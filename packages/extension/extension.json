@@ -5,12 +5,12 @@
   "repository": "https://github.com/lvce-editor/eslint",
   "browser": "src/eslintMain.ts",
   "categories": [],
-  "activation": [],
   "rpc": [
     "FileSystem.readFile",
     "FileSystem.readDirWithFileTypes",
     "FileSystem.stat"
   ],
+  "activation": ["onDiagnostic:javascript", "onDiagnostic:typescript"],
   "languages": [
     {
       "id": "json",
