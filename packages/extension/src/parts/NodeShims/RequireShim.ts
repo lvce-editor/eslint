@@ -13,4 +13,3 @@ if (typeof globalThis.require === 'undefined') {
     throw new Error(`Cannot find module '${id}'`)
   }) as NodeRequire
 }
-

@@ -98,16 +98,12 @@ globalThis.modules['node:assert'] = {
   },
   equal: (actual: unknown, expected: unknown, message?: string): void => {
     if (actual !== expected) {
-      throw new Error(
-        message || `Expected ${expected}, but got ${actual}`,
-      )
+      throw new Error(message || `Expected ${expected}, but got ${actual}`)
     }
   },
   strictEqual: (actual: unknown, expected: unknown, message?: string): void => {
     if (actual !== expected) {
-      throw new Error(
-        message || `Expected ${expected}, but got ${actual}`,
-      )
+      throw new Error(message || `Expected ${expected}, but got ${actual}`)
     }
   },
 }
@@ -133,4 +129,3 @@ if (typeof globalThis.require === 'undefined') {
     throw new Error(`Cannot find module '${id}'`)
   }) as NodeRequire
 }
-

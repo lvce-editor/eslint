@@ -110,17 +110,130 @@ globalThis.modules['node:os'] = {
   homedir: () => '/',
   EOL: '\n',
 }
+globalThis.modules['os'] = globalThis.modules['node:os']
 
-// Make require() work for node: modules
-if (typeof globalThis.require === 'undefined') {
+// Minimal url module shim
+globalThis.modules['node:url'] = {
+  pathToFileURL: (path) => {
+    return new URL(`file://${path}`)
+  },
+  fileURLToPath: (url) => {
+    if (typeof url === 'string') {
+      return url.replace('file://', '')
+    }
+    return url.pathname
+  },
+}
+globalThis.modules['url'] = globalThis.modules['node:url']
+
+// Minimal crypto module shim
+globalThis.modules['node:crypto'] = {
+  createHash: (algorithm) => {
+    // Minimal hash implementation
+    let hash = 0
+    return {
+      update: (data) => {
+        const str = typeof data === 'string' ? data : String(data)
+        for (let i = 0; i < str.length; i++) {
+          hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0
+        }
+        return this
+      },
+      digest: (encoding) => {
+        const hex = Math.abs(hash).toString(16)
+        if (encoding === 'hex') {
+          return hex
+        }
+        // For other encodings, return hex as string
+        return hex
+      },
+    }
+  },
+  randomBytes: (size) => {
+    const array = new Uint8Array(size)
+    if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+      crypto.getRandomValues(array)
+    } else {
+      for (let i = 0; i < size; i++) {
+        array[i] = Math.floor(Math.random() * 256)
+      }
+    }
+    // Return a Buffer-like object
+    return {
+      toString: (encoding) => {
+        if (encoding === 'hex') {
+          return Array.from(array)
+            .map((b) => b.toString(16).padStart(2, '0'))
+            .join('')
+        }
+        return String.fromCharCode(...array)
+      },
+      length: array.length,
+    }
+  },
+}
+globalThis.modules['crypto'] = globalThis.modules['node:crypto']
+
+// Minimal module shim
+globalThis.modules['node:module'] = {
+  createRequire: (filename) => {
+    return globalThis.require
+  },
+  _cache: {},
+}
+globalThis.modules['module'] = globalThis.modules['node:module']
+
+// Minimal events shim
+globalThis.modules['node:events'] = {
+  EventEmitter: class EventEmitter {
+    listeners = new Map()
+    on(event, listener) {
+      if (!this.listeners.has(event)) {
+        this.listeners.set(event, [])
+      }
+      this.listeners.get(event).push(listener)
+      return this
+    }
+    emit(event, ...args) {
+      const listeners = this.listeners.get(event) || []
+      for (const listener of listeners) {
+        listener(...args)
+      }
+      return listeners.length > 0
+    }
+    removeListener(event, listener) {
+      const listeners = this.listeners.get(event) || []
+      const index = listeners.indexOf(listener)
+      if (index > -1) {
+        listeners.splice(index, 1)
+      }
+      return this
+    }
+  },
+}
+globalThis.modules['events'] = globalThis.modules['node:events']
+
+// Also alias non-prefixed versions
+globalThis.modules['path'] = globalThis.modules['node:path']
+globalThis.modules['fs'] = globalThis.modules['node:fs']
+globalThis.modules['util'] = globalThis.modules['node:util']
+globalThis.modules['assert'] = globalThis.modules['node:assert']
+
+// Make require() work for both node: and non-prefixed modules
+if (globalThis.require === undefined) {
   globalThis.require = ((id) => {
+    // Handle node: prefix
     if (id.startsWith('node:')) {
       const module = globalThis.modules[id]
       if (module) {
         return module
       }
     }
+    // Handle non-prefixed built-in modules
+    const module = globalThis.modules[id]
+    if (module) {
+      return module
+    }
     throw new Error(`Cannot find module '${id}'`)
   })
 }
-
