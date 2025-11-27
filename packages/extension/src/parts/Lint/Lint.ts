@@ -1,6 +1,6 @@
 import { ESLint } from 'eslint'
-import * as EslintFileSystem from '../EslintFileSystem/EslintFileSystem.ts'
 import * as FindEslintConfig from '../FindEslintConfig/FindEslintConfig.ts'
+import * as LoadEslintConfig from '../LoadEslintConfig/LoadEslintConfig.ts'
 
 export type LintResult = {
   line: number
@@ -12,78 +12,112 @@ export type LintResult = {
   ruleId: string | null
 }
 
+const getDefaultConfig = () => ({
+  languageOptions: {
+    ecmaVersion: 'latest' as const,
+    sourceType: 'module' as const,
+    globals: {
+      console: 'readonly' as const,
+      process: 'readonly' as const,
+      Buffer: 'readonly' as const,
+      __dirname: 'readonly' as const,
+      __filename: 'readonly' as const,
+      global: 'readonly' as const,
+      module: 'readonly' as const,
+      require: 'readonly' as const,
+      exports: 'readonly' as const,
+    },
+  },
+  rules: {
+    // Use ESLint's recommended rules
+    'no-unused-vars': 'warn' as const,
+    'no-undef': 'error' as const,
+    'no-console': 'off' as const,
+    'no-debugger': 'error' as const,
+    'no-duplicate-case': 'error' as const,
+    'no-empty': 'warn' as const,
+    'no-extra-semi': 'error' as const,
+    'no-func-assign': 'error' as const,
+    'no-irregular-whitespace': 'error' as const,
+    'no-unreachable': 'error' as const,
+    'no-unsafe-finally': 'error' as const,
+    'no-unsafe-negation': 'error' as const,
+    'use-isnan': 'error' as const,
+    'valid-typeof': 'error' as const,
+  },
+})
+
 export const lint = async (
   text: string,
   filePath: string,
 ): Promise<LintResult[]> => {
-  // Extract directory from file path for file system operations
-  const pathParts = filePath.split('/')
-  pathParts.pop()
-  const basePath = pathParts.length > 0 ? pathParts.join('/') : '/'
-
-  // Create custom file system that uses RPC
-  const fileSystem = EslintFileSystem.createEslintFileSystem(basePath)
-
   // Find ESLint config file
   const configFilePath = await FindEslintConfig.findEslintConfig(filePath)
 
-  const eslintOptions: {
-    overrideConfigFile?: string | null
-    overrideConfig?: {
-      languageOptions: {
-        ecmaVersion: string
-        sourceType: string
-        globals: Record<string, string>
-      }
-      rules: Record<string, string>
-    }
-    fileSystem: typeof fileSystem
-  } = {
-    fileSystem,
-  }
+  let overrideConfig = getDefaultConfig()
 
   if (configFilePath) {
-    // Use the found config file
-    eslintOptions.overrideConfigFile = configFilePath
-  } else {
-    // Fallback to default config if no config file found
-    eslintOptions.overrideConfig = {
-      languageOptions: {
-        ecmaVersion: 'latest',
-        sourceType: 'module',
-        globals: {
-          console: 'readonly',
-          process: 'readonly',
-          Buffer: 'readonly',
-          __dirname: 'readonly',
-          __filename: 'readonly',
-          global: 'readonly',
-          module: 'readonly',
-          require: 'readonly',
-          exports: 'readonly',
-        },
-      },
-      rules: {
-        // Use ESLint's recommended rules
-        'no-unused-vars': 'warn',
-        'no-undef': 'error',
-        'no-console': 'off',
-        'no-debugger': 'error',
-        'no-duplicate-case': 'error',
-        'no-empty': 'warn',
-        'no-extra-semi': 'error',
-        'no-func-assign': 'error',
-        'no-irregular-whitespace': 'error',
-        'no-unreachable': 'error',
-        'no-unsafe-finally': 'error',
-        'no-unsafe-negation': 'error',
-        'use-isnan': 'error',
-        'valid-typeof': 'error',
-      },
+    try {
+      // Load and parse the config file
+      const loadedConfig = await LoadEslintConfig.loadEslintConfig(
+        configFilePath,
+      )
+
+      // Handle flat config format (array) or legacy format (object)
+      if (Array.isArray(loadedConfig)) {
+        // Flat config: merge all configs
+        overrideConfig = loadedConfig.reduce(
+          (merged, config) => {
+            return {
+              ...merged,
+              languageOptions: {
+                ...merged.languageOptions,
+                ...config.languageOptions,
+                globals: {
+                  ...merged.languageOptions?.globals,
+                  ...config.languageOptions?.globals,
+                },
+              },
+              rules: {
+                ...merged.rules,
+                ...config.rules,
+              },
+            }
+          },
+          getDefaultConfig(),
+        )
+      } else if (typeof loadedConfig === 'object' && loadedConfig !== null) {
+        // Legacy format or single flat config object
+        overrideConfig = {
+          ...getDefaultConfig(),
+          ...loadedConfig,
+          languageOptions: {
+            ...getDefaultConfig().languageOptions,
+            ...(loadedConfig as { languageOptions?: unknown }).languageOptions,
+          },
+          rules: {
+            ...getDefaultConfig().rules,
+            ...(loadedConfig as { rules?: unknown }).rules,
+          },
+        }
+      }
+    } catch (error) {
+      // If config loading fails, log and use default config
+      // eslint-disable-next-line no-console
+      console.warn('Failed to load ESLint config:', error)
     }
   }
 
-  const eslint = new ESLint(eslintOptions)
+  // Extract directory from file path for cwd
+  const pathParts = filePath.split('/')
+  pathParts.pop()
+  const cwd = pathParts.length > 0 ? pathParts.join('/') : '/'
+
+  const eslint = new ESLint({
+    overrideConfigFile: null,
+    overrideConfig,
+    cwd,
+  })
 
   const results = await eslint.lintText(text, {
     filePath,
