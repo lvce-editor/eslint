@@ -71,7 +71,9 @@ const pathModule = {
 }
 
 // posix and win32 are references to the same object in Node.js
+// @ts-ignore
 pathModule.posix = pathModule
+// @ts-ignore
 pathModule.win32 = pathModule
 
 globalThis.modules['node:path'] = pathModule
@@ -341,6 +343,7 @@ globalThis.modules['node:stream'] = {
 globalThis.modules['stream'] = globalThis.modules['node:stream']
 
 // Minimal buffer shim (use global Buffer if available, otherwise create minimal shim)
+// @ts-ignore
 if (typeof Buffer === 'undefined') {
   globalThis.Buffer = {
     from: (data, encoding) => {
@@ -393,6 +396,7 @@ if (typeof Buffer === 'undefined') {
 }
 
 // Minimal process shim
+// @ts-ignore
 if (typeof process === 'undefined') {
   const createStream = (name) => ({
     fd: 0,

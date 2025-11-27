@@ -91,10 +91,12 @@ export const lint = async (
           ...loadedConfig,
           languageOptions: {
             ...getDefaultConfig().languageOptions,
+            // @ts-ignore
             ...(loadedConfig as { languageOptions?: unknown }).languageOptions,
           },
           rules: {
             ...getDefaultConfig().rules,
+            // @ts-ignore
             ...(loadedConfig as { rules?: unknown }).rules,
           },
         }
@@ -125,6 +127,7 @@ export const lint = async (
     ? filePath.slice(cwd.length + 1)
     : filePath.replace(/^\//, '')
 
+  // @ts-ignore
   const results = linter.verifyAndFix(text, configArray, {
     filename: relativeFilePath,
     cwd,
