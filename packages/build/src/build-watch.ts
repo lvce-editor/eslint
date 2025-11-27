@@ -95,12 +95,45 @@ const main = async (): Promise<void> => {
       {
         name: 'ensure-esquery-exports',
         setup(build) {
-          // Intercept esquery resolution and use the ESM version
-          // esbuild should handle the default export correctly when bundling
+          // Intercept esquery resolution and create a wrapper that exposes exports correctly
           build.onResolve({ filter: /^esquery$/ }, (args) => {
-            const require = createRequire(import.meta.url)
             return {
-              path: require.resolve('esquery/dist/esquery.esm.min.js'),
+              path: args.path,
+              namespace: 'esquery-wrapper',
+            }
+          })
+
+          build.onLoad({ filter: /.*/, namespace: 'esquery-wrapper' }, () => {
+            const require = createRequire(import.meta.url)
+            const esqueryPath =
+              require.resolve('esquery/dist/esquery.esm.min.js')
+
+            // Create a wrapper that re-exports esquery with the correct structure
+            // ESLint expects esquery.parse, but ESM version exports as default
+            // Handle nested default exports (esquery.default.parse)
+            return {
+              contents: `import esqueryModule from ${JSON.stringify(esqueryPath)};
+// Unwrap default export - handle both direct and nested default exports
+let esquery = esqueryModule;
+if (esquery && typeof esquery === 'object') {
+  // If it has a default property, unwrap it
+  if ('default' in esquery && esquery.default) {
+    esquery = esquery.default;
+    // Handle double-wrapped default (default.default)
+    if (esquery && typeof esquery === 'object' && 'default' in esquery && esquery.default) {
+      esquery = esquery.default;
+    }
+  }
+}
+// Re-export to match ESLint's expectations
+// ESLint uses require("esquery") and expects esquery.parse to work directly
+export default esquery;
+export const parse = esquery?.parse;
+export const match = esquery?.match;
+export const query = esquery?.query || esquery;
+export const traverse = esquery?.traverse;
+export const matches = esquery?.matches;`,
+              loader: 'js',
             }
           })
         },
