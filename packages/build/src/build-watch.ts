@@ -108,6 +108,51 @@ const main = async (): Promise<void> => {
         },
       },
       {
+        name: 'fix-esquery-usage',
+        setup(build) {
+          build.onLoad({ filter: /.*/ }, (args) => {
+            // Only process JavaScript files in node_modules
+            // Don't process TypeScript files or source files
+            if (
+              !args.path.includes('node_modules') ||
+              (!args.path.endsWith('.js') &&
+                !args.path.endsWith('.cjs') &&
+                !args.path.endsWith('.mjs'))
+            ) {
+              return undefined
+            }
+
+            try {
+              const contents = readFileSync(args.path, 'utf-8')
+              let modified = contents
+
+              // Fix esquery.parse to esquery.default.parse
+              // Handle various patterns: esquery.parse, esquery.match, etc.
+              modified = modified.replace(
+                /esquery\.(parse|match|query|traverse|matches)\s*\(/g,
+                'esquery.default.$1(',
+              )
+
+              // Also handle destructuring: const { parse, match } = esquery
+              // This is trickier, but we can handle the usage after destructuring
+              // by replacing the variable names
+
+              if (modified !== contents) {
+                return {
+                  contents: modified,
+                  loader: 'js',
+                }
+              }
+            } catch {
+              // If we can't read the file, let esbuild handle it
+              return undefined
+            }
+
+            return undefined
+          })
+        },
+      },
+      {
         name: 'node-shim-replace',
         setup(build) {
           build.onLoad({ filter: /.*/ }, (args) => {
