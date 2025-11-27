@@ -3,7 +3,7 @@
   "name": "ESLint",
   "description": "ESLint extension",
   "repository": "https://github.com/lvce-editor/eslint",
-  "browser": "dist/eslintMain.ts",
+  "browser": "dist/eslintMain.js",
   "categories": [],
   "rpc": [
     "FileSystem.readFile",
