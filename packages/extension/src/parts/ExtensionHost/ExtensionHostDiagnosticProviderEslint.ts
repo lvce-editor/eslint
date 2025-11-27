@@ -7,8 +7,8 @@ export const label = 'ESLint'
 export const languageId = 'javascript'
 
 export const provideDiagnostics = async (textDocument: {
-  getText: () => string
-  uri?: { path: string }
+  text: string
+  uri: string
 }): Promise<
   Array<{
     line: number
@@ -20,8 +20,8 @@ export const provideDiagnostics = async (textDocument: {
     source: string
   }>
 > => {
-  const text = textDocument.getText()
-  const filePath = textDocument.uri?.path ?? 'file.js'
+  const { text } = textDocument
+  const filePath = textDocument.uri ?? 'file.js'
   const lintResults = await Lint.lint(text, filePath)
   return lintResults.map((result) => ({
     line: result.line,
