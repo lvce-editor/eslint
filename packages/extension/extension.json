@@ -5,7 +5,7 @@
   "repository": "https://github.com/lvce-editor/eslint",
   "browser": "src/eslintMain.ts",
   "categories": [],
-  "activation": [],
+  "activation": ["onDiagnostic:javascript", "onDiagnostic:typescript"],
   "rpc": [],
   "languages": [
     {
