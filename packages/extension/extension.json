@@ -6,7 +6,11 @@
   "browser": "src/eslintMain.ts",
   "categories": [],
   "activation": [],
-  "rpc": [],
+  "rpc": [
+    "FileSystem.readFile",
+    "FileSystem.readDirWithFileTypes",
+    "FileSystem.stat"
+  ],
   "languages": [
     {
       "id": "json",

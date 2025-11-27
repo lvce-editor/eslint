@@ -1,4 +1,6 @@
 import { ESLint } from 'eslint'
+import * as EslintFileSystem from '../EslintFileSystem/EslintFileSystem.ts'
+import * as FindEslintConfig from '../FindEslintConfig/FindEslintConfig.ts'
 
 export type LintResult = {
   line: number
@@ -10,10 +12,42 @@ export type LintResult = {
   ruleId: string | null
 }
 
-export const lint = async (text: string): Promise<LintResult[]> => {
-  const eslint = new ESLint({
-    overrideConfigFile: null,
-    overrideConfig: {
+export const lint = async (
+  text: string,
+  filePath: string,
+): Promise<LintResult[]> => {
+  // Extract directory from file path for file system operations
+  const pathParts = filePath.split('/')
+  pathParts.pop()
+  const basePath = pathParts.length > 0 ? pathParts.join('/') : '/'
+
+  // Create custom file system that uses RPC
+  const fileSystem = EslintFileSystem.createEslintFileSystem(basePath)
+
+  // Find ESLint config file
+  const configFilePath = await FindEslintConfig.findEslintConfig(filePath)
+
+  const eslintOptions: {
+    overrideConfigFile?: string | null
+    overrideConfig?: {
+      languageOptions: {
+        ecmaVersion: string
+        sourceType: string
+        globals: Record<string, string>
+      }
+      rules: Record<string, string>
+    }
+    fileSystem: typeof fileSystem
+  } = {
+    fileSystem,
+  }
+
+  if (configFilePath) {
+    // Use the found config file
+    eslintOptions.overrideConfigFile = configFilePath
+  } else {
+    // Fallback to default config if no config file found
+    eslintOptions.overrideConfig = {
       languageOptions: {
         ecmaVersion: 'latest',
         sourceType: 'module',
@@ -46,11 +80,13 @@ export const lint = async (text: string): Promise<LintResult[]> => {
         'use-isnan': 'error',
         'valid-typeof': 'error',
       },
-    },
-  })
+    }
+  }
+
+  const eslint = new ESLint(eslintOptions)
 
   const results = await eslint.lintText(text, {
-    filePath: 'file.js',
+    filePath,
   })
 
   const lintResults: LintResult[] = []
