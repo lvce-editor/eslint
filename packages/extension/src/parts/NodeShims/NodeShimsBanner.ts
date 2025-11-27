@@ -81,6 +81,20 @@ globalThis.modules['node:util'] = {
   inspect: (obj) => {
     return JSON.stringify(obj, null, 2)
   },
+  deprecate: (fn, message) => {
+    // Return the function as-is, optionally logging deprecation warning
+    return fn
+  },
+  types: {
+    isString: (value) => typeof value === 'string',
+    isNumber: (value) => typeof value === 'number',
+    isBoolean: (value) => typeof value === 'boolean',
+    isUndefined: (value) => value === undefined,
+    isNull: (value) => value === null,
+    isObject: (value) => typeof value === 'object' && value !== null,
+    isArray: (value) => Array.isArray(value),
+    isFunction: (value) => typeof value === 'function',
+  },
 }
 
 // Minimal assert module shim
