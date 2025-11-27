@@ -162,6 +162,30 @@ globalThis.modules['node:util'] = {
     isObject: (value) => typeof value === 'object' && value !== null,
     isArray: (value) => Array.isArray(value),
     isFunction: (value) => typeof value === 'function',
+    isBigInt: (value) => typeof value === 'bigint',
+    isBigInt64Array: (value) => value instanceof BigInt64Array,
+    isBigUint64Array: (value) => value instanceof BigUint64Array,
+    isDate: (value) => value instanceof Date,
+    isRegExp: (value) => value instanceof RegExp,
+    isMap: (value) => value instanceof Map,
+    isSet: (value) => value instanceof Set,
+    isWeakMap: (value) => value instanceof WeakMap,
+    isWeakSet: (value) => value instanceof WeakSet,
+    isPromise: (value) => value instanceof Promise,
+    isAsyncFunction: (value) => {
+      return (
+        typeof value === 'function' &&
+        value.constructor &&
+        value.constructor.name === 'AsyncFunction'
+      )
+    },
+    isGeneratorFunction: (value) => {
+      return (
+        typeof value === 'function' &&
+        value.constructor &&
+        value.constructor.name === 'GeneratorFunction'
+      )
+    },
   },
 }
 
@@ -324,6 +348,43 @@ if (typeof Buffer === 'undefined') {
     },
     isBuffer: () => false,
     alloc: (size) => new Uint8Array(size),
+    allocUnsafe: (size) => new Uint8Array(size),
+    allocUnsafeSlow: (size) => new Uint8Array(size),
+    byteLength: (data) => {
+      if (typeof data === 'string') {
+        return new TextEncoder().encode(data).length
+      }
+      if (data instanceof ArrayBuffer) {
+        return data.byteLength
+      }
+      if (data instanceof Uint8Array) {
+        return data.length
+      }
+      return 0
+    },
+    compare: (a, b) => {
+      // Simple comparison
+      if (a < b) return -1
+      if (a > b) return 1
+      return 0
+    },
+    concat: (list, totalLength) => {
+      const arrays = list.map((item) => {
+        if (item instanceof Uint8Array) return item
+        if (typeof item === 'string') return new TextEncoder().encode(item)
+        return new Uint8Array(0)
+      })
+      const total = totalLength || arrays.reduce((sum, arr) => sum + arr.length, 0)
+      const result = new Uint8Array(total)
+      let offset = 0
+      for (const arr of arrays) {
+        result.set(arr, offset)
+        offset += arr.length
+      }
+      return result
+    },
+    // Add bigint property for compatibility
+    bigint: undefined,
   }
 }
 
