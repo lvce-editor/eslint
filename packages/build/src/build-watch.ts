@@ -39,6 +39,7 @@ const main = async (): Promise<void> => {
       'stream',
       'buffer',
       'process',
+      'worker_threads',
       'jiti',
       'jiti/package.json',
     ],
@@ -86,6 +87,7 @@ const main = async (): Promise<void> => {
                 'stream',
                 'buffer',
                 'process',
+                'worker_threads',
               ]
               let modified = contents
 

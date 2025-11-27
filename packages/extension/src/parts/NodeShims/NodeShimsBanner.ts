@@ -260,6 +260,19 @@ if (typeof process === 'undefined') {
   }
 }
 
+// Minimal worker_threads module shim
+globalThis.modules['node:worker_threads'] = {
+  Worker: class Worker {
+    constructor() {
+      throw new Error('Worker threads are not available in web worker')
+    }
+  },
+  isMainThread: false,
+  parentPort: null,
+  workerData: null,
+}
+globalThis.modules['worker_threads'] = globalThis.modules['node:worker_threads']
+
 // Also alias non-prefixed versions
 globalThis.modules['path'] = globalThis.modules['node:path']
 globalThis.modules['fs'] = globalThis.modules['node:fs']
