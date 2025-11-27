@@ -53,6 +53,39 @@ globalThis.modules['node:fs'] = {
   readdirSync: () => {
     throw new Error('fs.readdirSync is not available in web worker')
   },
+  createReadStream: () => {
+    return {
+      fd: undefined,
+      on: () => {},
+      once: () => {},
+      emit: () => {},
+      destroy: () => {},
+      close: () => {},
+    }
+  },
+  createWriteStream: () => {
+    return {
+      fd: undefined,
+      write: () => {},
+      end: () => {},
+      on: () => {},
+      once: () => {},
+      emit: () => {},
+      destroy: () => {},
+      close: () => {},
+    }
+  },
+  openSync: () => {
+    throw new Error('fs.openSync is not available in web worker')
+  },
+  closeSync: () => {
+    throw new Error('fs.closeSync is not available in web worker')
+  },
+  constants: {
+    O_RDONLY: 0,
+    O_WRONLY: 1,
+    O_RDWR: 2,
+  },
 }
 
 // Minimal fs/promises shim
@@ -261,6 +294,24 @@ if (typeof Buffer === 'undefined') {
 
 // Minimal process shim
 if (typeof process === 'undefined') {
+  const createStream = (name) => ({
+    fd: 0,
+    isTTY: false,
+    write: () => {},
+    end: () => {},
+    on: () => {},
+    once: () => {},
+    emit: () => {},
+    removeListener: () => {},
+    read: () => null,
+    setEncoding: () => {},
+    pause: () => {},
+    resume: () => {},
+    pipe: () => {},
+    unpipe: () => {},
+    destroy: () => {},
+  })
+
   globalThis.process = {
     env: {},
     platform: 'browser',
@@ -271,6 +322,21 @@ if (typeof process === 'undefined') {
     nextTick: (fn) => {
       setTimeout(fn, 0)
     },
+    stdin: createStream('stdin'),
+    stdout: createStream('stdout'),
+    stderr: createStream('stderr'),
+    argv: [],
+    pid: 1,
+    ppid: 0,
+    title: 'browser',
+    arch: 'x64',
+    memoryUsage: () => ({
+      rss: 0,
+      heapTotal: 0,
+      heapUsed: 0,
+      external: 0,
+      arrayBuffers: 0,
+    }),
   }
 }
 
