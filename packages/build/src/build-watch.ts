@@ -1,7 +1,7 @@
 import { context } from 'esbuild'
 import { root } from './root.js'
 import { join } from 'node:path'
-import { readFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 
 const main = async (): Promise<void> => {
@@ -47,15 +47,37 @@ const main = async (): Promise<void> => {
     platform: 'browser',
     plugins: [
       {
-        name: 'inject-node-shims-first',
+        name: 'prepend-node-shims',
         setup(build) {
-          // Inject banner code at the entry point to ensure it runs first
-          build.onLoad({ filter: /eslintMain\.ts$/ }, (args) => {
-            const contents = readFileSync(args.path, 'utf-8')
-            // Prepend banner code to the entry point
-            return {
-              contents: bannerCode + '\n' + contents,
-              loader: 'ts',
+          // Use onEnd to prepend banner code to the actual output file
+          build.onEnd(async (result) => {
+            if (result.outputFiles && result.outputFiles.length > 0) {
+              for (const file of result.outputFiles) {
+                if (file.path.endsWith('.js')) {
+                  const originalText = file.text
+                  // Prepend banner code at the very beginning
+                  const newContents = bannerCode + '\n' + originalText
+                  file.contents = Buffer.from(newContents)
+                  // Also write to disk to ensure it's saved
+                  writeFileSync(file.path, newContents, 'utf-8')
+                }
+              }
+            } else {
+              // If outputFiles is empty (watch mode), write directly to the output file
+              const outfile = join(
+                root,
+                'packages',
+                'extension',
+                'dist',
+                'eslintMain.js',
+              )
+              try {
+                const existingContent = readFileSync(outfile, 'utf-8')
+                const newContent = bannerCode + '\n' + existingContent
+                writeFileSync(outfile, newContent, 'utf-8')
+              } catch {
+                // File might not exist yet, that's okay
+              }
             }
           })
         },
