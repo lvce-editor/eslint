@@ -72,8 +72,6 @@ const main = async (): Promise<void> => {
             }
             try {
               const contents = readFileSync(args.path, 'utf-8')
-              // Replace require("node:*) with globalThis.require("node:*")
-              // Replace require('path'), require("fs"), etc. with globalThis.require()
               const nodeBuiltins = [
                 'path',
                 'fs',
@@ -89,11 +87,15 @@ const main = async (): Promise<void> => {
                 'buffer',
                 'process',
               ]
-              let modified = contents.replace(
+              let modified = contents
+
+              // Replace require("node:*) with globalThis.require("node:*")
+              modified = modified.replace(
                 /require\s*\(\s*["']node:([^"']+)["']\s*\)/g,
                 'globalThis.require("node:$1")',
               )
-              // Replace non-prefixed requires for built-in modules
+
+              // Replace require('path'), require("fs"), etc. with globalThis.require()
               for (const moduleName of nodeBuiltins) {
                 const regex = new RegExp(
                   `require\\s*\\(\\s*["']${moduleName}["']\\s*\\)`,
@@ -104,6 +106,92 @@ const main = async (): Promise<void> => {
                   `globalThis.require('${moduleName}')`,
                 )
               }
+
+              // Replace ES6 import statements: import fs from "node:fs"
+              modified = modified.replace(
+                /import\s+(\w+)\s+from\s+["']node:([^"']+)["']/g,
+                (match, varName, moduleName) => {
+                  return `const ${varName} = globalThis.require("node:${moduleName}")`
+                },
+              )
+
+              // Replace ES6 import statements: import { createRequire } from "node:module"
+              modified = modified.replace(
+                /import\s+{([^}]+)}\s+from\s+["']node:([^"']+)["']/g,
+                (match, imports, moduleName) => {
+                  const moduleVar = `__node_module_${moduleName.replace(/[^a-zA-Z0-9]/g, '_')}__`
+                  const importList = imports
+                    .split(',')
+                    .map((imp) => {
+                      const trimmed = imp.trim()
+                      const parts = trimmed.split(/\s+as\s+/)
+                      const originalName = parts[0].trim()
+                      const alias = parts[1]?.trim() || originalName
+                      return `${alias}: ${moduleVar}.${originalName}`
+                    })
+                    .join(', ')
+                  return `const ${moduleVar} = globalThis.require("node:${moduleName}"); const { ${importList
+                    .split(': ')
+                    .map((i) => i.split(',')[0])
+                    .join(', ')} } = ${moduleVar}`
+                },
+              )
+
+              // Replace ES6 import statements: import * as path from "node:path"
+              modified = modified.replace(
+                /import\s+\*\s+as\s+(\w+)\s+from\s+["']node:([^"']+)["']/g,
+                (match, varName, moduleName) => {
+                  return `const ${varName} = globalThis.require("node:${moduleName}")`
+                },
+              )
+
+              // Replace ES6 import statements: import fs from "fs" (non-prefixed)
+              for (const moduleName of nodeBuiltins) {
+                // Default import: import fs from "fs"
+                modified = modified.replace(
+                  new RegExp(
+                    `import\\s+(\\w+)\\s+from\\s+["']${moduleName}["']`,
+                    'g',
+                  ),
+                  (match, varName) => {
+                    return `const ${varName} = globalThis.require('${moduleName}')`
+                  },
+                )
+
+                // Named imports: import { something } from "fs"
+                modified = modified.replace(
+                  new RegExp(
+                    `import\\s+{([^}]+)}\\s+from\\s+["']${moduleName}["']`,
+                    'g',
+                  ),
+                  (match, imports) => {
+                    const moduleVar = `__node_module_${moduleName}__`
+                    const importList = imports
+                      .split(',')
+                      .map((imp) => {
+                        const trimmed = imp.trim()
+                        const parts = trimmed.split(/\s+as\s+/)
+                        const originalName = parts[0].trim()
+                        const alias = parts[1]?.trim() || originalName
+                        return `${alias}: ${moduleVar}.${originalName}`
+                      })
+                      .join(', ')
+                    return `const ${moduleVar} = globalThis.require('${moduleName}'); const { ${imports} } = ${moduleVar}`
+                  },
+                )
+
+                // Namespace import: import * as fs from "fs"
+                modified = modified.replace(
+                  new RegExp(
+                    `import\\s+\\*\\s+as\\s+(\\w+)\\s+from\\s+["']${moduleName}["']`,
+                    'g',
+                  ),
+                  (match, varName) => {
+                    return `const ${varName} = globalThis.require('${moduleName}')`
+                  },
+                )
+              }
+
               return {
                 contents: modified,
                 loader: 'js',
