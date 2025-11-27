@@ -49,4 +49,3 @@ export const createNodeShimPlugin = (root: string): Plugin => {
     },
   }
 }
-

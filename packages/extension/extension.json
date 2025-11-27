@@ -5,11 +5,6 @@
   "repository": "https://github.com/lvce-editor/eslint",
   "browser": "dist/eslintMain.js",
   "categories": [],
-  "rpc": [
-    "FileSystem.readFile",
-    "FileSystem.readDirWithFileTypes",
-    "FileSystem.stat"
-  ],
   "activation": ["onDiagnostic:javascript", "onDiagnostic:typescript"],
   "languages": [
     {
