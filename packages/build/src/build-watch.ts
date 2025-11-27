@@ -95,53 +95,49 @@ const main = async (): Promise<void> => {
       {
         name: 'ensure-esquery-exports',
         setup(build) {
-          // Intercept esquery resolution and create a wrapper that exposes exports correctly
+          // Intercept esquery resolution and use the ESM version
           build.onResolve({ filter: /^esquery$/ }, (args) => {
+            const require = createRequire(import.meta.url)
+            // Resolve to the ESM version
+            const esqueryPath =
+              require.resolve('esquery/dist/esquery.esm.min.js')
             return {
-              path: args.path,
-              namespace: 'esquery-wrapper',
+              path: esqueryPath,
             }
           })
 
-          build.onLoad(
-            { filter: /.*/, namespace: 'esquery-wrapper' },
-            (args) => {
-              const require = createRequire(import.meta.url)
-              const esqueryPath =
-                require.resolve('esquery/dist/esquery.esm.min.js')
-              const esqueryContent = readFileSync(esqueryPath, 'utf-8')
+          // Transform the loaded esquery module to ensure exports are accessible
+          build.onLoad({ filter: /.*esquery.*\.js$/ }, (args) => {
+            // Only process the esquery ESM file
+            if (!args.path.includes('esquery/dist/esquery.esm.min.js')) {
+              return undefined
+            }
 
-              // Create a wrapper that re-exports esquery with the correct structure
-              // ESLint expects esquery.parse, but ESM version exports as default
-              // Handle nested default exports (esquery.default.parse)
-              // Inline the esquery module and wrap it
-              return {
-                contents: `${esqueryContent}
-// Unwrap default export - handle both direct and nested default exports
-let esquery = typeof default !== 'undefined' ? default : (typeof exports !== 'undefined' && exports.default ? exports.default : {});
-if (esquery && typeof esquery === 'object') {
-  // If it has a default property, unwrap it
-  if ('default' in esquery && esquery.default) {
-    esquery = esquery.default;
-    // Handle double-wrapped default (default.default)
-    if (esquery && typeof esquery === 'object' && 'default' in esquery && esquery.default) {
-      esquery = esquery.default;
-    }
+            const contents = readFileSync(args.path, 'utf-8')
+
+            // The ESM version exports as 'export default A' where A has parse, match, etc.
+            // We need to ensure the default export's properties are accessible
+            // Add code to re-export the default export's properties
+            return {
+              contents: `${contents}
+// Re-export default export properties for compatibility with ESLint
+// ESLint expects esquery.parse to work directly
+const esqueryDefault = typeof default !== 'undefined' ? default : undefined;
+if (esqueryDefault && typeof esqueryDefault === 'object') {
+  // Unwrap nested default if needed
+  const esquery = esqueryDefault.default || esqueryDefault;
+  // Re-export properties
+  if (esquery && typeof esquery.parse === 'function') {
+    export const parse = esquery.parse;
+    export const match = esquery.match;
+    export const query = esquery.query || esquery;
+    export const traverse = esquery.traverse;
+    export const matches = esquery.matches;
   }
-}
-// Re-export to match ESLint's expectations
-// ESLint uses require("esquery") and expects esquery.parse to work directly
-export default esquery;
-export const parse = esquery?.parse;
-export const match = esquery?.match;
-export const query = esquery?.query || esquery;
-export const traverse = esquery?.traverse;
-export const matches = esquery?.matches;`,
-                loader: 'js',
-                resolveDir: join(root, 'packages', 'extension'),
-              }
-            },
-          )
+}`,
+              loader: 'js',
+            }
+          })
         },
       },
       {
