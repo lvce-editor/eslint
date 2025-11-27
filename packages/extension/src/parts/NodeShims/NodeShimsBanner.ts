@@ -5,7 +5,7 @@ if (typeof globalThis.modules === 'undefined') {
 }
 
 // Minimal path module shim
-globalThis.modules['node:path'] = {
+const pathModule = {
   join: (...paths) => {
     return paths.filter(Boolean).join('/').replace(/\/+/g, '/')
   },
@@ -14,9 +14,13 @@ globalThis.modules['node:path'] = {
     parts.pop()
     return parts.join('/') || '/'
   },
-  basename: (path) => {
+  basename: (path, ext) => {
     const parts = path.split('/')
-    return parts[parts.length - 1] || ''
+    let name = parts[parts.length - 1] || ''
+    if (ext && name.endsWith(ext)) {
+      name = name.slice(0, -ext.length)
+    }
+    return name
   },
   extname: (path) => {
     const lastDot = path.lastIndexOf('.')
@@ -34,9 +38,40 @@ globalThis.modules['node:path'] = {
     }
     return resolved.replace(/\/+/g, '/')
   },
+  relative: (from, to) => {
+    // Simplified relative path calculation
+    if (from === to) return ''
+    const fromParts = from.split('/').filter(Boolean)
+    const toParts = to.split('/').filter(Boolean)
+    let commonLength = 0
+    for (let i = 0; i < Math.min(fromParts.length, toParts.length); i++) {
+      if (fromParts[i] === toParts[i]) {
+        commonLength++
+      } else {
+        break
+      }
+    }
+    const upLevels = fromParts.length - commonLength
+    const downPath = toParts.slice(commonLength).join('/')
+    return '../'.repeat(upLevels) + downPath
+  },
+  normalize: (path) => {
+    return path.replace(/\/+/g, '/').replace(/\/\.\//g, '/').replace(/\/\.$/, '')
+  },
+  isAbsolute: (path) => {
+    return path.startsWith('/')
+  },
   sep: '/',
   delimiter: ':',
+  posix: null, // Will be set below
+  win32: null, // Will be set below
 }
+
+// posix and win32 are references to the same object in Node.js
+pathModule.posix = pathModule
+pathModule.win32 = pathModule
+
+globalThis.modules['node:path'] = pathModule
 
 // Minimal fs module shim
 globalThis.modules['node:fs'] = {
