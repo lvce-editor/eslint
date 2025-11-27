@@ -3,7 +3,7 @@
   "name": "ESLint",
   "description": "ESLint extension",
   "repository": "https://github.com/lvce-editor/eslint",
-  "browser": "src/prettierMain.ts",
+  "browser": "src/eslintMain.ts",
   "categories": [],
   "activation": [],
   "rpc": [],
