@@ -59,9 +59,8 @@ export const lint = async (
   if (configFilePath) {
     try {
       // Load and parse the config file
-      const loadedConfig = await LoadEslintConfig.loadEslintConfig(
-        configFilePath,
-      )
+      const loadedConfig =
+        await LoadEslintConfig.loadEslintConfig(configFilePath)
 
       // Handle flat config format (array) or legacy format (object)
       if (Array.isArray(loadedConfig)) {

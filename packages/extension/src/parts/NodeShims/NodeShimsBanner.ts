@@ -56,7 +56,10 @@ const pathModule = {
     return '../'.repeat(upLevels) + downPath
   },
   normalize: (path) => {
-    return path.replace(/\/+/g, '/').replace(/\/\.\//g, '/').replace(/\/\.$/, '')
+    return path
+      .replace(/\/+/g, '/')
+      .replace(/\/\.\//g, '/')
+      .replace(/\/\.$/, '')
   },
   isAbsolute: (path) => {
     return path.startsWith('/')
@@ -374,7 +377,8 @@ if (typeof Buffer === 'undefined') {
         if (typeof item === 'string') return new TextEncoder().encode(item)
         return new Uint8Array(0)
       })
-      const total = totalLength || arrays.reduce((sum, arr) => sum + arr.length, 0)
+      const total =
+        totalLength || arrays.reduce((sum, arr) => sum + arr.length, 0)
       const result = new Uint8Array(total)
       let offset = 0
       for (const arr of arrays) {
@@ -487,7 +491,7 @@ globalThis.modules['assert'] = globalThis.modules['node:assert']
 
 // Make require() work for both node: and non-prefixed modules
 if (globalThis.require === undefined) {
-  globalThis.require = ((id) => {
+  globalThis.require = (id) => {
     // Handle node: prefix
     if (id.startsWith('node:')) {
       const module = globalThis.modules[id]
@@ -501,5 +505,5 @@ if (globalThis.require === undefined) {
       return module
     }
     throw new Error(`Cannot find module '${id}'`)
-  })
+  }
 }

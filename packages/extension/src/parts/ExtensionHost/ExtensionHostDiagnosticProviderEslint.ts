@@ -22,6 +22,7 @@ export const provideDiagnostics = async (textDocument: {
 > => {
   const { text } = textDocument
   const filePath = textDocument.uri ?? 'file.js'
+  console.log('exec', filePath)
   const lintResults = await Lint.lint(text, filePath)
   console.log({ lintResults })
   return lintResults.map((result) => ({

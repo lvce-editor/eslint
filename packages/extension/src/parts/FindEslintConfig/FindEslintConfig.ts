@@ -34,8 +34,7 @@ export const findEslintConfig = async (
     try {
       const entries = await FileSystem.readDirWithFileTypes(currentDir)
       const configFile = entries.find(
-        (entry) =>
-          entry.isFile && configFileNames.includes(entry.name),
+        (entry) => entry.isFile && configFileNames.includes(entry.name),
       )
 
       if (configFile) {

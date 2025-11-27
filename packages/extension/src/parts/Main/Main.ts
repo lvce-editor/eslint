@@ -6,6 +6,7 @@ export const activate = () => {
     ...ExtensionHostDiagnosticProviderEslint,
     languageId: 'javascript',
   })
+  console.log('did register')
 }
 
 export const deactivate = () => {}
