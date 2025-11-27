@@ -38,15 +38,31 @@ const main = async (): Promise<void> => {
       'jiti',
       'jiti/package.json',
     ],
+    packages: 'bundle',
+    mainFields: ['module', 'main'],
+    conditions: ['import', 'module', 'default'],
     plugins: [
+      {
+        name: 'ensure-eslint-bundled',
+        setup(build) {
+          // Ensure eslint is resolved and bundled
+          build.onResolve({ filter: /^eslint$/ }, (args) => {
+            // Don't mark as external - let it be bundled
+            return undefined
+          })
+        },
+      },
       {
         name: 'node-shim-replace',
         setup(build) {
           build.onLoad({ filter: /.*/ }, (args) => {
             // Only process JavaScript files in node_modules
+            // Don't process TypeScript files or source files
             if (
               !args.path.includes('node_modules') ||
-              (!args.path.endsWith('.js') && !args.path.endsWith('.cjs'))
+              (!args.path.endsWith('.js') &&
+                !args.path.endsWith('.cjs') &&
+                !args.path.endsWith('.mjs'))
             ) {
               return undefined
             }
@@ -92,6 +108,7 @@ const main = async (): Promise<void> => {
         },
       },
     ],
+    resolveExtensions: ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'],
   })
 
   await ctx.watch()

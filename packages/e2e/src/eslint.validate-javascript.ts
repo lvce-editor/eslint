@@ -2,8 +2,6 @@ import type { Test } from '@lvce-editor/test-with-playwright'
 
 export const name = 'eslint.validate-javascript'
 
-export const skip = 1
-
 export const test: Test = async ({
   FileSystem,
   Main,
@@ -12,6 +10,7 @@ export const test: Test = async ({
   expect,
 }) => {
   // arrange
+  await Editor.enableDiagnostics()
   const tmpDir = await FileSystem.getTmpDir()
   await FileSystem.writeFile(
     `${tmpDir}/test.js`,
