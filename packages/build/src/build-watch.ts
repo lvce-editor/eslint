@@ -22,9 +22,6 @@ const main = async (): Promise<void> => {
     bundle: true,
     format: 'esm',
     outfile: join(root, 'packages', 'extension', 'dist', 'eslintMain.js'),
-    banner: {
-      js: bannerCode,
-    },
     external: [
       'node:*',
       'path',
@@ -60,9 +57,10 @@ const main = async (): Promise<void> => {
         },
       },
       {
-        name: 'ensure-esquery-esm',
+        name: 'ensure-esquery-exports',
         setup(build) {
-          // Force esquery to use ESM version
+          // Intercept esquery resolution and use the ESM version
+          // esbuild should handle the default export correctly when bundling
           build.onResolve({ filter: /^esquery$/ }, (args) => {
             const require = createRequire(import.meta.url)
             return {
