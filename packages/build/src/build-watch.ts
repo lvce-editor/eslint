@@ -35,6 +35,10 @@ const main = async (): Promise<void> => {
       'assert',
       'module',
       'events',
+      'tty',
+      'stream',
+      'buffer',
+      'process',
       'jiti',
       'jiti/package.json',
     ],
@@ -80,6 +84,10 @@ const main = async (): Promise<void> => {
                 'assert',
                 'module',
                 'events',
+                'tty',
+                'stream',
+                'buffer',
+                'process',
               ]
               let modified = contents.replace(
                 /require\s*\(\s*["']node:([^"']+)["']\s*\)/g,

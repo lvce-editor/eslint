@@ -213,6 +213,53 @@ globalThis.modules['node:events'] = {
 }
 globalThis.modules['events'] = globalThis.modules['node:events']
 
+// Minimal tty module shim
+globalThis.modules['node:tty'] = {
+  isatty: () => false,
+  ReadStream: class {},
+  WriteStream: class {},
+}
+globalThis.modules['tty'] = globalThis.modules['node:tty']
+
+// Minimal stream module shim
+globalThis.modules['node:stream'] = {
+  Readable: class {},
+  Writable: class {},
+  Transform: class {},
+  Duplex: class {},
+  PassThrough: class {},
+}
+globalThis.modules['stream'] = globalThis.modules['node:stream']
+
+// Minimal buffer shim (use global Buffer if available, otherwise create minimal shim)
+if (typeof Buffer === 'undefined') {
+  globalThis.Buffer = {
+    from: (data, encoding) => {
+      if (typeof data === 'string') {
+        return new TextEncoder().encode(data)
+      }
+      return data
+    },
+    isBuffer: () => false,
+    alloc: (size) => new Uint8Array(size),
+  }
+}
+
+// Minimal process shim
+if (typeof process === 'undefined') {
+  globalThis.process = {
+    env: {},
+    platform: 'browser',
+    version: 'v0.0.0',
+    versions: {},
+    exit: () => {},
+    cwd: () => '/',
+    nextTick: (fn) => {
+      setTimeout(fn, 0)
+    },
+  }
+}
+
 // Also alias non-prefixed versions
 globalThis.modules['path'] = globalThis.modules['node:path']
 globalThis.modules['fs'] = globalThis.modules['node:fs']
