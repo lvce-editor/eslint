@@ -2,14 +2,24 @@
   "name": "builtin.eslint",
   "version": "0.0.0-dev",
   "description": "",
+<<<<<<< HEAD
   "keywords": [],
   "author": "",
   "type": "module",
+=======
+>>>>>>> origin/main
   "main": "src/eslintMain.ts",
   "scripts": {
     "test": "node --unhandled-rejections=warn --experimental-vm-modules ../../node_modules/jest/bin/jest.js --detectOpenHandles --forceExit",
     "test:watch": "node --unhandled-rejections=warn --experimental-vm-modules ../../node_modules/jest/bin/jest.js --watch"
   },
+<<<<<<< HEAD
+=======
+  "keywords": [],
+  "author": "",
+  "type": "module",
+  "devDependencies": {},
+>>>>>>> origin/main
   "jest": {
     "injectGlobals": false,
     "extensionsToTreatAsEsm": [
@@ -26,6 +36,10 @@
         }
       ]
     }
+<<<<<<< HEAD
   },
   "devDependencies": {}
+=======
+  }
+>>>>>>> origin/main
 }
