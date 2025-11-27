@@ -111,6 +111,10 @@ const main = async (): Promise<void> => {
               modified = modified.replace(
                 /import\s+(\w+)\s+from\s+["']node:([^"']+)["']/g,
                 (match, varName, moduleName) => {
+                  // Skip if this looks like already-replaced code
+                  if (match.includes('__node_module_') || match.includes('globalThis.require')) {
+                    return match
+                  }
                   return `const ${varName} = globalThis.require("node:${moduleName}")`
                 },
               )
@@ -119,21 +123,12 @@ const main = async (): Promise<void> => {
               modified = modified.replace(
                 /import\s+{([^}]+)}\s+from\s+["']node:([^"']+)["']/g,
                 (match, imports, moduleName) => {
+                  // Skip if this looks like already-replaced code
+                  if (match.includes('__node_module_') || match.includes('globalThis.require')) {
+                    return match
+                  }
                   const moduleVar = `__node_module_${moduleName.replace(/[^a-zA-Z0-9]/g, '_')}__`
-                  const importList = imports
-                    .split(',')
-                    .map((imp) => {
-                      const trimmed = imp.trim()
-                      const parts = trimmed.split(/\s+as\s+/)
-                      const originalName = parts[0].trim()
-                      const alias = parts[1]?.trim() || originalName
-                      return `${alias}: ${moduleVar}.${originalName}`
-                    })
-                    .join(', ')
-                  return `const ${moduleVar} = globalThis.require("node:${moduleName}"); const { ${importList
-                    .split(': ')
-                    .map((i) => i.split(',')[0])
-                    .join(', ')} } = ${moduleVar}`
+                  return `const ${moduleVar} = globalThis.require("node:${moduleName}"); const { ${imports} } = ${moduleVar}`
                 },
               )
 
@@ -166,16 +161,6 @@ const main = async (): Promise<void> => {
                   ),
                   (match, imports) => {
                     const moduleVar = `__node_module_${moduleName}__`
-                    const importList = imports
-                      .split(',')
-                      .map((imp) => {
-                        const trimmed = imp.trim()
-                        const parts = trimmed.split(/\s+as\s+/)
-                        const originalName = parts[0].trim()
-                        const alias = parts[1]?.trim() || originalName
-                        return `${alias}: ${moduleVar}.${originalName}`
-                      })
-                      .join(', ')
                     return `const ${moduleVar} = globalThis.require('${moduleName}'); const { ${imports} } = ${moduleVar}`
                   },
                 )
