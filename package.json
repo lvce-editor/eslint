@@ -1,10 +1,7 @@
 {
   "name": "builtin.eslint-monorepo",
   "version": "0.0.0-dev",
-  "description": "",
-  "keywords": [],
   "license": "MIT",
-  "author": "",
   "type": "module",
   "scripts": {
     "build": "node packages/build/src/build.js",

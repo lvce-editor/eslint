@@ -1,9 +1,6 @@
 {
   "name": "builtin.eslint",
   "version": "0.0.0-dev",
-  "description": "",
-  "keywords": [],
-  "author": "",
   "type": "module",
   "main": "src/eslintMain.ts",
   "scripts": {
