@@ -45,9 +45,6 @@ const main = async (): Promise<void> => {
     mainFields: ['module', 'main'],
     conditions: ['import', 'module', 'default'],
     platform: 'browser',
-    banner: {
-      js: bannerCode,
-    },
     plugins: [
       {
         name: 'inject-node-shims-first',
