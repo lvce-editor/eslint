@@ -103,18 +103,22 @@ const main = async (): Promise<void> => {
             }
           })
 
-          build.onLoad({ filter: /.*/, namespace: 'esquery-wrapper' }, () => {
-            const require = createRequire(import.meta.url)
-            const esqueryPath =
-              require.resolve('esquery/dist/esquery.esm.min.js')
+          build.onLoad(
+            { filter: /.*/, namespace: 'esquery-wrapper' },
+            (args) => {
+              const require = createRequire(import.meta.url)
+              const esqueryPath =
+                require.resolve('esquery/dist/esquery.esm.min.js')
+              const esqueryContent = readFileSync(esqueryPath, 'utf-8')
 
-            // Create a wrapper that re-exports esquery with the correct structure
-            // ESLint expects esquery.parse, but ESM version exports as default
-            // Handle nested default exports (esquery.default.parse)
-            return {
-              contents: `import esqueryModule from ${JSON.stringify(esqueryPath)};
+              // Create a wrapper that re-exports esquery with the correct structure
+              // ESLint expects esquery.parse, but ESM version exports as default
+              // Handle nested default exports (esquery.default.parse)
+              // Inline the esquery module and wrap it
+              return {
+                contents: `${esqueryContent}
 // Unwrap default export - handle both direct and nested default exports
-let esquery = esqueryModule;
+let esquery = typeof default !== 'undefined' ? default : (typeof exports !== 'undefined' && exports.default ? exports.default : {});
 if (esquery && typeof esquery === 'object') {
   // If it has a default property, unwrap it
   if ('default' in esquery && esquery.default) {
@@ -133,9 +137,11 @@ export const match = esquery?.match;
 export const query = esquery?.query || esquery;
 export const traverse = esquery?.traverse;
 export const matches = esquery?.matches;`,
-              loader: 'js',
-            }
-          })
+                loader: 'js',
+                resolveDir: join(root, 'packages', 'extension'),
+              }
+            },
+          )
         },
       },
       {
