@@ -408,6 +408,9 @@ if (typeof process === 'undefined') {
     destroy: () => {},
   })
 
+  const startTime = Date.now()
+  const startHrtime = performance.now()
+
   globalThis.process = {
     env: {},
     platform: 'browser',
@@ -433,6 +436,33 @@ if (typeof process === 'undefined') {
       external: 0,
       arrayBuffers: 0,
     }),
+    hrtime: (time) => {
+      // Returns [seconds, nanoseconds]
+      const now = performance.now()
+      const elapsed = now - startHrtime
+      const seconds = Math.floor(elapsed / 1000)
+      const nanoseconds = Math.floor((elapsed % 1000) * 1000000)
+      if (time) {
+        // If previous time is provided, return difference
+        const prevSeconds = time[0]
+        const prevNanoseconds = time[1]
+        const diffSeconds = seconds - prevSeconds
+        const diffNanoseconds = nanoseconds - prevNanoseconds
+        return [diffSeconds, diffNanoseconds]
+      }
+      return [seconds, nanoseconds]
+    },
+    uptime: () => {
+      return (Date.now() - startTime) / 1000
+    },
+  }
+
+  // Add hrtime.bigint property
+  globalThis.process.hrtime.bigint = () => {
+    const now = performance.now()
+    const elapsed = now - startHrtime
+    const nanoseconds = BigInt(Math.floor(elapsed * 1000000))
+    return nanoseconds
   }
 }
 
