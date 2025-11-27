@@ -11,8 +11,10 @@ export const getFn = (
 ): ((...args: readonly unknown[]) => unknown) => {
   switch (method) {
     case 'OutputChannel.log':
+      // @ts-ignore
       return log
     case 'Lint.lint':
+      // @ts-ignore
       return Lint.lint
     default:
       throw new CommandNotFoundError(method)
