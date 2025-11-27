@@ -25,4 +25,3 @@ export const stat = async (
   // @ts-ignore
   return await vscode.executeCommand('FileSystem.stat', path)
 }
-

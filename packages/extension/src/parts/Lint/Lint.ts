@@ -1,4 +1,4 @@
-import { ESLint } from 'eslint'
+import { Linter } from 'eslint'
 import * as FindEslintConfig from '../FindEslintConfig/FindEslintConfig.ts'
 import * as LoadEslintConfig from '../LoadEslintConfig/LoadEslintConfig.ts'
 
@@ -66,26 +66,25 @@ export const lint = async (
       // Handle flat config format (array) or legacy format (object)
       if (Array.isArray(loadedConfig)) {
         // Flat config: merge all configs
-        overrideConfig = loadedConfig.reduce(
-          (merged, config) => {
-            return {
-              ...merged,
-              languageOptions: {
-                ...merged.languageOptions,
-                ...config.languageOptions,
-                globals: {
-                  ...merged.languageOptions?.globals,
-                  ...config.languageOptions?.globals,
-                },
+        let merged = getDefaultConfig()
+        for (const config of loadedConfig) {
+          merged = {
+            ...merged,
+            languageOptions: {
+              ...merged.languageOptions,
+              ...config.languageOptions,
+              globals: {
+                ...merged.languageOptions?.globals,
+                ...config.languageOptions?.globals,
               },
-              rules: {
-                ...merged.rules,
-                ...config.rules,
-              },
-            }
-          },
-          getDefaultConfig(),
-        )
+            },
+            rules: {
+              ...merged.rules,
+              ...config.rules,
+            },
+          }
+        }
+        overrideConfig = merged
       } else if (typeof loadedConfig === 'object' && loadedConfig !== null) {
         // Legacy format or single flat config object
         overrideConfig = {
@@ -101,10 +100,9 @@ export const lint = async (
           },
         }
       }
-    } catch (error) {
-      // If config loading fails, log and use default config
-      // eslint-disable-next-line no-console
-      console.warn('Failed to load ESLint config:', error)
+    } catch {
+      // If config loading fails, use default config
+      // Config loading errors are silently ignored
     }
   }
 
@@ -113,30 +111,38 @@ export const lint = async (
   pathParts.pop()
   const cwd = pathParts.length > 0 ? pathParts.join('/') : '/'
 
-  const eslint = new ESLint({
-    overrideConfigFile: null,
-    overrideConfig,
-    cwd,
+  // Use Linter class which doesn't require config files
+  const linter = new Linter({
+    configType: 'flat',
   })
 
-  const results = await eslint.lintText(text, {
-    filePath,
+  // Convert config to flat config format (array)
+  const configArray = Array.isArray(overrideConfig)
+    ? overrideConfig
+    : [overrideConfig]
+
+  // Make file path relative to cwd for flat config matching
+  const relativeFilePath = filePath.startsWith(cwd)
+    ? filePath.slice(cwd.length + 1)
+    : filePath.replace(/^\//, '')
+
+  const results = linter.verifyAndFix(text, configArray, {
+    filename: relativeFilePath,
+    cwd,
   })
 
   const lintResults: LintResult[] = []
 
-  for (const result of results) {
-    for (const message of result.messages) {
-      lintResults.push({
-        line: message.line,
-        column: message.column,
-        endLine: message.endLine ?? undefined,
-        endColumn: message.endColumn ?? undefined,
-        message: message.message,
-        severity: message.severity === 2 ? 'error' : 'warning',
-        ruleId: message.ruleId,
-      })
-    }
+  for (const message of results.messages) {
+    lintResults.push({
+      line: message.line,
+      column: message.column,
+      endLine: message.endLine ?? undefined,
+      endColumn: message.endColumn ?? undefined,
+      message: message.message,
+      severity: message.severity === 2 ? 'error' : 'warning',
+      ruleId: message.ruleId,
+    })
   }
 
   return lintResults

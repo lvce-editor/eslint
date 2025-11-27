@@ -58,4 +58,3 @@ export const findEslintConfig = async (
 
   return null
 }
-

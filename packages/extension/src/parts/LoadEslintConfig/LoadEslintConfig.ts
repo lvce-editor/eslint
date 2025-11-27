@@ -48,4 +48,3 @@ export const loadEslintConfig = async (
     throw new Error(`Unable to parse config file: ${configFilePath}`)
   }
 }
-

@@ -6,9 +6,10 @@ export const label = 'ESLint'
 
 export const languageId = 'javascript'
 
-export const provideDiagnostics = async (
-  textDocument: { getText: () => string; uri?: { path: string } },
-): Promise<
+export const provideDiagnostics = async (textDocument: {
+  getText: () => string
+  uri?: { path: string }
+}): Promise<
   Array<{
     line: number
     column: number

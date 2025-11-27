@@ -4,7 +4,7 @@ import * as Lint from '../src/parts/Lint/Lint.ts'
 // Mock vscode global
 beforeEach(() => {
   // @ts-ignore
-  global.vscode = {
+  globalThis.vscode = {
     executeCommand: async (method: string, ...args: unknown[]) => {
       // Mock file system operations for tests
       if (method === 'FileSystem.readFile') {
