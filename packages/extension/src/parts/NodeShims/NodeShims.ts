@@ -2,14 +2,14 @@
 // These provide minimal implementations of Node.js built-in modules
 // that ESLint and plugins may require
 
-if (typeof globalThis.modules === 'undefined') {
+if (globalThis.modules === undefined) {
   globalThis.modules = {}
 }
 
 // Minimal path module shim
 globalThis.modules['node:path'] = {
   join: (...paths: string[]): string => {
-    return paths.filter(Boolean).join('/').replace(/\/+/g, '/')
+    return paths.filter(Boolean).join('/').replaceAll(/\/+/g, '/')
   },
   dirname: (path: string): string => {
     const parts = path.split('/')
@@ -34,7 +34,7 @@ globalThis.modules['node:path'] = {
         resolved = resolved === '/' ? `/${path}` : `${resolved}/${path}`
       }
     }
-    return resolved.replace(/\/+/g, '/')
+    return resolved.replaceAll(/\/+/g, '/')
   },
   sep: '/',
   delimiter: ':',
@@ -118,7 +118,7 @@ globalThis.modules['node:os'] = {
 }
 
 // Make require() work for node: modules
-if (typeof globalThis.require === 'undefined') {
+if (globalThis.require === undefined) {
   globalThis.require = ((id: string) => {
     if (id.startsWith('node:')) {
       const module = globalThis.modules[id]
@@ -127,5 +127,6 @@ if (typeof globalThis.require === 'undefined') {
       }
     }
     throw new Error(`Cannot find module '${id}'`)
+    // @ts-ignore
   }) as NodeRequire
 }
