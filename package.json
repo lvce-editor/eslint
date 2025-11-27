@@ -1,0 +1,33 @@
+{
+  "name": "builtin.eslint-monorepo",
+  "version": "0.0.0-dev",
+  "description": "",
+  "type": "module",
+  "scripts": {
+    "postinstall": "lerna bootstrap --ci",
+    "test": "lerna run test",
+    "dev": "node ./node_modules/@lvce-editor/server/bin/server.js --only-extension=packages/extension --test-path=packages/e2e",
+    "type-check": "tsc -b",
+    "test:watch": "node --unhandled-rejections=warn --experimental-vm-modules ./node_modules/jest/bin/jest.js --watch",
+    "e2e": "cd packages/e2e && npm run e2e",
+    "e2e:headless": "cd packages/e2e && npm run e2e:headless",
+    "build": "node packages/build/src/build.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@lerna/legacy-package-management": "^8.2.4",
+    "@lvce-editor/server": "^0.68.2",
+    "@types/node": "^24.10.1",
+    "jest": "^30.2.0",
+    "lerna": "^8.2.3",
+    "prettier": "^4.0.0-alpha.10",
+    "ts-jest": "^29.4.5",
+    "typescript": "^5.9.3"
+  },
+  "prettier": {
+    "semi": false,
+    "singleQuote": true
+  }
+}
