@@ -45,7 +45,24 @@ const main = async (): Promise<void> => {
     mainFields: ['module', 'main'],
     conditions: ['import', 'module', 'default'],
     platform: 'browser',
+    banner: {
+      js: bannerCode,
+    },
     plugins: [
+      {
+        name: 'inject-node-shims-first',
+        setup(build) {
+          // Inject banner code at the entry point to ensure it runs first
+          build.onLoad({ filter: /eslintMain\.ts$/ }, (args) => {
+            const contents = readFileSync(args.path, 'utf-8')
+            // Prepend banner code to the entry point
+            return {
+              contents: bannerCode + '\n' + contents,
+              loader: 'ts',
+            }
+          })
+        },
+      },
       {
         name: 'ensure-eslint-bundled',
         setup(build) {
