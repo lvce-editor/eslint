@@ -1,14 +1,15 @@
-import * as ExtensionHostFormattingProviderPrettier from '../ExtensionHost/ExtensionHostFormattingProviderPrettier.ts'
-import * as LanguageIds from '../LanguageIds/LanguageIds.ts'
+// import * as ExtensionHostDiagnosticProviderEslint from '../ExtensionHost/ExtensionHostDiagnosticProviderEslint.ts'
+
+// const eslintEnabled = false
 
 export const activate = () => {
-  for (const languageId of LanguageIds.languageIds) {
-    // @ts-ignore
-    vscode.registerFormattingProvider({
-      ...ExtensionHostFormattingProviderPrettier,
-      languageId,
-    })
-  }
+  // if (eslintEnabled) {
+  //   // @ts-ignore
+  //   vscode.registerDiagnosticProvider({
+  //     ...ExtensionHostDiagnosticProviderEslint,
+  //     languageId: 'javascript',
+  //   })
+  // }
 }
 
 export const deactivate = () => {}

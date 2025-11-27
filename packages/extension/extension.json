@@ -3,10 +3,9 @@
   "name": "ESLint",
   "description": "ESLint extension",
   "repository": "https://github.com/lvce-editor/eslint",
-  "browser": "src/eslintMain.ts",
+  "browser": "dist/eslintMain.js",
   "categories": [],
   "activation": ["onDiagnostic:javascript", "onDiagnostic:typescript"],
-  "rpc": [],
   "languages": [
     {
       "id": "json",
