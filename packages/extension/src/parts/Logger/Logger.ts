@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 export const info = (...args) => {
   console.info(...args)
 }

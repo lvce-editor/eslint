@@ -40,7 +40,7 @@ export const number = (value) => {
   if (type !== 'number') {
     throw new AssertionError('expected value to be of type number')
   }
-  if (isNaN(value)) {
+  if (Number.isNaN(value)) {
     throw new AssertionError('value is NaN')
   }
 }
