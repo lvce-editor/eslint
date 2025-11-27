@@ -11,6 +11,6 @@ if (globalThis.require === undefined) {
       }
     }
     throw new Error(`Cannot find module '${id}'`)
-  // @ts-ignore
+    // @ts-ignore
   }) as NodeRequire
 }
