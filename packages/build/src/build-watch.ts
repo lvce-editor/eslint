@@ -2,6 +2,7 @@ import { context } from 'esbuild'
 import { root } from './root.js'
 import { join } from 'node:path'
 import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 
 const main = async (): Promise<void> => {
   const bannerPath = join(
@@ -46,6 +47,7 @@ const main = async (): Promise<void> => {
     packages: 'bundle',
     mainFields: ['module', 'main'],
     conditions: ['import', 'module', 'default'],
+    platform: 'browser',
     plugins: [
       {
         name: 'ensure-eslint-bundled',
@@ -54,6 +56,18 @@ const main = async (): Promise<void> => {
           build.onResolve({ filter: /^eslint$/ }, (args) => {
             // Don't mark as external - let it be bundled
             return undefined
+          })
+        },
+      },
+      {
+        name: 'ensure-esquery-esm',
+        setup(build) {
+          // Force esquery to use ESM version
+          build.onResolve({ filter: /^esquery$/ }, (args) => {
+            const require = createRequire(import.meta.url)
+            return {
+              path: require.resolve('esquery/dist/esquery.esm.min.js'),
+            }
           })
         },
       },
