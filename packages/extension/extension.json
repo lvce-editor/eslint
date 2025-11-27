@@ -1,0 +1,30 @@
+{
+  "id": "builtin.eslint",
+  "name": "ESLint",
+  "description": "ESLint extension",
+  "repository": "https://github.com/lvce-editor/eslint",
+  "browser": "src/prettierMain.ts",
+  "categories": [],
+  "activation": [],
+  "rpc": [],
+  "languages": [
+    {
+      "id": "json",
+      "fileNames": [".eslintrc"]
+    },
+    {
+      "id": "ignore",
+      "fileNames": [".eslintignore"]
+    }
+  ],
+  "jsonValidation": [
+    {
+      "fileMatch": ".eslintrc",
+      "url": "https://json.schemastore.org/eslintrc"
+    },
+    {
+      "fileMatch": ".eslintrc.json",
+      "url": "https://json.schemastore.org/eslintrc"
+    }
+  ]
+}
