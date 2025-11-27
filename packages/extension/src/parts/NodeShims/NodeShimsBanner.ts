@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-implied-eval */
+/* eslint-disable unicorn/prefer-code-point */
 // This code is injected as a banner by esbuild
 // It sets up Node.js module shims before any other code runs
 if (globalThis.modules === undefined) {
@@ -273,9 +275,7 @@ globalThis.modules['node:crypto'] = {
     return {
       toString: (encoding) => {
         if (encoding === 'hex') {
-          return [...array]
-            .map((b) => b.toString(16).padStart(2, '0'))
-            .join('')
+          return [...array].map((b) => b.toString(16).padStart(2, '0')).join('')
         }
         return String.fromCharCode(...array)
       },
