@@ -9,7 +9,11 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
+<<<<<<< HEAD
     "@lvce-editor/package-extension": "^2.0.0",
+=======
+    "@lvce-editor/package-extension": "^2.1.0",
+>>>>>>> origin/main
     "@types/node": "^24.10.1",
     "esbuild": "^0.27.0"
   }
