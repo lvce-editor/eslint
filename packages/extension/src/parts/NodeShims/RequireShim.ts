@@ -1,7 +1,7 @@
 // This file is injected by esbuild to set up require() for node: modules
 // It must be loaded before any code that uses require("node:*")
 
-if (typeof globalThis.require === 'undefined') {
+if (globalThis.require === undefined) {
   // @ts-ignore
   globalThis.require = ((id: string) => {
     if (id.startsWith('node:')) {
@@ -11,5 +11,6 @@ if (typeof globalThis.require === 'undefined') {
       }
     }
     throw new Error(`Cannot find module '${id}'`)
+    // @ts-ignore
   }) as NodeRequire
 }

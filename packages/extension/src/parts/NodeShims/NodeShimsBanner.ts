@@ -1,13 +1,15 @@
+/* eslint-disable @typescript-eslint/no-implied-eval */
+/* eslint-disable unicorn/prefer-code-point */
 // This code is injected as a banner by esbuild
 // It sets up Node.js module shims before any other code runs
-if (typeof globalThis.modules === 'undefined') {
+if (globalThis.modules === undefined) {
   globalThis.modules = {}
 }
 
 // Minimal path module shim
 const pathModule = {
   join: (...paths) => {
-    return paths.filter(Boolean).join('/').replace(/\/+/g, '/')
+    return paths.filter(Boolean).join('/').replaceAll(/\/+/g, '/')
   },
   dirname: (path) => {
     const parts = path.split('/')
@@ -36,7 +38,7 @@ const pathModule = {
         resolved = resolved === '/' ? `/${path}` : `${resolved}/${path}`
       }
     }
-    return resolved.replace(/\/+/g, '/')
+    return resolved.replaceAll(/\/+/g, '/')
   },
   relative: (from, to) => {
     // Simplified relative path calculation
@@ -57,8 +59,8 @@ const pathModule = {
   },
   normalize: (path) => {
     return path
-      .replace(/\/+/g, '/')
-      .replace(/\/\.\//g, '/')
+      .replaceAll(/\/+/g, '/')
+      .replaceAll('/./', '/')
       .replace(/\/\.$/, '')
   },
   isAbsolute: (path) => {
@@ -71,7 +73,9 @@ const pathModule = {
 }
 
 // posix and win32 are references to the same object in Node.js
+// @ts-ignore
 pathModule.posix = pathModule
+// @ts-ignore
 pathModule.win32 = pathModule
 
 globalThis.modules['node:path'] = pathModule
@@ -271,9 +275,7 @@ globalThis.modules['node:crypto'] = {
     return {
       toString: (encoding) => {
         if (encoding === 'hex') {
-          return Array.from(array)
-            .map((b) => b.toString(16).padStart(2, '0'))
-            .join('')
+          return [...array].map((b) => b.toString(16).padStart(2, '0')).join('')
         }
         return String.fromCharCode(...array)
       },
@@ -313,7 +315,7 @@ globalThis.modules['node:events'] = {
     removeListener(event, listener) {
       const listeners = this.listeners.get(event) || []
       const index = listeners.indexOf(listener)
-      if (index > -1) {
+      if (index !== -1) {
         listeners.splice(index, 1)
       }
       return this
@@ -341,6 +343,7 @@ globalThis.modules['node:stream'] = {
 globalThis.modules['stream'] = globalThis.modules['node:stream']
 
 // Minimal buffer shim (use global Buffer if available, otherwise create minimal shim)
+// @ts-ignore
 if (typeof Buffer === 'undefined') {
   globalThis.Buffer = {
     from: (data, encoding) => {
@@ -393,6 +396,7 @@ if (typeof Buffer === 'undefined') {
 }
 
 // Minimal process shim
+// @ts-ignore
 if (typeof process === 'undefined') {
   const createStream = (name) => ({
     fd: 0,
@@ -445,7 +449,7 @@ if (typeof process === 'undefined') {
       const now = performance.now()
       const elapsed = now - startHrtime
       const seconds = Math.floor(elapsed / 1000)
-      const nanoseconds = Math.floor((elapsed % 1000) * 1000000)
+      const nanoseconds = Math.floor((elapsed % 1000) * 1_000_000)
       if (time) {
         // If previous time is provided, return difference
         const prevSeconds = time[0]
@@ -465,7 +469,7 @@ if (typeof process === 'undefined') {
   globalThis.process.hrtime.bigint = () => {
     const now = performance.now()
     const elapsed = now - startHrtime
-    const nanoseconds = BigInt(Math.floor(elapsed * 1000000))
+    const nanoseconds = BigInt(Math.floor(elapsed * 1_000_000))
     return nanoseconds
   }
 }
