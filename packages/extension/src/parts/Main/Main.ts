@@ -1,3 +1,4 @@
+import * as ExtensionHostDiagnosticProviderEslint from '../ExtensionHost/ExtensionHostDiagnosticProviderEslint.ts'
 import * as ExtensionHostFormattingProviderPrettier from '../ExtensionHost/ExtensionHostFormattingProviderPrettier.ts'
 import * as LanguageIds from '../LanguageIds/LanguageIds.ts'
 
@@ -9,6 +10,11 @@ export const activate = () => {
       languageId,
     })
   }
+  // @ts-ignore
+  vscode.registerDiagnosticProvider({
+    ...ExtensionHostDiagnosticProviderEslint,
+    languageId: 'javascript',
+  })
 }
 
 export const deactivate = () => {}
