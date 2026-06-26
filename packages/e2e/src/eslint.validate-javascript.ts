@@ -3,11 +3,11 @@ import type { Test } from '@lvce-editor/test-with-playwright'
 export const name = 'eslint.validate-javascript'
 
 export const test: Test = async ({
-  FileSystem,
-  Main,
   Editor,
-  Locator,
   expect,
+  FileSystem,
+  Locator,
+  Main,
 }) => {
   // arrange
   await Editor.enableDiagnostics()

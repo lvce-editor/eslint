@@ -4,6 +4,7 @@ import * as Lint from '../src/parts/Lint/Lint.ts'
 // Mock vscode global
 beforeEach(() => {
   // @ts-ignore
+  // eslint-disable-next-line unicorn/no-global-object-property-assignment
   globalThis.vscode = {
     executeCommand: async (method: string, ...args: unknown[]) => {
       // Mock file system operations for tests
@@ -19,7 +20,7 @@ beforeEach(() => {
         return []
       }
       if (method === 'FileSystem.stat') {
-        return { isFile: false, isDirectory: false }
+        return { isDirectory: false, isFile: false }
       }
       throw new Error(`Unexpected method: ${method}`)
     },

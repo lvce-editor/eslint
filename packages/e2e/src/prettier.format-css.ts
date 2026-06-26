@@ -5,11 +5,11 @@ export const name = 'prettier.format-css'
 export const skip = 1
 
 export const test: Test = async ({
-  FileSystem,
-  Main,
   Editor,
-  Locator,
   expect,
+  FileSystem,
+  Locator,
+  Main,
 }) => {
   // arrange
   const tmpDir = await FileSystem.getTmpDir()

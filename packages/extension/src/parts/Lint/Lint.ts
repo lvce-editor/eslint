@@ -15,23 +15,20 @@ export type LintResult = {
 const getDefaultConfig = () => ({
   languageOptions: {
     ecmaVersion: 'latest' as const,
-    sourceType: 'module' as const,
     globals: {
-      console: 'readonly' as const,
-      process: 'readonly' as const,
-      Buffer: 'readonly' as const,
       __dirname: 'readonly' as const,
       __filename: 'readonly' as const,
+      Buffer: 'readonly' as const,
+      console: 'readonly' as const,
+      exports: 'readonly' as const,
       global: 'readonly' as const,
       module: 'readonly' as const,
+      process: 'readonly' as const,
       require: 'readonly' as const,
-      exports: 'readonly' as const,
     },
+    sourceType: 'module' as const,
   },
   rules: {
-    // Use ESLint's recommended rules
-    'no-unused-vars': 'warn' as const,
-    'no-undef': 'error' as const,
     'no-console': 'off' as const,
     'no-debugger': 'error' as const,
     'no-duplicate-case': 'error' as const,
@@ -39,9 +36,12 @@ const getDefaultConfig = () => ({
     'no-extra-semi': 'error' as const,
     'no-func-assign': 'error' as const,
     'no-irregular-whitespace': 'error' as const,
+    'no-undef': 'error' as const,
     'no-unreachable': 'error' as const,
     'no-unsafe-finally': 'error' as const,
     'no-unsafe-negation': 'error' as const,
+    // Use ESLint's recommended rules
+    'no-unused-vars': 'warn' as const,
     'use-isnan': 'error' as const,
     'valid-typeof': 'error' as const,
   },
@@ -129,23 +129,19 @@ export const lint = async (
 
   // @ts-ignore
   const results = linter.verifyAndFix(text, configArray, {
-    filename: relativeFilePath,
     cwd,
+    filename: relativeFilePath,
   })
 
-  const lintResults: LintResult[] = []
-
-  for (const message of results.messages) {
-    lintResults.push({
-      line: message.line,
-      column: message.column,
-      endLine: message.endLine ?? undefined,
-      endColumn: message.endColumn ?? undefined,
-      message: message.message,
-      severity: message.severity === 2 ? 'error' : 'warning',
-      ruleId: message.ruleId,
-    })
-  }
+  const lintResults: LintResult[] = Array.from(results.messages, (message) => ({
+    column: message.column,
+    endColumn: message.endColumn ?? undefined,
+    endLine: message.endLine ?? undefined,
+    line: message.line,
+    message: message.message,
+    ruleId: message.ruleId,
+    severity: message.severity === 2 ? 'error' : 'warning',
+  }))
 
   return lintResults
 }

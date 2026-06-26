@@ -1,4 +1,6 @@
 /* eslint-disable @typescript-eslint/no-implied-eval */
+/* eslint-disable unicorn/no-global-object-property-assignment */
+/* eslint-disable unicorn/no-this-outside-of-class */
 /* eslint-disable unicorn/prefer-code-point */
 // This code is injected as a banner by esbuild
 // It sets up Node.js module shims before any other code runs
@@ -8,38 +10,38 @@ if (globalThis.modules === undefined) {
 
 // Minimal path module shim
 const pathModule = {
-  join: (...paths) => {
-    return paths.filter(Boolean).join('/').replaceAll(/\/+/g, '/')
-  },
-  dirname: (path) => {
-    const parts = path.split('/')
-    parts.pop()
-    return parts.join('/') || '/'
-  },
   basename: (path, ext) => {
     const parts = path.split('/')
-    let name = parts[parts.length - 1] || ''
+    let name = parts.at(-1) || ''
     if (ext && name.endsWith(ext)) {
       name = name.slice(0, -ext.length)
     }
     return name
+  },
+  delimiter: ':',
+  dirname: (path) => {
+    const parts = path.split('/')
+    parts.pop()
+    return parts.join('/') || '/'
   },
   extname: (path) => {
     const lastDot = path.lastIndexOf('.')
     const lastSlash = path.lastIndexOf('/')
     return lastDot > lastSlash ? path.slice(lastDot) : ''
   },
-  resolve: (...paths) => {
-    let resolved = '/'
-    for (const path of paths) {
-      if (path.startsWith('/')) {
-        resolved = path
-      } else {
-        resolved = resolved === '/' ? `/${path}` : `${resolved}/${path}`
-      }
-    }
-    return resolved.replaceAll(/\/+/g, '/')
+  isAbsolute: (path) => {
+    return path.startsWith('/')
   },
+  join: (...paths) => {
+    return paths.filter(Boolean).join('/').replaceAll(/\/+/g, '/')
+  },
+  normalize: (path) => {
+    return path
+      .replaceAll(/\/+/g, '/')
+      .replaceAll('/./', '/')
+      .replace(/\/\.$/, '')
+  },
+  posix: null, // Will be set below
   relative: (from, to) => {
     // Simplified relative path calculation
     if (from === to) return ''
@@ -57,18 +59,18 @@ const pathModule = {
     const downPath = toParts.slice(commonLength).join('/')
     return '../'.repeat(upLevels) + downPath
   },
-  normalize: (path) => {
-    return path
-      .replaceAll(/\/+/g, '/')
-      .replaceAll('/./', '/')
-      .replace(/\/\.$/, '')
-  },
-  isAbsolute: (path) => {
-    return path.startsWith('/')
+  resolve: (...paths) => {
+    let resolved = '/'
+    for (const path of paths) {
+      if (path.startsWith('/')) {
+        resolved = path
+      } else {
+        resolved = resolved === '/' ? `/${path}` : `${resolved}/${path}`
+      }
+    }
+    return resolved.replaceAll(/\/+/g, '/')
   },
   sep: '/',
-  delimiter: ':',
-  posix: null, // Will be set below
   win32: null, // Will be set below
 }
 
@@ -82,103 +84,86 @@ globalThis.modules['node:path'] = pathModule
 
 // Minimal fs module shim
 globalThis.modules['node:fs'] = {
-  existsSync: () => false,
-  readFileSync: () => {
-    throw new Error('fs.readFileSync is not available in web worker')
-  },
-  writeFileSync: () => {
-    throw new Error('fs.writeFileSync is not available in web worker')
-  },
-  statSync: () => {
-    throw new Error('fs.statSync is not available in web worker')
-  },
-  readdirSync: () => {
-    throw new Error('fs.readdirSync is not available in web worker')
-  },
-  createReadStream: () => {
-    return {
-      fd: undefined,
-      on: () => {},
-      once: () => {},
-      emit: () => {},
-      destroy: () => {},
-      close: () => {},
-    }
-  },
-  createWriteStream: () => {
-    return {
-      fd: undefined,
-      write: () => {},
-      end: () => {},
-      on: () => {},
-      once: () => {},
-      emit: () => {},
-      destroy: () => {},
-      close: () => {},
-    }
-  },
-  openSync: () => {
-    throw new Error('fs.openSync is not available in web worker')
-  },
   closeSync: () => {
     throw new Error('fs.closeSync is not available in web worker')
   },
   constants: {
     O_RDONLY: 0,
-    O_WRONLY: 1,
     O_RDWR: 2,
+    O_WRONLY: 1,
+  },
+  createReadStream: () => {
+    return {
+      close: () => {},
+      destroy: () => {},
+      emit: () => {},
+      fd: undefined,
+      on: () => {},
+      once: () => {},
+    }
+  },
+  createWriteStream: () => {
+    return {
+      close: () => {},
+      destroy: () => {},
+      emit: () => {},
+      end: () => {},
+      fd: undefined,
+      on: () => {},
+      once: () => {},
+      write: () => {},
+    }
+  },
+  existsSync: () => false,
+  openSync: () => {
+    throw new Error('fs.openSync is not available in web worker')
+  },
+  readdirSync: () => {
+    throw new Error('fs.readdirSync is not available in web worker')
+  },
+  readFileSync: () => {
+    throw new Error('fs.readFileSync is not available in web worker')
+  },
+  statSync: () => {
+    throw new Error('fs.statSync is not available in web worker')
+  },
+  writeFileSync: () => {
+    throw new Error('fs.writeFileSync is not available in web worker')
   },
 }
 
 // Minimal fs/promises shim
 globalThis.modules['node:fs/promises'] = {
+  readdir: async () => {
+    throw new Error('fs.promises.readdir is not available in web worker')
+  },
   readFile: async () => {
     throw new Error('fs.promises.readFile is not available in web worker')
-  },
-  writeFile: async () => {
-    throw new Error('fs.promises.writeFile is not available in web worker')
   },
   stat: async () => {
     throw new Error('fs.promises.stat is not available in web worker')
   },
-  readdir: async () => {
-    throw new Error('fs.promises.readdir is not available in web worker')
+  writeFile: async () => {
+    throw new Error('fs.promises.writeFile is not available in web worker')
   },
 }
 
 // Minimal util module shim
 globalThis.modules['node:util'] = {
+  deprecate: (fn, message) => {
+    // Return the function as-is, optionally logging deprecation warning
+    return fn
+  },
+  inspect: (obj) => {
+    return JSON.stringify(obj, null, 2)
+  },
   promisify: (fn) => {
     return (...args) => {
       return Promise.resolve(fn(...args))
     }
   },
-  inspect: (obj) => {
-    return JSON.stringify(obj, null, 2)
-  },
-  deprecate: (fn, message) => {
-    // Return the function as-is, optionally logging deprecation warning
-    return fn
-  },
   types: {
-    isString: (value) => typeof value === 'string',
-    isNumber: (value) => typeof value === 'number',
-    isBoolean: (value) => typeof value === 'boolean',
-    isUndefined: (value) => value === undefined,
-    isNull: (value) => value === null,
-    isObject: (value) => typeof value === 'object' && value !== null,
     isArray: (value) => Array.isArray(value),
-    isFunction: (value) => typeof value === 'function',
-    isBigInt: (value) => typeof value === 'bigint',
-    isBigInt64Array: (value) => value instanceof BigInt64Array,
-    isBigUint64Array: (value) => value instanceof BigUint64Array,
-    isDate: (value) => value instanceof Date,
-    isRegExp: (value) => value instanceof RegExp,
-    isMap: (value) => value instanceof Map,
-    isSet: (value) => value instanceof Set,
-    isWeakMap: (value) => value instanceof WeakMap,
-    isWeakSet: (value) => value instanceof WeakSet,
-    isPromise: (value) => value instanceof Promise,
     isAsyncFunction: (value) => {
       return (
         typeof value === 'function' &&
@@ -186,6 +171,12 @@ globalThis.modules['node:util'] = {
         value.constructor.name === 'AsyncFunction'
       )
     },
+    isBigInt: (value) => typeof value === 'bigint',
+    isBigInt64Array: (value) => value instanceof BigInt64Array,
+    isBigUint64Array: (value) => value instanceof BigUint64Array,
+    isBoolean: (value) => typeof value === 'boolean',
+    isDate: (value) => value instanceof Date,
+    isFunction: (value) => typeof value === 'function',
     isGeneratorFunction: (value) => {
       return (
         typeof value === 'function' &&
@@ -193,19 +184,30 @@ globalThis.modules['node:util'] = {
         value.constructor.name === 'GeneratorFunction'
       )
     },
+    isMap: (value) => value instanceof Map,
+    isNull: (value) => value === null,
+    isNumber: (value) => typeof value === 'number',
+    isObject: (value) => typeof value === 'object' && value !== null,
+    isPromise: (value) => value instanceof Promise,
+    isRegExp: (value) => value instanceof RegExp,
+    isSet: (value) => value instanceof Set,
+    isString: (value) => typeof value === 'string',
+    isUndefined: (value) => value === undefined,
+    isWeakMap: (value) => value instanceof WeakMap,
+    isWeakSet: (value) => value instanceof WeakSet,
   },
 }
 
 // Minimal assert module shim
 globalThis.modules['node:assert'] = {
-  ok: (value, message) => {
-    if (!value) {
-      throw new Error(message || 'Assertion failed')
-    }
-  },
   equal: (actual, expected, message) => {
     if (actual !== expected) {
       throw new Error(message || `Expected ${expected}, but got ${actual}`)
+    }
+  },
+  ok: (value, message) => {
+    if (!value) {
+      throw new Error(message || 'Assertion failed')
     }
   },
   strictEqual: (actual, expected, message) => {
@@ -217,24 +219,24 @@ globalThis.modules['node:assert'] = {
 
 // Minimal os module shim
 globalThis.modules['node:os'] = {
-  platform: () => 'browser',
   arch: () => 'x64',
-  tmpdir: () => '/tmp',
-  homedir: () => '/',
   EOL: '\n',
+  homedir: () => '/',
+  platform: () => 'browser',
+  tmpdir: () => '/tmp',
 }
 globalThis.modules['os'] = globalThis.modules['node:os']
 
 // Minimal url module shim
 globalThis.modules['node:url'] = {
-  pathToFileURL: (path) => {
-    return new URL(`file://${path}`)
-  },
   fileURLToPath: (url) => {
     if (typeof url === 'string') {
       return url.replace('file://', '')
     }
     return url.pathname
+  },
+  pathToFileURL: (path) => {
+    return new URL(`file://${path}`)
   },
 }
 globalThis.modules['url'] = globalThis.modules['node:url']
@@ -245,13 +247,6 @@ globalThis.modules['node:crypto'] = {
     // Minimal hash implementation
     let hash = 0
     return {
-      update: (data) => {
-        const str = typeof data === 'string' ? data : String(data)
-        for (let i = 0; i < str.length; i++) {
-          hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0
-        }
-        return this
-      },
       digest: (encoding) => {
         const hex = Math.abs(hash).toString(16)
         if (encoding === 'hex') {
@@ -259,6 +254,13 @@ globalThis.modules['node:crypto'] = {
         }
         // For other encodings, return hex as string
         return hex
+      },
+      update: (data) => {
+        const str = typeof data === 'string' ? data : String(data)
+        for (let i = 0; i < str.length; i++) {
+          hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0
+        }
+        return this
       },
     }
   },
@@ -273,13 +275,15 @@ globalThis.modules['node:crypto'] = {
     }
     // Return a Buffer-like object
     return {
+      length: array.length,
       toString: (encoding) => {
         if (encoding === 'hex') {
-          return [...array].map((b) => b.toString(16).padStart(2, '0')).join('')
+          return Array.from(array, (b) => b.toString(16).padStart(2, '0')).join(
+            '',
+          )
         }
         return String.fromCharCode(...array)
       },
-      length: array.length,
     }
   },
 }
@@ -287,10 +291,10 @@ globalThis.modules['crypto'] = globalThis.modules['node:crypto']
 
 // Minimal module shim
 globalThis.modules['node:module'] = {
+  _cache: {},
   createRequire: (filename) => {
     return globalThis.require
   },
-  _cache: {},
 }
 globalThis.modules['module'] = globalThis.modules['node:module']
 
@@ -334,11 +338,11 @@ globalThis.modules['tty'] = globalThis.modules['node:tty']
 
 // Minimal stream module shim
 globalThis.modules['node:stream'] = {
-  Readable: class {},
-  Writable: class {},
-  Transform: class {},
   Duplex: class {},
   PassThrough: class {},
+  Readable: class {},
+  Transform: class {},
+  Writable: class {},
 }
 globalThis.modules['stream'] = globalThis.modules['node:stream']
 
@@ -346,16 +350,11 @@ globalThis.modules['stream'] = globalThis.modules['node:stream']
 // @ts-ignore
 if (typeof Buffer === 'undefined') {
   globalThis.Buffer = {
-    from: (data, encoding) => {
-      if (typeof data === 'string') {
-        return new TextEncoder().encode(data)
-      }
-      return data
-    },
-    isBuffer: () => false,
     alloc: (size) => new Uint8Array(size),
     allocUnsafe: (size) => new Uint8Array(size),
     allocUnsafeSlow: (size) => new Uint8Array(size),
+    // Add bigint property for compatibility
+    bigint: undefined,
     byteLength: (data) => {
       if (typeof data === 'string') {
         return new TextEncoder().encode(data).length
@@ -390,8 +389,13 @@ if (typeof Buffer === 'undefined') {
       }
       return result
     },
-    // Add bigint property for compatibility
-    bigint: undefined,
+    from: (data, encoding) => {
+      if (typeof data === 'string') {
+        return new TextEncoder().encode(data)
+      }
+      return data
+    },
+    isBuffer: () => false,
   }
 }
 
@@ -399,51 +403,32 @@ if (typeof Buffer === 'undefined') {
 // @ts-ignore
 if (typeof process === 'undefined') {
   const createStream = (name) => ({
+    destroy: () => {},
+    emit: () => {},
+    end: () => {},
     fd: 0,
     isTTY: false,
-    write: () => {},
-    end: () => {},
     on: () => {},
     once: () => {},
-    emit: () => {},
-    removeListener: () => {},
-    read: () => null,
-    setEncoding: () => {},
     pause: () => {},
-    resume: () => {},
     pipe: () => {},
+    read: () => null,
+    removeListener: () => {},
+    resume: () => {},
+    setEncoding: () => {},
     unpipe: () => {},
-    destroy: () => {},
+    write: () => {},
   })
 
   const startTime = Date.now()
   const startHrtime = performance.now()
 
   globalThis.process = {
-    env: {},
-    platform: 'browser',
-    version: 'v0.0.0',
-    versions: {},
-    exit: () => {},
-    cwd: () => '/',
-    nextTick: (fn) => {
-      setTimeout(fn, 0)
-    },
-    stdin: createStream('stdin'),
-    stdout: createStream('stdout'),
-    stderr: createStream('stderr'),
-    argv: [],
-    pid: 1,
-    ppid: 0,
-    title: 'browser',
     arch: 'x64',
-    memoryUsage: () => ({
-      rss: 0,
-      heapTotal: 0,
-      heapUsed: 0,
-      external: 0,
-      arrayBuffers: 0,
-    }),
+    argv: [],
+    cwd: () => '/',
+    env: {},
+    exit: () => {},
     hrtime: (time) => {
       // Returns [seconds, nanoseconds]
       const now = performance.now()
@@ -460,9 +445,28 @@ if (typeof process === 'undefined') {
       }
       return [seconds, nanoseconds]
     },
+    memoryUsage: () => ({
+      arrayBuffers: 0,
+      external: 0,
+      heapTotal: 0,
+      heapUsed: 0,
+      rss: 0,
+    }),
+    nextTick: (fn) => {
+      setTimeout(fn, 0)
+    },
+    pid: 1,
+    platform: 'browser',
+    ppid: 0,
+    stderr: createStream('stderr'),
+    stdin: createStream('stdin'),
+    stdout: createStream('stdout'),
+    title: 'browser',
     uptime: () => {
       return (Date.now() - startTime) / 1000
     },
+    version: 'v0.0.0',
+    versions: {},
   }
 
   // Add hrtime.bigint property
@@ -476,13 +480,13 @@ if (typeof process === 'undefined') {
 
 // Minimal worker_threads module shim
 globalThis.modules['node:worker_threads'] = {
+  isMainThread: false,
+  parentPort: null,
   Worker: class Worker {
     constructor() {
       throw new Error('Worker threads are not available in web worker')
     }
   },
-  isMainThread: false,
-  parentPort: null,
   workerData: null,
 }
 globalThis.modules['worker_threads'] = globalThis.modules['node:worker_threads']

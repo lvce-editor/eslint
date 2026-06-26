@@ -1,3 +1,4 @@
+/* eslint-disable unicorn/no-global-object-property-assignment */
 // This file is injected by esbuild to set up require() for node: modules
 // It must be loaded before any code that uses require("node:*")
 

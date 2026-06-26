@@ -11,21 +11,21 @@ export const getFn = (
   method: string,
 ): ((...args: readonly unknown[]) => unknown) => {
   switch (method) {
-    case 'OutputChannel.log':
-      // @ts-ignore
-      return log
-    case 'Lint.lint':
-      // @ts-ignore
-      return Lint.lint
-    case 'FileSystem.readFile':
-      // @ts-ignore
-      return FileSystem.readFile
     case 'FileSystem.readDirWithFileTypes':
       // @ts-ignore
       return FileSystem.readDirWithFileTypes
+    case 'FileSystem.readFile':
+      // @ts-ignore
+      return FileSystem.readFile
     case 'FileSystem.stat':
       // @ts-ignore
       return FileSystem.stat
+    case 'Lint.lint':
+      // @ts-ignore
+      return Lint.lint
+    case 'OutputChannel.log':
+      // @ts-ignore
+      return log
     default:
       throw new CommandNotFoundError(method)
   }
