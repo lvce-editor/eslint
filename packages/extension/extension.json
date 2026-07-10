@@ -5,7 +5,12 @@
   "repository": "https://github.com/lvce-editor/eslint",
   "browser": "dist/eslintMain.js",
   "categories": [],
-  "activation": ["onDiagnostic:javascript", "onDiagnostic:typescript"],
+  "activation": [
+    "onDiagnostic:javascript",
+    "onDiagnostic:typescript",
+    "onLanguage:javascript",
+    "onLanguage:typescript"
+  ],
   "languages": [
     {
       "id": "json",
