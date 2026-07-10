@@ -2,7 +2,14 @@ import type { Test } from '@lvce-editor/test-with-playwright'
 
 export const name = 'eslint.config-plugin'
 
-export const test: Test = async ({ Editor, FileSystem, Main, Workspace }) => {
+export const test: Test = async ({
+  Editor,
+  expect,
+  FileSystem,
+  Locator,
+  Main,
+  Workspace,
+}) => {
   const tmpDir = await FileSystem.getTmpDir()
   const pluginDir = `${tmpDir}/node_modules/eslint-plugin-demo`
   await FileSystem.mkdir(`${tmpDir}/node_modules`)
@@ -24,6 +31,7 @@ export const test: Test = async ({ Editor, FileSystem, Main, Workspace }) => {
 
   await Main.openUri(`${tmpDir}/test.js`)
 
+  await expect(Locator('.Diagnostic')).toHaveCount(1)
   await Editor.shouldHaveDiagnostics([
     {
       columnIndex: 7,
