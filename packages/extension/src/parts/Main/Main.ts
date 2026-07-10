@@ -11,6 +11,7 @@ export const activate = () => {
     // @ts-ignore
     vscode.registerDiagnosticProvider({
       ...ExtensionHostDiagnosticProviderEslint,
+      id: `eslint.${languageId}`,
       languageId,
     })
   }

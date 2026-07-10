@@ -4,6 +4,7 @@
   "description": "ESLint extension",
   "repository": "https://github.com/lvce-editor/eslint",
   "browser": "dist/eslintMain.js",
+  "isolated": true,
   "categories": [],
   "activation": [
     "onDiagnostic:javascript",
@@ -16,6 +17,16 @@
     {
       "id": "eslint.lint",
       "label": "ESLint: Lint Document"
+    }
+  ],
+  "diagnosticProviders": [
+    {
+      "id": "eslint.javascript",
+      "languageId": "javascript"
+    },
+    {
+      "id": "eslint.typescript",
+      "languageId": "typescript"
     }
   ],
   "languages": [
