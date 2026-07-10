@@ -1,15 +1,13 @@
-// import * as ExtensionHostDiagnosticProviderEslint from '../ExtensionHost/ExtensionHostDiagnosticProviderEslint.ts'
-
-// const eslintEnabled = false
+import * as ExtensionHostDiagnosticProviderEslint from '../ExtensionHost/ExtensionHostDiagnosticProviderEslint.ts'
 
 export const activate = () => {
-  // if (eslintEnabled) {
-  //   // @ts-ignore
-  //   vscode.registerDiagnosticProvider({
-  //     ...ExtensionHostDiagnosticProviderEslint,
-  //     languageId: 'javascript',
-  //   })
-  // }
+  for (const languageId of ['javascript', 'typescript']) {
+    // @ts-ignore
+    vscode.registerDiagnosticProvider({
+      ...ExtensionHostDiagnosticProviderEslint,
+      languageId,
+    })
+  }
 }
 
 export const deactivate = () => {}

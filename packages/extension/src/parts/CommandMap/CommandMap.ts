@@ -1,6 +1,5 @@
 import { CommandNotFoundError } from '../CommandNotFoundError/CommandNotFoundError.ts'
 import * as FileSystem from '../FileSystem/FileSystem.ts'
-import * as Lint from '../Lint/Lint.ts'
 
 const log = (message: string): void => {
   // eslint-disable-next-line no-console
@@ -20,9 +19,6 @@ export const getFn = (
     case 'FileSystem.stat':
       // @ts-ignore
       return FileSystem.stat
-    case 'Lint.lint':
-      // @ts-ignore
-      return Lint.lint
     case 'OutputChannel.log':
       // @ts-ignore
       return log

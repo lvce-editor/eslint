@@ -2,30 +2,23 @@ import type { Test } from '@lvce-editor/test-with-playwright'
 
 export const name = 'eslint.validate-javascript'
 
-export const test: Test = async ({
-  Editor,
-  expect,
-  FileSystem,
-  Locator,
-  Main,
-}) => {
-  // arrange
-  await Editor.enableDiagnostics()
+export const test: Test = async ({ Editor, FileSystem, Main, Workspace }) => {
   const tmpDir = await FileSystem.getTmpDir()
-  await FileSystem.writeFile(
-    `${tmpDir}/test.js`,
-    `let x = '1'
+  await FileSystem.writeFile(`${tmpDir}/test.js`, 'debugger')
+  await Workspace.setPath(tmpDir)
+  await Editor.enableDiagnostics()
 
-x++`,
-  )
   await Main.openUri(`${tmpDir}/test.js`)
 
-  // act
-  // await Editor.format()
-
-  // // assert
-  // const editor = Locator('.Editor')
-  // await expect(editor).toHaveText(`h1 {  font-size: 10px;}`)
-
-  // TODO check for diagnostics
+  await Editor.shouldHaveDiagnosticProviderResult([
+    {
+      columnIndex: 1,
+      endColumnIndex: 9,
+      endRowIndex: 1,
+      message: "Unexpected 'debugger' statement.",
+      rowIndex: 1,
+      source: 'no-debugger',
+      type: 'error',
+    },
+  ])
 }
