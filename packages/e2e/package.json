@@ -5,8 +5,8 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
-    "e2e": "npm --prefix ../.. run build && node ./node_modules/@lvce-editor/test-with-playwright/bin/test-with-playwright.js --only-extension=../../dist --test-path=.",
-    "e2e:headless": "npm --prefix ../.. run build && node ./node_modules/@lvce-editor/test-with-playwright/bin/test-with-playwright.js --only-extension=../../dist --test-path=. --headless"
+    "e2e": "npm --prefix ../.. run build && node ../build/src/prepare-e2e.js && node ./node_modules/@lvce-editor/test-with-playwright/bin/test-with-playwright.js --only-extension=../extension --test-path=.",
+    "e2e:headless": "npm --prefix ../.. run build && node ../build/src/prepare-e2e.js && node ./node_modules/@lvce-editor/test-with-playwright/bin/test-with-playwright.js --only-extension=../extension --test-path=. --headless"
   },
   "devDependencies": {
     "@lvce-editor/test-with-playwright": "^22.1.0"
