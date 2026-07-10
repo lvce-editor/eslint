@@ -31,7 +31,8 @@ export const test: Test = async ({
 
   await Main.openUri(`${tmpDir}/test.js`)
 
-  await expect(Locator('.Diagnostic')).toHaveCount(1)
+  const diagnostic = Locator('.Diagnostic')
+  await expect(diagnostic).toHaveCount(1)
   await Editor.shouldHaveDiagnostics([
     {
       columnIndex: 7,
