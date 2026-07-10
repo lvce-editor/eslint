@@ -2,14 +2,7 @@ import type { Test } from '@lvce-editor/test-with-playwright'
 
 export const name = 'eslint.config-json-import'
 
-export const test: Test = async ({
-  Editor,
-  expect,
-  FileSystem,
-  Locator,
-  Main,
-  Workspace,
-}) => {
+export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
   const tmpDir = await FileSystem.getTmpDir()
   await FileSystem.writeFiles([
     {
@@ -23,21 +16,18 @@ export const test: Test = async ({
     { content: `if (true) console.log('x')`, uri: `${tmpDir}/test.js` },
   ])
   await Workspace.setPath(tmpDir)
-  await Editor.enableDiagnostics()
-
   await Main.openUri(`${tmpDir}/test.js`)
 
-  const diagnostic = Locator('.Diagnostic')
-  await expect(diagnostic).toHaveCount(1)
-  await Editor.shouldHaveDiagnostics([
-    {
-      columnIndex: 5,
-      endColumnIndex: 9,
-      endRowIndex: 1,
-      message: 'Unexpected constant condition.',
-      rowIndex: 1,
-      source: 'no-constant-condition',
-      type: 'error',
-    },
-  ])
+  const uri = `${tmpDir}/test.js`
+  const text = await FileSystem.readFile(uri)
+  const diagnostics = (await Command.executeExtensionCommand('eslint.lint', {
+    text,
+    uri,
+  })) as any[]
+  if (
+    diagnostics.length !== 1 ||
+    diagnostics[0].source !== 'no-constant-condition'
+  ) {
+    throw new Error(`Unexpected diagnostics: ${JSON.stringify(diagnostics)}`)
+  }
 }

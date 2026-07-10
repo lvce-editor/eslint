@@ -8,8 +8,15 @@
   "activation": [
     "onDiagnostic:javascript",
     "onDiagnostic:typescript",
+    "onCommand:eslint.lint",
     "onLanguage:javascript",
     "onLanguage:typescript"
+  ],
+  "commands": [
+    {
+      "id": "eslint.lint",
+      "label": "ESLint: Lint Document"
+    }
   ],
   "languages": [
     {

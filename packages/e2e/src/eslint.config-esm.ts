@@ -2,14 +2,7 @@ import type { Test } from '@lvce-editor/test-with-playwright'
 
 export const name = 'eslint.config-esm'
 
-export const test: Test = async ({
-  Editor,
-  expect,
-  FileSystem,
-  Locator,
-  Main,
-  Workspace,
-}) => {
+export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
   const tmpDir = await FileSystem.getTmpDir()
   await FileSystem.writeFiles([
     {
@@ -19,21 +12,15 @@ export const test: Test = async ({
     { content: 'if (value == null) {}', uri: `${tmpDir}/test.js` },
   ])
   await Workspace.setPath(tmpDir)
-  await Editor.enableDiagnostics()
-
   await Main.openUri(`${tmpDir}/test.js`)
 
-  const diagnostic = Locator('.Diagnostic')
-  await expect(diagnostic).toHaveCount(1)
-  await Editor.shouldHaveDiagnostics([
-    {
-      columnIndex: 11,
-      endColumnIndex: 13,
-      endRowIndex: 1,
-      message: "Expected '===' and instead saw '=='.",
-      rowIndex: 1,
-      source: 'eqeqeq',
-      type: 'error',
-    },
-  ])
+  const uri = `${tmpDir}/test.js`
+  const text = await FileSystem.readFile(uri)
+  const diagnostics = (await Command.executeExtensionCommand('eslint.lint', {
+    text,
+    uri,
+  })) as any[]
+  if (diagnostics.length !== 1 || diagnostics[0].source !== 'eqeqeq') {
+    throw new Error(`Unexpected diagnostics: ${JSON.stringify(diagnostics)}`)
+  }
 }

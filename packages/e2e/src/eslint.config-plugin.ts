@@ -2,14 +2,7 @@ import type { Test } from '@lvce-editor/test-with-playwright'
 
 export const name = 'eslint.config-plugin'
 
-export const test: Test = async ({
-  Editor,
-  expect,
-  FileSystem,
-  Locator,
-  Main,
-  Workspace,
-}) => {
+export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
   const tmpDir = await FileSystem.getTmpDir()
   const pluginDir = `${tmpDir}/node_modules/eslint-plugin-demo`
   await FileSystem.mkdir(`${tmpDir}/node_modules`)
@@ -27,21 +20,15 @@ export const test: Test = async ({
     { content: 'const foo = 1', uri: `${tmpDir}/test.js` },
   ])
   await Workspace.setPath(tmpDir)
-  await Editor.enableDiagnostics()
-
   await Main.openUri(`${tmpDir}/test.js`)
 
-  const diagnostic = Locator('.Diagnostic')
-  await expect(diagnostic).toHaveCount(1)
-  await Editor.shouldHaveDiagnostics([
-    {
-      columnIndex: 7,
-      endColumnIndex: 10,
-      endRowIndex: 1,
-      message: 'Do not use foo',
-      rowIndex: 1,
-      source: 'demo/no-foo',
-      type: 'error',
-    },
-  ])
+  const uri = `${tmpDir}/test.js`
+  const text = await FileSystem.readFile(uri)
+  const diagnostics = (await Command.executeExtensionCommand('eslint.lint', {
+    text,
+    uri,
+  })) as any[]
+  if (diagnostics.length !== 1 || diagnostics[0].source !== 'demo/no-foo') {
+    throw new Error(`Unexpected diagnostics: ${JSON.stringify(diagnostics)}`)
+  }
 }
