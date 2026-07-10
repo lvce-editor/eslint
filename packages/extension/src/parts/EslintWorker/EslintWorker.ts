@@ -22,20 +22,30 @@ export const invoke = async (
   method: string,
   ...params: readonly unknown[]
 ): Promise<any> => {
-  const rpc = await getInstance()
+  let rpc: any
+  let timedOut = false
   let timeout: ReturnType<typeof setTimeout> | undefined
+  const invokeWorker = async (): Promise<any> => {
+    rpc = await getInstance()
+    if (timedOut) {
+      await rpc.dispose()
+      throw new Error(`ESLint sandbox exceeded ${timeoutMs} ms`)
+    }
+    return rpc.invoke(method, ...params)
+  }
   try {
     return await Promise.race([
-      rpc.invoke(method, ...params),
+      invokeWorker(),
       new Promise((_, reject) => {
         timeout = setTimeout(() => {
+          timedOut = true
           reject(new Error(`ESLint sandbox exceeded ${timeoutMs} ms`))
         }, timeoutMs)
       }),
     ])
   } catch (error) {
     state.rpcPromise = undefined
-    await rpc.dispose()
+    await rpc?.dispose()
     throw error
   } finally {
     clearTimeout(timeout)
