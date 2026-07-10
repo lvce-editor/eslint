@@ -10,7 +10,7 @@ export const test: Test = async ({ Editor, FileSystem, Main, Workspace }) => {
 
   await Main.openUri(`${tmpDir}/test.js`)
 
-  await Editor.shouldHaveDiagnosticProviderResult([
+  await Editor.shouldHaveDiagnostics([
     {
       columnIndex: 1,
       endColumnIndex: 9,
