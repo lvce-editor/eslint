@@ -4,7 +4,6 @@
   "description": "ESLint extension",
   "repository": "https://github.com/lvce-editor/eslint",
   "browser": "dist/eslintMain.js",
-  "isolated": true,
   "categories": [],
   "activation": [
     "onDiagnostic:javascript",
