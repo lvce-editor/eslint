@@ -1,12 +1,11 @@
 {
-  "name": "builtin.eslint",
+  "name": "@lvce-editor/eslint-worker",
   "version": "0.0.0-dev",
   "license": "MIT",
   "type": "module",
-  "main": "src/eslintMain.ts",
+  "main": "src/eslintWorkerMain.ts",
   "scripts": {
-    "test": "node --unhandled-rejections=warn --experimental-vm-modules ./node_modules/jest/bin/jest.js --detectOpenHandles --forceExit",
-    "test:watch": "node --unhandled-rejections=warn --experimental-vm-modules ./node_modules/jest/bin/jest.js --watch"
+    "test": "node --unhandled-rejections=warn --experimental-vm-modules ./node_modules/jest/bin/jest.js --detectOpenHandles --forceExit"
   },
   "jest": {
     "injectGlobals": false,
@@ -26,11 +25,11 @@
     }
   },
   "dependencies": {
-    "@babel/standalone": "^7.28.4"
+    "eslint": "^10.6.0",
+    "jiti": "^2.6.1"
   },
   "devDependencies": {
     "@jest/globals": "^30.4.1",
-    "@types/babel__standalone": "^7.1.9",
     "jest": "^30.4.2",
     "ts-jest": "^29.4.11"
   }
