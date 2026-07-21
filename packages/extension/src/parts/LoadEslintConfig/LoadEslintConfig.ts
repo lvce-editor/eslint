@@ -79,7 +79,6 @@ const readPackageJson = async (
   if (!(await isFile(path))) {
     return undefined
   }
-  // eslint-disable-next-line unicorn/consistent-json-file-read
   const content = await FileSystem.readFile(path)
 
   return JSON.parse(content)
