@@ -3,7 +3,7 @@
   "version": "0.0.0-dev",
   "license": "MIT",
   "type": "module",
-  "main": "src/eslintMain.ts",
+  "main": "dist/eslintMain.js",
   "scripts": {
     "test": "node --unhandled-rejections=warn --experimental-vm-modules ../../node_modules/jest/bin/jest.js --detectOpenHandles --forceExit",
     "test:watch": "node --unhandled-rejections=warn --experimental-vm-modules ../../node_modules/jest/bin/jest.js --watch"
@@ -26,10 +26,13 @@
     }
   },
   "dependencies": {
-    "@babel/standalone": "^8.0.4"
+    "@babel/standalone": "^8.0.4",
+    "eslint": "^10.7.0",
+    "jiti": "^2.6.1"
   },
   "devDependencies": {
     "@jest/globals": "^30.4.1",
+    "@lvce-editor/api": "^8.54.0",
     "@types/babel__standalone": "^7.1.9",
     "jest": "^30.4.2",
     "ts-jest": "^29.4.12"

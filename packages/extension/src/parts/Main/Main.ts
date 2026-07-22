@@ -1,15 +1,26 @@
+import {
+  activate as activateExtensionApi,
+  registerCommand,
+  registerDiagnosticProvider,
+} from '@lvce-editor/api'
 import * as ExtensionHostDiagnosticProviderEslint from '../ExtensionHost/ExtensionHostDiagnosticProviderEslint.ts'
 
-export const activate = () => {
-  // @ts-ignore
-  vscode.registerCommand({
+const state = {
+  isActivated: false,
+}
+
+export const activate = async (): Promise<void> => {
+  if (state.isActivated) {
+    return
+  }
+  state.isActivated = true
+  await activateExtensionApi()
+  registerCommand({
     execute: ExtensionHostDiagnosticProviderEslint.provideDiagnostics,
     id: 'eslint.lint',
-    label: 'ESLint: Lint Document',
   })
   for (const languageId of ['javascript', 'typescript']) {
-    // @ts-ignore
-    vscode.registerDiagnosticProvider({
+    registerDiagnosticProvider({
       ...ExtensionHostDiagnosticProviderEslint,
       id: `eslint.${languageId}`,
       languageId,
@@ -17,4 +28,4 @@ export const activate = () => {
   }
 }
 
-export const deactivate = () => {}
+export const deactivate = (): void => {}
