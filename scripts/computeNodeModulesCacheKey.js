@@ -8,14 +8,13 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const root = join(__dirname, '..')
 
 const locations = [
-  'lerna.json',
+  'package.json',
   'package-lock.json',
-  'packages/build/package-lock.json',
-  'packages/extension/package-lock.json',
-  'packages/server/package-lock.json',
+  '.github/workflows/pr.yml',
   '.github/workflows/ci.yml',
   '.github/workflows/release.yml',
   'scripts/computeNodeModulesCacheKey.js',
+  'packages/server/src/postinstall.js',
 ]
 
 const getAbsolutePath = (relativePath) => {

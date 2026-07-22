@@ -7,7 +7,7 @@ const main = async (): Promise<void> => {
   execa(
     'node',
     [
-      'packages/server/node_modules/@lvce-editor/server/bin/server.js',
+      'node_modules/@lvce-editor/server/bin/server.js',
       '--test-path=packages/e2e',
       '--only-extension=packages/extension',
     ],

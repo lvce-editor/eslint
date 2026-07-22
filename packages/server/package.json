@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "postinstall": "node src/postinstall.js",
-    "dev": "node ./node_modules/@lvce-editor/server/bin/server.js --test-path=../e2e"
+    "dev": "node ../../node_modules/@lvce-editor/server/bin/server.js --test-path=../e2e"
   },
   "keywords": [],
   "author": "",

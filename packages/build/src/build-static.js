@@ -6,8 +6,6 @@ import { pathToFileURL } from 'node:url'
 await import('./build.js')
 const sharedProcessPath = join(
   root,
-  'packages',
-  'server',
   'node_modules',
   '@lvce-editor',
   'shared-process',
