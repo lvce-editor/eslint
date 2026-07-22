@@ -9,8 +9,3 @@ await cp(
   join(root, 'dist', 'dist', 'eslintMain.js'),
   join(extension, 'dist', 'eslintMain.js'),
 )
-await cp(
-  join(root, 'dist', 'eslint-worker'),
-  join(extension, 'eslint-worker'),
-  { force: true, recursive: true },
-)

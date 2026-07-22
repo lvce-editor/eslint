@@ -1,5 +1,6 @@
-import * as EslintWorker from '../EslintWorker/EslintWorker.ts'
+import type { Diagnostic } from '@lvce-editor/api'
 import * as FindEslintConfig from '../FindEslintConfig/FindEslintConfig.ts'
+import * as Lint from '../Lint/Lint.ts'
 import * as LoadEslintConfig from '../LoadEslintConfig/LoadEslintConfig.ts'
 
 export const id = 'eslint'
@@ -11,17 +12,7 @@ export const languageId = 'javascript'
 export const provideDiagnostics = async (textDocument: {
   text: string
   uri: string
-}): Promise<
-  Array<{
-    line: number
-    column: number
-    endLine?: number
-    endColumn?: number
-    message: string
-    severity: 'error' | 'warning'
-    source: string
-  }>
-> => {
+}): Promise<readonly Diagnostic[]> => {
   try {
     const { text } = textDocument
     const filePath = textDocument.uri ?? 'file.js'
@@ -29,32 +20,29 @@ export const provideDiagnostics = async (textDocument: {
     const config = configPath
       ? await LoadEslintConfig.loadEslintConfig(configPath)
       : undefined
-    const lintResults = await EslintWorker.invoke(
-      'Lint.lint',
-      text,
-      filePath,
-      config,
-    )
+    const lintResults = await Lint.lint(text, filePath, config)
     return lintResults.map((result) => ({
-      column: result.column,
-      endColumn: result.endColumn,
-      endLine: result.endLine,
-      line: result.line,
+      columnIndex: result.column - 1,
+      endColumnIndex: (result.endColumn ?? result.column) - 1,
+      endRowIndex: (result.endLine ?? result.line) - 1,
       message: result.message,
-      severity: result.severity,
+      rowIndex: result.line - 1,
       source: result.ruleId ?? 'eslint',
+      type: result.severity,
+      uri: filePath,
     }))
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     return [
       {
-        column: 1,
-        endColumn: 1,
-        endLine: 1,
-        line: 1,
+        columnIndex: 0,
+        endColumnIndex: 0,
+        endRowIndex: 0,
         message: `ESLint: ${message}`,
-        severity: 'error',
+        rowIndex: 0,
         source: 'eslint',
+        type: 'error',
+        uri: textDocument.uri,
       },
     ]
   }

@@ -4,6 +4,12 @@
   "description": "ESLint extension",
   "repository": "https://github.com/lvce-editor/eslint",
   "browser": "dist/eslintMain.js",
+  "workerName": "ESLint Worker",
+  "isolated": true,
+  "contentSecurityPolicy": [
+    "default-src 'none'",
+    "script-src 'self' 'unsafe-eval'"
+  ],
   "categories": [],
   "activation": [
     "onDiagnostic:javascript",

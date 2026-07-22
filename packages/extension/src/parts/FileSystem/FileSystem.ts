@@ -1,6 +1,25 @@
+import {
+  readDirWithFileTypes as readDirWithFileTypesApi,
+  readFile as readFileApi,
+  stat as statApi,
+} from '@lvce-editor/api'
+
+interface FileSystemApi {
+  readonly readDirWithFileTypes: typeof readDirWithFileTypesApi
+  readonly readFile: typeof readFileApi
+  readonly stat: typeof statApi
+}
+
+export const state: { api: FileSystemApi } = {
+  api: {
+    readDirWithFileTypes: readDirWithFileTypesApi,
+    readFile: readFileApi,
+    stat: statApi,
+  },
+}
+
 export const readFile = async (path: string): Promise<string> => {
-  // @ts-ignore
-  return await vscode.executeCommand('FileSystem.readFile', path)
+  return state.api.readFile(path)
 }
 
 export const readDirWithFileTypes = async (
@@ -12,8 +31,12 @@ export const readDirWithFileTypes = async (
     isDirectory: boolean
   }>
 > => {
-  // @ts-ignore
-  return await vscode.executeCommand('FileSystem.readDirWithFileTypes', path)
+  const entries = await state.api.readDirWithFileTypes(path)
+  return entries.map((entry) => ({
+    isDirectory: entry.type === 3 || entry.type === 11,
+    isFile: entry.type === 7 || entry.type === 10,
+    name: entry.name,
+  }))
 }
 
 export const stat = async (
@@ -22,6 +45,9 @@ export const stat = async (
   isFile: boolean
   isDirectory: boolean
 }> => {
-  // @ts-ignore
-  return await vscode.executeCommand('FileSystem.stat', path)
+  const type = await state.api.stat(path)
+  return {
+    isDirectory: type === 3 || type === 11,
+    isFile: type === 7 || type === 10,
+  }
 }

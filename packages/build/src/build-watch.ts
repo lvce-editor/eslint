@@ -1,10 +1,11 @@
-import { context } from 'esbuild'
+import { build, context, type BuildOptions } from 'esbuild'
 import { root } from './root.js'
 import { join } from 'node:path'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
+import { pathToFileURL } from 'node:url'
 
-const main = async (): Promise<void> => {
+const getBuildOptions = (outfile: string): BuildOptions => {
   const bannerPath = join(
     root,
     'packages',
@@ -17,12 +18,13 @@ const main = async (): Promise<void> => {
 
   const bannerCode = readFileSync(bannerPath, 'utf-8')
 
-  const ctx = await context({
+  return {
     entryPoints: [join(root, 'packages', 'extension', 'src', 'eslintMain.ts')],
     bundle: true,
     format: 'esm',
-    outfile: join(root, 'packages', 'extension', 'dist', 'eslintMain.js'),
+    outfile,
     external: [
+      'electron',
       'node:*',
       'path',
       'fs',
@@ -64,13 +66,6 @@ const main = async (): Promise<void> => {
               }
             } else {
               // If outputFiles is empty (watch mode), write directly to the output file
-              const outfile = join(
-                root,
-                'packages',
-                'extension',
-                'dist',
-                'eslintMain.js',
-              )
               try {
                 const existingContent = readFileSync(outfile, 'utf-8')
                 const newContent = bannerCode + '\n' + existingContent
@@ -321,11 +316,21 @@ const main = async (): Promise<void> => {
       },
     ],
     resolveExtensions: ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'],
-  })
+  }
+}
 
+export const buildExtension = async (outfile: string): Promise<void> => {
+  await build(getBuildOptions(outfile))
+}
+
+export const watchExtension = async (): Promise<void> => {
+  const outfile = join(root, 'packages', 'extension', 'dist', 'eslintMain.js')
+  const ctx = await context(getBuildOptions(outfile))
   await ctx.watch()
   // eslint-disable-next-line no-console
   console.log('Watching for changes...')
 }
 
-main()
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+  watchExtension()
+}

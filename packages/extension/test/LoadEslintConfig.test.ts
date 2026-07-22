@@ -1,8 +1,26 @@
-/* eslint-disable unicorn/no-global-object-property-assignment */
 import { beforeEach, expect, test } from '@jest/globals'
+import * as FileSystem from '../src/parts/FileSystem/FileSystem.ts'
 import * as LoadEslintConfig from '../src/parts/LoadEslintConfig/LoadEslintConfig.ts'
 
 const state: { files: Record<string, string> } = { files: {} }
+
+const readFile = async (path: string): Promise<string> => {
+  if (!(path in state.files)) {
+    throw new Error(`File not found: ${path}`)
+  }
+  return state.files[path]
+}
+
+const stat = async (path: string): Promise<number> => {
+  if (path in state.files) {
+    return 7
+  }
+  const prefix = `${path.replace(/\/$/, '')}/`
+  if (Object.keys(state.files).some((file) => file.startsWith(prefix))) {
+    return 3
+  }
+  throw new Error(`File not found: ${path}`)
+}
 
 const setFiles = (value: Record<string, string>): void => {
   state.files = value
@@ -10,27 +28,10 @@ const setFiles = (value: Record<string, string>): void => {
 
 beforeEach(() => {
   state.files = {}
-  // @ts-ignore
-  globalThis.vscode = {
-    executeCommand: async (method: string, path: string) => {
-      if (method === 'FileSystem.readFile') {
-        if (!(path in state.files)) {
-          throw new Error(`File not found: ${path}`)
-        }
-        return state.files[path]
-      }
-      if (method === 'FileSystem.stat') {
-        if (path in state.files) {
-          return { isDirectory: false, isFile: true }
-        }
-        const prefix = `${path.replace(/\/$/, '')}/`
-        if (Object.keys(state.files).some((file) => file.startsWith(prefix))) {
-          return { isDirectory: true, isFile: false }
-        }
-        throw new Error(`File not found: ${path}`)
-      }
-      throw new Error(`Unexpected method: ${method}`)
-    },
+  FileSystem.state.api = {
+    readDirWithFileTypes: async () => [],
+    readFile,
+    stat,
   }
 })
 
