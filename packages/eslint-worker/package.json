@@ -5,7 +5,7 @@
   "type": "module",
   "main": "src/eslintWorkerMain.ts",
   "scripts": {
-    "test": "node --unhandled-rejections=warn --experimental-vm-modules ./node_modules/jest/bin/jest.js --detectOpenHandles --forceExit"
+    "test": "node --unhandled-rejections=warn --experimental-vm-modules ../../node_modules/jest/bin/jest.js --detectOpenHandles --forceExit"
   },
   "jest": {
     "injectGlobals": false,
