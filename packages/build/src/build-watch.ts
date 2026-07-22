@@ -323,7 +323,7 @@ export const buildExtension = async (outfile: string): Promise<void> => {
   await build(getBuildOptions(outfile))
 }
 
-const main = async (): Promise<void> => {
+export const watchExtension = async (): Promise<void> => {
   const outfile = join(root, 'packages', 'extension', 'dist', 'eslintMain.js')
   const ctx = await context(getBuildOptions(outfile))
   await ctx.watch()
@@ -332,5 +332,5 @@ const main = async (): Promise<void> => {
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main()
+  watchExtension()
 }

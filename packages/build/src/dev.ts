@@ -1,8 +1,9 @@
 import { execa } from 'execa'
+import { watchExtension } from './build-watch.ts'
 import { root } from './root.js'
 
 const main = async (): Promise<void> => {
-  await import('./build-watch.ts')
+  await watchExtension()
 
   execa(
     'node',
