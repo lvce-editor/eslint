@@ -26,12 +26,12 @@
     }
   },
   "dependencies": {
-    "@babel/standalone": "^7.28.4"
+    "@babel/standalone": "^8.0.4"
   },
   "devDependencies": {
     "@jest/globals": "^30.4.1",
     "@types/babel__standalone": "^7.1.9",
     "jest": "^30.4.2",
-    "ts-jest": "^29.4.11"
+    "ts-jest": "^29.4.12"
   }
 }
