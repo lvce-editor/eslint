@@ -1,24 +1,16 @@
 import type { Test } from '@lvce-editor/test-with-playwright'
 
-export const name = 'eslint.no-empty-character-class'
+export const name = 'eslint.no-unreachable-after-switch-return'
 
-const expectedDiagnostics = [
-  {
-    source: 'no-empty-character-class',
-    type: 'error',
-  },
-]
+const expectedDiagnostics = [{ source: 'no-unreachable', type: 'error' }]
 
 export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
   const tmpDir = await FileSystem.getTmpDir()
   const uri = `${tmpDir}/test.js`
-  await FileSystem.writeFiles([
-    {
-      content: `export default [{ rules: { 'no-empty-character-class': 'error' } }]`,
-      uri: `${tmpDir}/eslint.config.js`,
-    },
-    { content: 'const pattern = /^abc[]/', uri },
-  ])
+  await FileSystem.writeFile(
+    uri,
+    'function run(value) { switch (value) { case 1: return } return; 1 }\nrun(1)',
+  )
   await Workspace.setPath(tmpDir)
   await Main.openUri(uri)
 

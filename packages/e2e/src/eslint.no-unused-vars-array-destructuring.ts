@@ -1,24 +1,13 @@
 import type { Test } from '@lvce-editor/test-with-playwright'
 
-export const name = 'eslint.no-compare-neg-zero'
+export const name = 'eslint.no-unused-vars-array-destructuring'
 
-const expectedDiagnostics = [
-  {
-    source: 'no-compare-neg-zero',
-    type: 'error',
-  },
-]
+const expectedDiagnostics = [{ source: 'no-unused-vars', type: 'warning' }]
 
 export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
   const tmpDir = await FileSystem.getTmpDir()
   const uri = `${tmpDir}/test.js`
-  await FileSystem.writeFiles([
-    {
-      content: `export default [{ rules: { 'no-compare-neg-zero': 'error' } }]`,
-      uri: `${tmpDir}/eslint.config.js`,
-    },
-    { content: 'value === -0', uri },
-  ])
+  await FileSystem.writeFile(uri, 'const [unused] = [1]')
   await Workspace.setPath(tmpDir)
   await Main.openUri(uri)
 

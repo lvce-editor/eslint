@@ -1,24 +1,13 @@
 import type { Test } from '@lvce-editor/test-with-playwright'
 
-export const name = 'eslint.no-dupe-class-members'
+export const name = 'eslint.no-undef-template-literal'
 
-const expectedDiagnostics = [
-  {
-    source: 'no-dupe-class-members',
-    type: 'error',
-  },
-]
+const expectedDiagnostics = [{ source: 'no-undef', type: 'error' }]
 
 export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
   const tmpDir = await FileSystem.getTmpDir()
   const uri = `${tmpDir}/test.js`
-  await FileSystem.writeFiles([
-    {
-      content: `export default [{ rules: { 'no-dupe-class-members': 'error' } }]`,
-      uri: `${tmpDir}/eslint.config.js`,
-    },
-    { content: 'class Example { run() {} run() {} }', uri },
-  ])
+  await FileSystem.writeFile(uri, '`${missing}`')
   await Workspace.setPath(tmpDir)
   await Main.openUri(uri)
 

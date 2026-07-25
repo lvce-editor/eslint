@@ -1,24 +1,13 @@
 import type { Test } from '@lvce-editor/test-with-playwright'
 
-export const name = 'eslint.no-dupe-else-if'
+export const name = 'eslint.no-undef-class-extends'
 
-const expectedDiagnostics = [
-  {
-    source: 'no-dupe-else-if',
-    type: 'error',
-  },
-]
+const expectedDiagnostics = [{ source: 'no-undef', type: 'error' }]
 
 export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
   const tmpDir = await FileSystem.getTmpDir()
   const uri = `${tmpDir}/test.js`
-  await FileSystem.writeFiles([
-    {
-      content: `export default [{ rules: { 'no-dupe-else-if': 'error' } }]`,
-      uri: `${tmpDir}/eslint.config.js`,
-    },
-    { content: 'if (value === 1) {} else if (value === 1) {}', uri },
-  ])
+  await FileSystem.writeFile(uri, 'export default class extends Missing {}')
   await Workspace.setPath(tmpDir)
   await Main.openUri(uri)
 

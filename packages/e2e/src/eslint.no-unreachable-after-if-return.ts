@@ -1,24 +1,16 @@
 import type { Test } from '@lvce-editor/test-with-playwright'
 
-export const name = 'eslint.no-const-assign'
+export const name = 'eslint.no-unreachable-after-if-return'
 
-const expectedDiagnostics = [
-  {
-    source: 'no-const-assign',
-    type: 'error',
-  },
-]
+const expectedDiagnostics = [{ source: 'no-unreachable', type: 'error' }]
 
 export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
   const tmpDir = await FileSystem.getTmpDir()
   const uri = `${tmpDir}/test.js`
-  await FileSystem.writeFiles([
-    {
-      content: `export default [{ rules: { 'no-const-assign': 'error' } }]`,
-      uri: `${tmpDir}/eslint.config.js`,
-    },
-    { content: 'const value = 1\nvalue = 2', uri },
-  ])
+  await FileSystem.writeFile(
+    uri,
+    'function run() { if (true) { return } return; 1 }\nrun()',
+  )
   await Workspace.setPath(tmpDir)
   await Main.openUri(uri)
 

@@ -1,24 +1,13 @@
 import type { Test } from '@lvce-editor/test-with-playwright'
 
-export const name = 'eslint.no-alert'
+export const name = 'eslint.no-unused-vars-arrow-parameter'
 
-const expectedDiagnostics = [
-  {
-    source: 'no-alert',
-    type: 'error',
-  },
-]
+const expectedDiagnostics = [{ source: 'no-unused-vars', type: 'warning' }]
 
 export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
   const tmpDir = await FileSystem.getTmpDir()
   const uri = `${tmpDir}/test.js`
-  await FileSystem.writeFiles([
-    {
-      content: `export default [{ rules: { 'no-alert': 'error' } }]`,
-      uri: `${tmpDir}/eslint.config.js`,
-    },
-    { content: `alert('x')`, uri },
-  ])
+  await FileSystem.writeFile(uri, 'const fn = (unused) => 1; fn()')
   await Workspace.setPath(tmpDir)
   await Main.openUri(uri)
 

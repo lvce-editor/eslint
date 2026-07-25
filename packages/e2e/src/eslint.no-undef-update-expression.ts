@@ -1,24 +1,13 @@
 import type { Test } from '@lvce-editor/test-with-playwright'
 
-export const name = 'eslint.array-callback-return'
+export const name = 'eslint.no-undef-update-expression'
 
-const expectedDiagnostics = [
-  {
-    source: 'array-callback-return',
-    type: 'error',
-  },
-]
+const expectedDiagnostics = [{ source: 'no-undef', type: 'error' }]
 
 export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
   const tmpDir = await FileSystem.getTmpDir()
   const uri = `${tmpDir}/test.js`
-  await FileSystem.writeFiles([
-    {
-      content: `export default [{ rules: { 'array-callback-return': 'error' } }]`,
-      uri: `${tmpDir}/eslint.config.js`,
-    },
-    { content: '[1].map(() => {})', uri },
-  ])
+  await FileSystem.writeFile(uri, 'missing++')
   await Workspace.setPath(tmpDir)
   await Main.openUri(uri)
 

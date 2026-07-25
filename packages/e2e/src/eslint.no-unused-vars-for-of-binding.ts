@@ -1,24 +1,13 @@
 import type { Test } from '@lvce-editor/test-with-playwright'
 
-export const name = 'eslint.no-cond-assign'
+export const name = 'eslint.no-unused-vars-for-of-binding'
 
-const expectedDiagnostics = [
-  {
-    source: 'no-cond-assign',
-    type: 'error',
-  },
-]
+const expectedDiagnostics = [{ source: 'no-unused-vars', type: 'warning' }]
 
 export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
   const tmpDir = await FileSystem.getTmpDir()
   const uri = `${tmpDir}/test.js`
-  await FileSystem.writeFiles([
-    {
-      content: `export default [{ rules: { 'no-cond-assign': 'error' } }]`,
-      uri: `${tmpDir}/eslint.config.js`,
-    },
-    { content: 'let value\nif (value = 1) {}', uri },
-  ])
+  await FileSystem.writeFile(uri, 'for (const unused of [1]) {}')
   await Workspace.setPath(tmpDir)
   await Main.openUri(uri)
 

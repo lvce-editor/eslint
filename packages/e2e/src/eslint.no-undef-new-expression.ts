@@ -1,27 +1,13 @@
 import type { Test } from '@lvce-editor/test-with-playwright'
 
-export const name = 'eslint.no-duplicate-case'
+export const name = 'eslint.no-undef-new-expression'
 
-const expectedDiagnostics = [
-  {
-    source: 'no-duplicate-case',
-    type: 'error',
-  },
-]
+const expectedDiagnostics = [{ source: 'no-undef', type: 'error' }]
 
 export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
   const tmpDir = await FileSystem.getTmpDir()
   const uri = `${tmpDir}/test.js`
-  await FileSystem.writeFiles([
-    {
-      content: `export default [{ rules: { 'no-duplicate-case': 'error' } }]`,
-      uri: `${tmpDir}/eslint.config.js`,
-    },
-    {
-      content: 'switch (value) { case 1: break; case 1: break }',
-      uri,
-    },
-  ])
+  await FileSystem.writeFile(uri, 'new Missing()')
   await Workspace.setPath(tmpDir)
   await Main.openUri(uri)
 

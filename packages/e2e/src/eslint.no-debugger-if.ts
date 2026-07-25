@@ -1,27 +1,13 @@
 import type { Test } from '@lvce-editor/test-with-playwright'
 
-export const name = 'eslint.default-case-last'
+export const name = 'eslint.no-debugger-if'
 
-const expectedDiagnostics = [
-  {
-    source: 'default-case-last',
-    type: 'error',
-  },
-]
+const expectedDiagnostics = [{ source: 'no-debugger', type: 'error' }]
 
 export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
   const tmpDir = await FileSystem.getTmpDir()
   const uri = `${tmpDir}/test.js`
-  await FileSystem.writeFiles([
-    {
-      content: `export default [{ rules: { 'default-case-last': 'error' } }]`,
-      uri: `${tmpDir}/eslint.config.js`,
-    },
-    {
-      content: 'switch (value) { default: break; case 1: break }',
-      uri,
-    },
-  ])
+  await FileSystem.writeFile(uri, 'if (true) { debugger }')
   await Workspace.setPath(tmpDir)
   await Main.openUri(uri)
 

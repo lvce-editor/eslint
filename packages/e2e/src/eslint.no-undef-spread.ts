@@ -1,24 +1,13 @@
 import type { Test } from '@lvce-editor/test-with-playwright'
 
-export const name = 'eslint.no-array-constructor'
+export const name = 'eslint.no-undef-spread'
 
-const expectedDiagnostics = [
-  {
-    source: 'no-array-constructor',
-    type: 'error',
-  },
-]
+const expectedDiagnostics = [{ source: 'no-undef', type: 'error' }]
 
 export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
   const tmpDir = await FileSystem.getTmpDir()
   const uri = `${tmpDir}/test.js`
-  await FileSystem.writeFiles([
-    {
-      content: `export default [{ rules: { 'no-array-constructor': 'error' } }]`,
-      uri: `${tmpDir}/eslint.config.js`,
-    },
-    { content: 'const values = new Array(1, 2)', uri },
-  ])
+  await FileSystem.writeFile(uri, 'const values = [...missing]; values')
   await Workspace.setPath(tmpDir)
   await Main.openUri(uri)
 

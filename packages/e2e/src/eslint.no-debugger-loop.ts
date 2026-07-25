@@ -1,24 +1,13 @@
 import type { Test } from '@lvce-editor/test-with-playwright'
 
-export const name = 'eslint.curly'
+export const name = 'eslint.no-debugger-loop'
 
-const expectedDiagnostics = [
-  {
-    source: 'curly',
-    type: 'error',
-  },
-]
+const expectedDiagnostics = [{ source: 'no-debugger', type: 'error' }]
 
 export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
   const tmpDir = await FileSystem.getTmpDir()
   const uri = `${tmpDir}/test.js`
-  await FileSystem.writeFiles([
-    {
-      content: `export default [{ rules: { curly: 'error' } }]`,
-      uri: `${tmpDir}/eslint.config.js`,
-    },
-    { content: `if (true) console.log('x')`, uri },
-  ])
+  await FileSystem.writeFile(uri, 'for (;;) { debugger; break }')
   await Workspace.setPath(tmpDir)
   await Main.openUri(uri)
 

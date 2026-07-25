@@ -1,24 +1,16 @@
 import type { Test } from '@lvce-editor/test-with-playwright'
 
-export const name = 'eslint.getter-return'
+export const name = 'eslint.no-unused-vars-rest-binding'
 
-const expectedDiagnostics = [
-  {
-    source: 'getter-return',
-    type: 'error',
-  },
-]
+const expectedDiagnostics = [{ source: 'no-unused-vars', type: 'warning' }]
 
 export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
   const tmpDir = await FileSystem.getTmpDir()
   const uri = `${tmpDir}/test.js`
-  await FileSystem.writeFiles([
-    {
-      content: `export default [{ rules: { 'getter-return': 'error' } }]`,
-      uri: `${tmpDir}/eslint.config.js`,
-    },
-    { content: 'const value = { get name() {} }', uri },
-  ])
+  await FileSystem.writeFile(
+    uri,
+    'const { used, ...unused } = { used: 1 }; used',
+  )
   await Workspace.setPath(tmpDir)
   await Main.openUri(uri)
 

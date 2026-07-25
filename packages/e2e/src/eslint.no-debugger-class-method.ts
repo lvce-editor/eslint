@@ -1,24 +1,16 @@
 import type { Test } from '@lvce-editor/test-with-playwright'
 
-export const name = 'eslint.no-async-promise-executor'
+export const name = 'eslint.no-debugger-class-method'
 
-const expectedDiagnostics = [
-  {
-    source: 'no-async-promise-executor',
-    type: 'error',
-  },
-]
+const expectedDiagnostics = [{ source: 'no-debugger', type: 'error' }]
 
 export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
   const tmpDir = await FileSystem.getTmpDir()
   const uri = `${tmpDir}/test.js`
-  await FileSystem.writeFiles([
-    {
-      content: `export default [{ rules: { 'no-async-promise-executor': 'error' } }]`,
-      uri: `${tmpDir}/eslint.config.js`,
-    },
-    { content: 'new Promise(async (resolve) => resolve())', uri },
-  ])
+  await FileSystem.writeFile(
+    uri,
+    'class Example { run() { debugger } }\nnew Example().run()',
+  )
   await Workspace.setPath(tmpDir)
   await Main.openUri(uri)
 

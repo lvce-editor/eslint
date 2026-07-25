@@ -1,24 +1,13 @@
 import type { Test } from '@lvce-editor/test-with-playwright'
 
-export const name = 'eslint.no-class-assign'
+export const name = 'eslint.no-debugger-function'
 
-const expectedDiagnostics = [
-  {
-    source: 'no-class-assign',
-    type: 'error',
-  },
-]
+const expectedDiagnostics = [{ source: 'no-debugger', type: 'error' }]
 
 export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
   const tmpDir = await FileSystem.getTmpDir()
   const uri = `${tmpDir}/test.js`
-  await FileSystem.writeFiles([
-    {
-      content: `export default [{ rules: { 'no-class-assign': 'error' } }]`,
-      uri: `${tmpDir}/eslint.config.js`,
-    },
-    { content: 'class Example {}\nExample = 1', uri },
-  ])
+  await FileSystem.writeFile(uri, 'function run() { debugger }\nrun()')
   await Workspace.setPath(tmpDir)
   await Main.openUri(uri)
 
