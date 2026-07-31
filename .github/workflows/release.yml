@@ -6,35 +6,17 @@ on:
     tags:
       - 'v[0-9]+.[0-9]+.[0-9]+'
 jobs:
-  create-release:
-    name: create-release
-    runs-on: ubuntu-24.04
-    outputs:
-      upload_url: ${{ steps.release.outputs.upload_url }}
-      rg_version: ${{ env.RG_VERSION }}
-    steps:
-      - name: Get the release version from the tag
-        shell: bash
-        if: env.RG_VERSION == ''
-        run: |
-          echo "RG_VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
-          echo "version is: ${{ env.RG_VERSION }}"
-      - name: Create GitHub release
-        id: release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ env.RG_VERSION }}
-          release_name: ${{ env.RG_VERSION }}
-
   build-release:
     name: build-release
-    needs: ['create-release']
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
+      - name: Get the release version from the tag
+        shell: bash
+        run: echo "RG_VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
       - uses: actions/setup-node@v4
         with:
           node-version-file: '.nvmrc'
@@ -67,16 +49,11 @@ jobs:
       - name: Build archive
         shell: bash
         run: |
-          staging="eslint-${{ needs.create-release.outputs.rg_version }}"
+          staging="eslint-${RG_VERSION}"
           mv "extension.tar.br" "$staging.tar.br"
           echo "ASSET=$staging.tar.br" >> $GITHUB_ENV
 
-      - name: Upload release archive
-        uses: actions/upload-release-asset@v1.0.1
+      - name: Create GitHub release
+        run: gh release create "$RG_VERSION" "$ASSET" --repo "$GITHUB_REPOSITORY" --verify-tag --title "$RG_VERSION" --notes-from-tag
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ${{ env.ASSET }}
-          asset_name: ${{ env.ASSET }}
-          asset_content_type: application/octet-stream
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
