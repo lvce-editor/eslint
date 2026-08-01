@@ -54,6 +54,6 @@ jobs:
           echo "ASSET=$staging.tar.br" >> $GITHUB_ENV
 
       - name: Create GitHub release
-        run: gh release create "$RG_VERSION" "$ASSET" --repo "$GITHUB_REPOSITORY" --verify-tag --title "$RG_VERSION" --notes-from-tag
+        run: gh release create "$RG_VERSION" "$ASSET" --repo "$GITHUB_REPOSITORY" --verify-tag --title "$RG_VERSION" --generate-notes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
