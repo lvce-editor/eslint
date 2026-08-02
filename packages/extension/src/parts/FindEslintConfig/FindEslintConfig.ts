@@ -1,6 +1,6 @@
 import * as FileSystem from '../FileSystem/FileSystem.ts'
 
-const configFileNames = [
+export const configFileNames = [
   'eslint.config.js',
   'eslint.config.mjs',
   'eslint.config.cjs',

@@ -4,6 +4,7 @@ import {
   registerDiagnosticProvider,
 } from '@lvce-editor/api'
 import * as ExtensionHostDiagnosticProviderEslint from '../ExtensionHost/ExtensionHostDiagnosticProviderEslint.ts'
+import * as HandleFileChanges from '../HandleFileChanges/HandleFileChanges.ts'
 import * as LintDocument from '../LintDocument/LintDocument.ts'
 
 const state = {
@@ -16,6 +17,7 @@ export const activate = async (): Promise<void> => {
   }
   state.isActivated = true
   await activateExtensionApi()
+  HandleFileChanges.register()
   registerCommand({
     execute: LintDocument.lintDocument,
     id: 'eslint.lint',

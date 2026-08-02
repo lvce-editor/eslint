@@ -1,5 +1,7 @@
+import type { FileChanges } from '@lvce-editor/api'
 import { transform } from '@babel/standalone'
 import * as FileSystem from '../FileSystem/FileSystem.ts'
+import { configFileNames } from '../FindEslintConfig/FindEslintConfig.ts'
 
 export interface ModuleGraph {
   readonly entry: string
@@ -30,6 +32,44 @@ const maxModuleCount = 512
 const maxTotalBytes = 5 * 1024 * 1024
 const requireRegex = /\brequire\(\s*(['"])([^'"]+)\1\s*\)/g
 const cache = new Map<string, { entrySource: string; graph: ModuleGraph }>()
+
+const toPath = (uri: string): string => {
+  if (uri.startsWith('file://')) {
+    return decodeURIComponent(new URL(uri).pathname)
+  }
+  return uri
+}
+
+const getChangedPaths = (changes: Readonly<FileChanges>): readonly string[] => {
+  return [
+    ...(changes.changed ?? []),
+    ...(changes.deleted ?? []),
+    ...(changes.renamed ?? []).flat(),
+  ].map((uri) => normalize(toPath(uri)))
+}
+
+const isConfigFile = (path: string): boolean => {
+  const fileName = path.slice(path.lastIndexOf('/') + 1)
+  return configFileNames.includes(fileName)
+}
+
+export const invalidateForFileChanges = (
+  changes: Readonly<FileChanges>,
+): boolean => {
+  const changedPaths = getChangedPaths(changes)
+  let shouldRefresh = changedPaths.some(isConfigFile)
+  for (const [entry, cached] of cache) {
+    const hasChangedModule = changedPaths.some(
+      (path) => path === entry || Object.hasOwn(cached.graph.modules, path),
+    )
+    if (!hasChangedModule) {
+      continue
+    }
+    cache.delete(entry)
+    shouldRefresh = true
+  }
+  return shouldRefresh
+}
 
 const normalize = (path: string): string => {
   const parts: string[] = []
