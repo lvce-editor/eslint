@@ -113,6 +113,15 @@ test('provides a safe process shim to config dependencies', () => {
   expect(value).toEqual(['v0.0.0', '0.0.0', 0, false, 'bigint'])
 })
 
+test('provides the node global alias to config dependencies', () => {
+  const value = LoadModuleGraph.loadModuleGraph(
+    graph({
+      '/workspace/eslint.config.js': `module.exports = [global.Array === Array, global.console === console, global.globalThis === globalThis]`,
+    }),
+  )
+  expect(value).toEqual([true, true, true])
+})
+
 test('provides node module builtin metadata', () => {
   const value = LoadModuleGraph.loadModuleGraph(
     graph({
