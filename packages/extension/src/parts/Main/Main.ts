@@ -3,7 +3,7 @@ import {
   registerCommand,
   registerDiagnosticProvider,
 } from '@lvce-editor/api'
-import * as ExtensionHostDiagnosticProviderEslint from '../ExtensionHost/ExtensionHostDiagnosticProviderEslint.ts'
+import * as GetDiagnosticProviders from '../GetDiagnosticProviders/GetDiagnosticProviders.ts'
 import * as HandleFileChanges from '../HandleFileChanges/HandleFileChanges.ts'
 import * as LintDocument from '../LintDocument/LintDocument.ts'
 
@@ -22,12 +22,8 @@ export const activate = async (): Promise<void> => {
     execute: LintDocument.lintDocument,
     id: 'eslint.lint',
   })
-  for (const languageId of ['javascript', 'typescript']) {
-    registerDiagnosticProvider({
-      ...ExtensionHostDiagnosticProviderEslint,
-      id: `eslint.${languageId}`,
-      languageId,
-    })
+  for (const provider of GetDiagnosticProviders.getDiagnosticProviders()) {
+    registerDiagnosticProvider(provider)
   }
 }
 
