@@ -13,6 +13,17 @@ export type LintResult = {
   ruleId: string | null
 }
 
+type LintMessage = ReturnType<Linter['verify']>[number]
+
+const isNoMatchingConfigMessage = (message: LintMessage): boolean => {
+  return (
+    message.ruleId === null &&
+    message.line === 0 &&
+    message.column === 0 &&
+    message.message.startsWith('No matching configuration found')
+  )
+}
+
 const defaultConfig = {
   languageOptions: {
     ecmaVersion: 'latest' as const,
@@ -35,19 +46,20 @@ export const lint = async (
     ? await LoadModuleGraph.loadModuleGraph(graph)
     : defaultConfig
   const config = Array.isArray(loadedConfig) ? loadedConfig : [loadedConfig]
-  const linter = new Linter({ configType: 'flat' })
   const baseDirectory = graph
     ? Path.dirname(graph.entry)
     : Path.dirname(filePath)
-  const relativeFilePath = Path.relative(baseDirectory, filePath)
-  const messages = linter.verify(text, config, { filename: relativeFilePath })
-  return messages.map((message) => ({
-    column: message.column,
-    endColumn: message.endColumn ?? undefined,
-    endLine: message.endLine ?? undefined,
-    line: message.line,
-    message: message.message,
-    ruleId: message.ruleId,
-    severity: message.severity === 2 ? 'error' : 'warning',
-  }))
+  const linter = new Linter({ configType: 'flat', cwd: baseDirectory })
+  const messages = linter.verify(text, config, { filename: filePath })
+  return messages
+    .filter((message) => !isNoMatchingConfigMessage(message))
+    .map((message) => ({
+      column: message.column,
+      endColumn: message.endColumn ?? undefined,
+      endLine: message.endLine ?? undefined,
+      line: message.line,
+      message: message.message,
+      ruleId: message.ruleId,
+      severity: message.severity === 2 ? 'error' : 'warning',
+    }))
 }

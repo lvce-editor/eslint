@@ -466,7 +466,9 @@ if (typeof process === 'undefined') {
       return (Date.now() - startTime) / 1000
     },
     version: 'v0.0.0',
-    versions: {},
+    versions: {
+      node: '0.0.0',
+    },
   }
 
   // Add hrtime.bigint property

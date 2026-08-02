@@ -86,6 +86,110 @@ test('provides the path shim', () => {
   expect(value).toBe('file')
 })
 
+test('provides path posix and win32 entry points', () => {
+  const value = LoadModuleGraph.loadModuleGraph(
+    graph({
+      '/workspace/eslint.config.js': `module.exports = [require('node:path/posix').basename('/a/b'), require('node:path/win32').basename('/a/b')]`,
+    }),
+  )
+  expect(value).toEqual(['b', 'b'])
+})
+
+test('provides the performance hooks shim', () => {
+  const value = LoadModuleGraph.loadModuleGraph(
+    graph({
+      '/workspace/eslint.config.js': `module.exports = typeof require('node:perf_hooks').performance.now()`,
+    }),
+  )
+  expect(value).toBe('number')
+})
+
+test('provides a safe process shim to config dependencies', () => {
+  const value = LoadModuleGraph.loadModuleGraph(
+    graph({
+      '/workspace/eslint.config.js': `const processModule = require('node:process'); module.exports = [processModule.version, processModule.versions.node, processModule.argv.length, processModule.features.typescript, typeof processModule.hrtime.bigint()]`,
+    }),
+  )
+  expect(value).toEqual(['v0.0.0', '0.0.0', 0, false, 'bigint'])
+})
+
+test('provides the node global alias to config dependencies', () => {
+  const value = LoadModuleGraph.loadModuleGraph(
+    graph({
+      '/workspace/eslint.config.js': `module.exports = [global.Array === Array, global.console === console, global.globalThis === globalThis]`,
+    }),
+  )
+  expect(value).toEqual([true, true, true])
+})
+
+test('provides node immediate timer shims to config dependencies', () => {
+  const value = LoadModuleGraph.loadModuleGraph(
+    graph({
+      '/workspace/eslint.config.js': `const handle = setImmediate(() => {}); clearImmediate(handle); module.exports = [typeof setImmediate, typeof clearImmediate]`,
+    }),
+  )
+  expect(value).toEqual(['function', 'function'])
+})
+
+test('provides deep strict equality to config dependencies', () => {
+  const value = LoadModuleGraph.loadModuleGraph(
+    graph({
+      '/workspace/eslint.config.js': `const { isDeepStrictEqual } = require('node:util'); module.exports = [isDeepStrictEqual(['.ts'], ['.ts']), isDeepStrictEqual({ nested: [1] }, { nested: [2] })]`,
+    }),
+  )
+  expect(value).toEqual([true, false])
+})
+
+test('provides node module builtin metadata', () => {
+  const value = LoadModuleGraph.loadModuleGraph(
+    graph({
+      '/workspace/eslint.config.js': `const moduleApi = require('node:module'); module.exports = [moduleApi.isBuiltin('fs'), moduleApi.isBuiltin('http'), moduleApi.builtinModules.includes('worker_threads')]`,
+    }),
+  )
+  expect(value).toEqual([true, false, true])
+})
+
+test('provides a chainable crypto hash shim', () => {
+  const value = LoadModuleGraph.loadModuleGraph(
+    graph({
+      '/workspace/eslint.config.js': `module.exports = require('node:crypto').createHash('md5').update('config').digest('hex')`,
+    }),
+  )
+  expect(typeof value).toBe('string')
+  expect(value).not.toHaveLength(0)
+})
+
+test('prevents child process execution', () => {
+  expect(() =>
+    LoadModuleGraph.loadModuleGraph(
+      graph({
+        '/workspace/eslint.config.js': `module.exports = require('node:child_process').execFileSync('git')`,
+      }),
+    ),
+  ).toThrow('Child processes are not available in the ESLint config sandbox')
+})
+
+test('supports commonjs EventEmitter subclasses', () => {
+  const value = LoadModuleGraph.loadModuleGraph(
+    graph({
+      '/workspace/eslint.config.js': `const EventEmitter = require('events'); class Plugin extends EventEmitter {}; const plugin = new Plugin(); let called = false; plugin.on('load', () => { called = true }); plugin.emit('load'); module.exports = called`,
+    }),
+  )
+  expect(value).toBe(true)
+})
+
+test('supports packages that initialize a worker during module load', () => {
+  const value = LoadModuleGraph.loadModuleGraph(
+    graph({
+      '/workspace/eslint.config.js': `const { MessageChannel, Worker } = require('node:worker_threads'); const { port2 } = new MessageChannel(); const worker = new Worker('worker.js', { transferList: [port2] }); worker.unref(); module.exports = [{ worker }]`,
+    }),
+  )
+  expect(value[0].worker).toBeDefined()
+  expect(() => value[0].worker.postMessage({})).toThrow(
+    'Worker threads are not available in the ESLint config sandbox',
+  )
+})
+
 test('limits fs reads to preloaded virtual files', () => {
   const value = LoadModuleGraph.loadModuleGraph(
     graph({
@@ -94,6 +198,28 @@ test('limits fs reads to preloaded virtual files', () => {
     }),
   )
   expect(value).toBe('safe')
+})
+
+test('exposes non-module workspace files with node buffer decoding', () => {
+  const value = LoadModuleGraph.loadModuleGraph({
+    ...graph({
+      '/workspace/eslint.config.js': `module.exports = require('fs').readFileSync('/workspace/source.ts').toString('utf8')`,
+    }),
+    files: {
+      '/workspace/source.ts': 'export const value = 1',
+    },
+  })
+  expect(value).toBe('export const value = 1')
+})
+
+test('provides virtual fs stat and realpath helpers', () => {
+  const value = LoadModuleGraph.loadModuleGraph(
+    graph({
+      '/workspace/data.json': 'safe',
+      '/workspace/eslint.config.js': `const fs = require('fs'); module.exports = [fs.statSync('/workspace/data.json').isFile(), fs.statSync('/workspace').isDirectory(), fs.realpathSync.native('/workspace/../workspace')]`,
+    }),
+  )
+  expect(value).toEqual([true, true, '/workspace'])
 })
 
 test('rejects fs reads outside the virtual graph', () => {
@@ -110,8 +236,92 @@ test('rejects modules absent from the graph', () => {
   expect(() =>
     LoadModuleGraph.loadModuleGraph(
       graph({
-        '/workspace/eslint.config.js': `module.exports = require('child_process')`,
+        '/workspace/eslint.config.js': `module.exports = require('http')`,
       }),
     ),
-  ).toThrow("Module 'child_process' was not preloaded")
+  ).toThrow("Module 'http' was not preloaded")
+})
+
+test('provides IP address helpers', () => {
+  const value = LoadModuleGraph.loadModuleGraph(
+    graph({
+      '/workspace/eslint.config.js': `const net = require('node:net'); module.exports = [net.isIP('127.0.0.1'), net.isIP('::1'), net.isIP('example.com')]`,
+    }),
+  )
+  expect(value).toEqual([4, 6, 0])
+})
+
+test('lets config modules catch missing optional dependencies', () => {
+  const value = LoadModuleGraph.loadModuleGraph(
+    graph({
+      '/workspace/eslint.config.js': `let loaded = true; try { require('optional-plugin') } catch { loaded = false }; module.exports = loaded`,
+    }),
+  )
+  expect(value).toBe(false)
+})
+
+test('supports require.resolve for preloaded modules', () => {
+  const value = LoadModuleGraph.loadModuleGraph(
+    graph(
+      {
+        '/workspace/eslint.config.js': `module.exports = require.resolve('./worker.js')`,
+        '/workspace/worker.js': `module.exports = true`,
+      },
+      {
+        '/workspace/eslint.config.js\0./worker.js': '/workspace/worker.js',
+      },
+    ),
+  )
+  expect(value).toBe('/workspace/worker.js')
+})
+
+test('supports virtual directory discovery and absolute dynamic requires', () => {
+  const value = LoadModuleGraph.loadModuleGraph(
+    graph({
+      '/workspace/eslint.config.js': `const fs = require('fs'); const path = require('path'); const rules = fs.readdirSync('/workspace/rules').map(file => require(path.join('/workspace/rules', file))); module.exports = rules`,
+      '/workspace/rules/first.js': `module.exports = 'first'`,
+      '/workspace/rules/second.js': `module.exports = 'second'`,
+    }),
+  )
+  expect(value).toEqual(['first', 'second'])
+})
+
+test('resolves absolute dynamic requires without an extension', () => {
+  const value = LoadModuleGraph.loadModuleGraph(
+    graph({
+      '/workspace/eslint.config.js': `module.exports = require('/workspace/rules/first')`,
+      '/workspace/rules/first.js': `module.exports = 'first'`,
+    }),
+  )
+  expect(value).toBe('first')
+})
+
+test('resolves relative dynamic requires without an extension', () => {
+  const value = LoadModuleGraph.loadModuleGraph(
+    graph({
+      '/workspace/eslint.config.js': `module.exports = require('./rules/first')`,
+      '/workspace/rules/first.js': `module.exports = 'first'`,
+    }),
+  )
+  expect(value).toBe('first')
+})
+
+test('reuses a known bare package resolution for a dynamic require', () => {
+  const value = LoadModuleGraph.loadModuleGraph(
+    graph(
+      {
+        '/workspace/config.js': `module.exports = require('example')`,
+        '/workspace/dynamic.js': `module.exports = require('example')`,
+        '/workspace/eslint.config.js': `require('./config.js'); module.exports = require('./dynamic.js')`,
+        '/workspace/node_modules/example/index.js': `module.exports = 'example'`,
+      },
+      {
+        '/workspace/config.js\0example':
+          '/workspace/node_modules/example/index.js',
+        '/workspace/eslint.config.js\0./config.js': '/workspace/config.js',
+        '/workspace/eslint.config.js\0./dynamic.js': '/workspace/dynamic.js',
+      },
+    ),
+  )
+  expect(value).toBe('example')
 })
