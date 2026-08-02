@@ -4,14 +4,19 @@ import * as LoadEslintConfig from '../src/parts/LoadEslintConfig/LoadEslintConfi
 
 const state: { files: Record<string, string> } = { files: {} }
 
-const readFile = async (path: string): Promise<string> => {
+const toPath = (uri: string): string =>
+  decodeURIComponent(new URL(uri).pathname)
+
+const readFile = async (uri: string): Promise<string> => {
+  const path = toPath(uri)
   if (!(path in state.files)) {
     throw new Error(`File not found: ${path}`)
   }
   return state.files[path]
 }
 
-const stat = async (path: string): Promise<number> => {
+const stat = async (uri: string): Promise<number> => {
+  const path = toPath(uri)
   if (path in state.files) {
     return 7
   }

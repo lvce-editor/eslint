@@ -18,8 +18,15 @@ export const state: { api: FileSystemApi } = {
   },
 }
 
+const toFileUri = (path: string): string => {
+  if (path.startsWith('file://')) {
+    return path
+  }
+  return new URL(path, 'file://').href
+}
+
 export const readFile = async (path: string): Promise<string> => {
-  return state.api.readFile(path)
+  return state.api.readFile(toFileUri(path))
 }
 
 export const readDirWithFileTypes = async (
@@ -31,7 +38,7 @@ export const readDirWithFileTypes = async (
     isDirectory: boolean
   }>
 > => {
-  const entries = await state.api.readDirWithFileTypes(path)
+  const entries = await state.api.readDirWithFileTypes(toFileUri(path))
   return entries.map((entry) => ({
     isDirectory: entry.type === 3 || entry.type === 11,
     isFile: entry.type === 7 || entry.type === 10,
@@ -45,7 +52,7 @@ export const stat = async (
   isFile: boolean
   isDirectory: boolean
 }> => {
-  const type = await state.api.stat(path)
+  const type = await state.api.stat(toFileUri(path))
   return {
     isDirectory: type === 3 || type === 11,
     isFile: type === 7 || type === 10,
