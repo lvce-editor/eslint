@@ -104,6 +104,15 @@ test('provides the performance hooks shim', () => {
   expect(value).toBe('number')
 })
 
+test('provides a safe process shim to config dependencies', () => {
+  const value = LoadModuleGraph.loadModuleGraph(
+    graph({
+      '/workspace/eslint.config.js': `const processModule = require('node:process'); module.exports = [processModule.version, processModule.versions.node, processModule.argv.length, processModule.features.typescript, typeof processModule.hrtime.bigint()]`,
+    }),
+  )
+  expect(value).toEqual(['v0.0.0', '0.0.0', 0, false, 'bigint'])
+})
+
 test('provides node module builtin metadata', () => {
   const value = LoadModuleGraph.loadModuleGraph(
     graph({

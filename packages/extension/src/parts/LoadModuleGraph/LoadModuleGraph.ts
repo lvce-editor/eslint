@@ -115,6 +115,52 @@ const isIP = (value: string): 0 | 4 | 6 => {
   return isIPv6(value) ? 6 : 0
 }
 
+const createVirtualProcess = (graph: ModuleGraph) => {
+  const startTime = globalThis.performance.now()
+  const getElapsedNanoseconds = (): number =>
+    Math.floor((globalThis.performance.now() - startTime) * 1_000_000)
+  const hrtime = Object.assign(
+    (previous?: readonly [number, number]): [number, number] => {
+      const elapsed = getElapsedNanoseconds()
+      const seconds = Math.floor(elapsed / 1_000_000_000)
+      const nanoseconds = elapsed % 1_000_000_000
+      if (!previous) {
+        return [seconds, nanoseconds]
+      }
+      let differenceSeconds = seconds - previous[0]
+      let differenceNanoseconds = nanoseconds - previous[1]
+      if (differenceNanoseconds < 0) {
+        differenceSeconds--
+        differenceNanoseconds += 1_000_000_000
+      }
+      return [differenceSeconds, differenceNanoseconds]
+    },
+    {
+      bigint: (): bigint => BigInt(getElapsedNanoseconds()),
+    },
+  )
+  return {
+    argv: [] as readonly string[],
+    cwd: (): string => Path.dirname(graph.entry),
+    env: Object.freeze({}),
+    features: Object.freeze({ typescript: false }),
+    hrtime,
+    memoryUsage: () => ({
+      arrayBuffers: 0,
+      external: 0,
+      heapTotal: 0,
+      heapUsed: 0,
+      rss: 0,
+    }),
+    nextTick: (callback: () => void): void => queueMicrotask(callback),
+    pid: 1,
+    platform: 'browser',
+    ppid: 0,
+    version: 'v0.0.0',
+    versions: Object.freeze({ node: '0.0.0' }),
+  }
+}
+
 const createBuiltins = (graph: ModuleGraph): Readonly<Record<string, any>> => {
   const path = createPathModule()
   path.posix = path
@@ -234,6 +280,7 @@ const createBuiltins = (graph: ModuleGraph): Readonly<Record<string, any>> => {
   const utilTypes = {
     isRegExp: (value: unknown): value is RegExp => value instanceof RegExp,
   }
+  const process = createVirtualProcess(graph)
   return {
     'node:assert': assertModule,
     'node:assert/strict': assertModule,
@@ -273,11 +320,7 @@ const createBuiltins = (graph: ModuleGraph): Readonly<Record<string, any>> => {
     'node:perf_hooks': {
       performance: globalThis.performance,
     },
-    'node:process': {
-      cwd: (): string => Path.dirname(graph.entry),
-      env: Object.freeze({}),
-      platform: 'browser',
-    },
+    'node:process': process,
     'node:url': {
       fileURLToPath: (url: string | URL): string => new URL(url).pathname,
       pathToFileURL: (filePath: string): URL =>
