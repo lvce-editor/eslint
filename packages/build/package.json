@@ -9,8 +9,8 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
-    "@lvce-editor/package-extension": "^3.5.0",
-    "@types/node": "^26.1.1",
+    "@lvce-editor/package-extension": "^3.7.0",
+    "@types/node": "^26.1.2",
     "esbuild": "^0.28.1"
   }
 }
