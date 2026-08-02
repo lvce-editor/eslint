@@ -11,6 +11,15 @@ type CommonJsRequire = {
   resolve(specifier: string): string
 }
 
+const clearImmediate = (handle: ReturnType<typeof setTimeout>): void => {
+  clearTimeout(handle)
+}
+
+const setImmediate = (
+  callback: (...args: any[]) => void,
+  ...args: any[]
+): ReturnType<typeof setTimeout> => setTimeout(callback, 0, ...args)
+
 const resolutionKey = (parent: string, specifier: string): string =>
   `${parent}\0${specifier}`
 
@@ -115,6 +124,48 @@ const isIP = (value: string): 0 | 4 | 6 => {
   return isIPv6(value) ? 6 : 0
 }
 
+const isDeepStrictEqual = (
+  actual: unknown,
+  expected: unknown,
+  seen = new WeakMap<object, object>(),
+): boolean => {
+  if (Object.is(actual, expected)) {
+    return true
+  }
+  if (
+    !actual ||
+    !expected ||
+    typeof actual !== 'object' ||
+    typeof expected !== 'object' ||
+    Object.getPrototypeOf(actual) !== Object.getPrototypeOf(expected)
+  ) {
+    return false
+  }
+  const seenExpected = seen.get(actual)
+  if (seenExpected) {
+    return seenExpected === expected
+  }
+  seen.set(actual, expected)
+  const actualKeys = Reflect.ownKeys(actual).filter((key) =>
+    Object.prototype.propertyIsEnumerable.call(actual, key),
+  )
+  const expectedKeys = Reflect.ownKeys(expected).filter((key) =>
+    Object.prototype.propertyIsEnumerable.call(expected, key),
+  )
+  return (
+    actualKeys.length === expectedKeys.length &&
+    actualKeys.every(
+      (key) =>
+        expectedKeys.includes(key) &&
+        isDeepStrictEqual(
+          (actual as Record<PropertyKey, unknown>)[key],
+          (expected as Record<PropertyKey, unknown>)[key],
+          seen,
+        ),
+    )
+  )
+}
+
 const createVirtualProcess = (graph: ModuleGraph) => {
   const startTime = globalThis.performance.now()
   const getElapsedNanoseconds = (): number =>
@@ -161,28 +212,40 @@ const createVirtualProcess = (graph: ModuleGraph) => {
   }
 }
 
+const encodeVirtualFile = (content: string): Uint8Array => {
+  const bytes = new TextEncoder().encode(content)
+  Object.defineProperty(bytes, 'toString', {
+    value: (encoding = 'utf8', start = 0): string => {
+      const decoderEncoding = encoding === 'utf16le' ? 'utf-16le' : 'utf8'
+      return new TextDecoder(decoderEncoding).decode(bytes.subarray(start))
+    },
+  })
+  return bytes
+}
+
 const createBuiltins = (graph: ModuleGraph): Readonly<Record<string, any>> => {
+  const virtualFiles = { ...graph.files, ...graph.modules }
   const path = createPathModule()
   path.posix = path
   path.win32 = path
   const existsSync = (filePath: string): boolean =>
-    Object.hasOwn(graph.modules, Path.normalize(filePath))
+    Object.hasOwn(virtualFiles, Path.normalize(filePath))
   const readFileSync = (
     filePath: string,
     encoding?: string,
   ): string | Uint8Array => {
     const normalized = Path.normalize(filePath)
-    if (!Object.hasOwn(graph.modules, normalized)) {
+    if (!Object.hasOwn(virtualFiles, normalized)) {
       throw new Error(`Virtual file is not available: ${normalized}`)
     }
-    const content = graph.modules[normalized]
-    return encoding ? content : new TextEncoder().encode(content)
+    const content = virtualFiles[normalized]
+    return encoding ? content : encodeVirtualFile(content)
   }
   const readdirSync = (directory: string): readonly string[] => {
     const normalized = Path.normalize(directory).replace(/\/$/, '')
     const prefix = `${normalized}/`
     const entries = new Set<string>()
-    for (const path of Object.keys(graph.modules)) {
+    for (const path of Object.keys(virtualFiles)) {
       if (!path.startsWith(prefix)) {
         continue
       }
@@ -199,9 +262,9 @@ const createBuiltins = (graph: ModuleGraph): Readonly<Record<string, any>> => {
   )
   const statSync = (path: string) => {
     const normalized = Path.normalize(path).replace(/\/$/, '')
-    const isFile = Object.hasOwn(graph.modules, normalized)
+    const isFile = Object.hasOwn(virtualFiles, normalized)
     const prefix = `${normalized}/`
-    const isDirectory = Object.keys(graph.modules).some((modulePath) =>
+    const isDirectory = Object.keys(virtualFiles).some((modulePath) =>
       modulePath.startsWith(prefix),
     )
     return {
@@ -328,6 +391,7 @@ const createBuiltins = (graph: ModuleGraph): Readonly<Record<string, any>> => {
     },
     'node:util': {
       inspect: (value: unknown): string => JSON.stringify(value),
+      isDeepStrictEqual,
       promisify:
         (fn: (...args: any[]) => any) =>
         (...args: any[]) =>
@@ -474,9 +538,20 @@ export const loadModuleGraph = (graph: ModuleGraph): any => {
       '__filename',
       '__dirname',
       'global',
+      'clearImmediate',
+      'setImmediate',
       `'use strict';\n${source}\n//# sourceURL=${id}`,
     )
-    evaluate(module, module.exports, require, id, Path.dirname(id), globalThis)
+    evaluate(
+      module,
+      module.exports,
+      require,
+      id,
+      Path.dirname(id),
+      globalThis,
+      clearImmediate,
+      setImmediate,
+    )
     return module.exports
   }
 

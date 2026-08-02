@@ -5,6 +5,7 @@ import { configFileNames } from '../FindEslintConfig/FindEslintConfig.ts'
 
 export interface ModuleGraph {
   readonly entry: string
+  readonly files: Readonly<Record<string, string>>
   readonly modules: Readonly<Record<string, string>>
   readonly resolutions: Readonly<Record<string, string>>
 }
@@ -41,6 +42,22 @@ const builtins = new Set([
   'worker_threads',
 ])
 const extensions = ['', '.js', '.cjs', '.mjs', '.json']
+const virtualFileExtensions = [
+  '.cjs',
+  '.js',
+  '.jsx',
+  '.json',
+  '.mjs',
+  '.ts',
+  '.tsx',
+]
+const ignoredWorkspaceDirectories = new Set([
+  '.git',
+  '.tmp',
+  'coverage',
+  'dist',
+  'node_modules',
+])
 const maxModuleCount = 8192
 const maxTotalBytes = 64 * 1024 * 1024
 const cache = new Map<string, { entrySource: string; graph: ModuleGraph }>()
@@ -370,6 +387,34 @@ const getInvokedFunction = (value: any): any => {
   return undefined
 }
 
+const getCommonJsExportedValue = (statement: any): any => {
+  const expression =
+    statement.type === 'ExpressionStatement' ? statement.expression : undefined
+  if (
+    expression?.type !== 'AssignmentExpression' ||
+    expression.left?.type !== 'MemberExpression'
+  ) {
+    return undefined
+  }
+  const { object } = expression.left
+  const isModuleExports =
+    object?.type === 'Identifier' &&
+    object.name === 'module' &&
+    expression.left.property?.type === 'Identifier' &&
+    expression.left.property.name === 'exports'
+  const isExportsProperty =
+    object?.type === 'Identifier' && object.name === 'exports'
+  const isModuleExportsProperty =
+    object?.type === 'MemberExpression' &&
+    object.object?.type === 'Identifier' &&
+    object.object.name === 'module' &&
+    object.property?.type === 'Identifier' &&
+    object.property.name === 'exports'
+  return isModuleExports || isExportsProperty || isModuleExportsProperty
+    ? expression.right
+    : undefined
+}
+
 /* eslint-disable sonarjs/cognitive-complexity */
 const getDependencies = (ast: unknown): DependencyAnalysis => {
   const dependencies = new Map<string, boolean>()
@@ -474,24 +519,14 @@ const getDependencies = (ast: unknown): DependencyAnalysis => {
     }
   }
   for (const statement of programBody) {
-    const expression =
-      statement.type === 'ExpressionStatement'
-        ? statement.expression
-        : undefined
-    const isModuleExports =
-      expression?.type === 'AssignmentExpression' &&
-      expression.left?.type === 'MemberExpression' &&
-      expression.left.object?.type === 'Identifier' &&
-      expression.left.object.name === 'module' &&
-      expression.left.property?.type === 'Identifier' &&
-      expression.left.property.name === 'exports'
-    if (!isModuleExports) {
+    const exportedValue = getCommonJsExportedValue(statement)
+    if (!exportedValue) {
       continue
     }
     const exportedFunction =
-      expression.right?.type === 'Identifier'
-        ? functions.get(expression.right.name)
-        : expression.right
+      exportedValue.type === 'Identifier'
+        ? functions.get(exportedValue.name)
+        : exportedValue
     if (exportedFunctionTypes.includes(exportedFunction?.type)) {
       visit(exportedFunction.body)
     }
@@ -556,6 +591,7 @@ export const loadEslintConfig = async (
     return cached.graph
   }
   clearResolutionCaches()
+  const files: Record<string, string> = {}
   const modules: Record<string, string> = {}
   const resolutions: Record<string, string> = {}
   let totalBytes = 0
@@ -614,8 +650,54 @@ export const loadEslintConfig = async (
     }
   }
 
+  const preloadVirtualFiles = async (
+    directory: string,
+    ignoredDirectories: ReadonlySet<string>,
+  ): Promise<void> => {
+    const entries = await FileSystem.readDirWithFileTypes(directory)
+    for (const entry of entries) {
+      const path = join(directory, entry.name)
+      if (entry.isDirectory) {
+        if (!ignoredDirectories.has(entry.name)) {
+          await preloadVirtualFiles(path, ignoredDirectories)
+        }
+        continue
+      }
+      if (
+        !entry.isFile ||
+        virtualFileExtensions.every((extension) => !path.endsWith(extension)) ||
+        Object.hasOwn(modules, path)
+      ) {
+        continue
+      }
+      if (
+        Object.keys(modules).length + Object.keys(files).length >=
+        maxModuleCount
+      ) {
+        throw new Error(
+          `ESLint config exceeds the ${maxModuleCount} file limit`,
+        )
+      }
+      const source = await FileSystem.readFile(path)
+      totalBytes += source.length
+      if (totalBytes > maxTotalBytes) {
+        throw new Error('ESLint config exceeds the 64 MB file limit')
+      }
+      files[path] = source
+    }
+  }
+
   await visit(entry, entrySource)
-  const graph = { entry, modules, resolutions }
+  await preloadVirtualFiles(dirname(entry), ignoredWorkspaceDirectories)
+  const typeScriptLibDirectories = new Set(
+    Object.keys(modules)
+      .filter((path) => path.includes('/node_modules/typescript/lib/'))
+      .map(dirname),
+  )
+  for (const directory of typeScriptLibDirectories) {
+    await preloadVirtualFiles(directory, new Set())
+  }
+  const graph = { entry, files, modules, resolutions }
   cache.set(entry, { entrySource, graph })
   return graph
 }

@@ -46,12 +46,11 @@ export const lint = async (
     ? await LoadModuleGraph.loadModuleGraph(graph)
     : defaultConfig
   const config = Array.isArray(loadedConfig) ? loadedConfig : [loadedConfig]
-  const linter = new Linter({ configType: 'flat' })
   const baseDirectory = graph
     ? Path.dirname(graph.entry)
     : Path.dirname(filePath)
-  const relativeFilePath = Path.relative(baseDirectory, filePath)
-  const messages = linter.verify(text, config, { filename: relativeFilePath })
+  const linter = new Linter({ configType: 'flat', cwd: baseDirectory })
+  const messages = linter.verify(text, config, { filename: filePath })
   return messages
     .filter((message) => !isNoMatchingConfigMessage(message))
     .map((message) => ({
