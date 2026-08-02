@@ -473,9 +473,10 @@ export const loadModuleGraph = (graph: ModuleGraph): any => {
       'require',
       '__filename',
       '__dirname',
+      'global',
       `'use strict';\n${source}\n//# sourceURL=${id}`,
     )
-    evaluate(module, module.exports, require, id, Path.dirname(id))
+    evaluate(module, module.exports, require, id, Path.dirname(id), globalThis)
     return module.exports
   }
 
