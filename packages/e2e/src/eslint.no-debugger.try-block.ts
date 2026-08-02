@@ -7,14 +7,8 @@ const expectedDiagnostics = [{ source: 'no-debugger', type: 'error' }]
 export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
   const tmpDir = await FileSystem.getTmpDir()
   const uri = `${tmpDir}/test.js`
-  const text = 'try { debugger } catch (error) { console.log(error) }'
-  await FileSystem.writeFiles([
-    {
-      content: "export default [{ rules: { 'no-debugger': 'error' } }]",
-      uri: `${tmpDir}/eslint.config.js`,
-    },
-    { content: text, uri },
-  ])
+  const text = 'try { debugger } catch {}'
+  await FileSystem.writeFile(uri, text)
   await Workspace.setPath(tmpDir)
   await Main.openUri(uri)
 

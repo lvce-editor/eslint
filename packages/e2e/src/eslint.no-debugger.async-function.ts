@@ -8,13 +8,7 @@ export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
   const tmpDir = await FileSystem.getTmpDir()
   const uri = `${tmpDir}/test.js`
   const text = 'async function run() { debugger } run()'
-  await FileSystem.writeFiles([
-    {
-      content: "export default [{ rules: { 'no-debugger': 'error' } }]",
-      uri: `${tmpDir}/eslint.config.js`,
-    },
-    { content: text, uri },
-  ])
+  await FileSystem.writeFile(uri, text)
   await Workspace.setPath(tmpDir)
   await Main.openUri(uri)
 

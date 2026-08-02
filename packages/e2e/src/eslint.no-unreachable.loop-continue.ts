@@ -7,14 +7,8 @@ const expectedDiagnostics = [{ source: 'no-unreachable', type: 'error' }]
 export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
   const tmpDir = await FileSystem.getTmpDir()
   const uri = `${tmpDir}/test.js`
-  const text = 'for (const value of [1]) { continue; console.log(value) }'
-  await FileSystem.writeFiles([
-    {
-      content: "export default [{ rules: { 'no-unreachable': 'error' } }]",
-      uri: `${tmpDir}/eslint.config.js`,
-    },
-    { content: text, uri },
-  ])
+  const text = 'for (const value of [1]) { continue; value }'
+  await FileSystem.writeFile(uri, text)
   await Workspace.setPath(tmpDir)
   await Main.openUri(uri)
 

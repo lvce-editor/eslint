@@ -7,15 +7,8 @@ const expectedDiagnostics = [{ source: 'no-undef', type: 'error' }]
 export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
   const tmpDir = await FileSystem.getTmpDir()
   const uri = `${tmpDir}/test.js`
-  const text = 'console.log({ missing })'
-  await FileSystem.writeFiles([
-    {
-      content:
-        "export default [{ languageOptions: { globals: { console: 'readonly' } }, rules: { 'no-undef': 'error' } }]",
-      uri: `${tmpDir}/eslint.config.js`,
-    },
-    { content: text, uri },
-  ])
+  const text = 'export default { missing }'
+  await FileSystem.writeFile(uri, text)
   await Workspace.setPath(tmpDir)
   await Main.openUri(uri)
 
