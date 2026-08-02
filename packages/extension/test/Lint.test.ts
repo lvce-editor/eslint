@@ -90,3 +90,23 @@ test('returns no diagnostics for a file ignored by flat config', async () => {
   )
   expect(results).toEqual([])
 })
+
+test('preserves fixes returned by ESLint rules', async () => {
+  const results = await Lint.lint(
+    'const value = "test"',
+    '/workspace/file.js',
+    createGraph(
+      `module.exports = [{ rules: { quotes: ['error', 'single'] } }]`,
+    ),
+  )
+
+  expect(results[0]).toEqual(
+    expect.objectContaining({
+      fix: {
+        range: [14, 20],
+        text: "'test'",
+      },
+      ruleId: 'quotes',
+    }),
+  )
+})
