@@ -4,5 +4,6 @@ export const languageIds = [
   'json',
   'javascript',
   'typescript',
+  'yaml',
   'graphql',
 ]

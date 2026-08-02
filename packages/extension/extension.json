@@ -14,9 +14,11 @@
   "activation": [
     "onDiagnostic:javascript",
     "onDiagnostic:typescript",
+    "onDiagnostic:yaml",
     "onCommand:eslint.lint",
     "onLanguage:javascript",
-    "onLanguage:typescript"
+    "onLanguage:typescript",
+    "onLanguage:yaml"
   ],
   "commands": [
     {
@@ -32,6 +34,10 @@
     {
       "id": "eslint.typescript",
       "languageId": "typescript"
+    },
+    {
+      "id": "eslint.yaml",
+      "languageId": "yaml"
     }
   ],
   "languages": [
