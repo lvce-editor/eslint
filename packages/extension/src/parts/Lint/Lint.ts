@@ -11,6 +11,10 @@ export type LintResult = {
   message: string
   severity: 'error' | 'warning'
   ruleId: string | null
+  fix?: {
+    range: readonly [number, number]
+    text: string
+  }
 }
 
 type LintMessage = ReturnType<Linter['verify']>[number]
@@ -57,6 +61,12 @@ export const lint = async (
       column: message.column,
       endColumn: message.endColumn ?? undefined,
       endLine: message.endLine ?? undefined,
+      ...(message.fix && {
+        fix: {
+          range: message.fix.range,
+          text: message.fix.text,
+        },
+      }),
       line: message.line,
       message: message.message,
       ruleId: message.ruleId,
