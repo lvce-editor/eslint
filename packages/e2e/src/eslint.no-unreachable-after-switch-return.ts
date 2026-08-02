@@ -15,10 +15,10 @@ export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
   await Main.openUri(uri)
 
   const text = await FileSystem.readFile(uri)
-  const diagnostics = (await Command.executeExtensionCommand(
-    'eslint.lint',
-    { text, uri },
-  )) as readonly { source: string; type: string }[]
+  const diagnostics = (await Command.executeExtensionCommand('eslint.lint', {
+    text,
+    uri,
+  })) as readonly { source: string; type: string }[]
   const actualDiagnostics = diagnostics.map(({ source, type }) => ({
     source,
     type,

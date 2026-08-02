@@ -10,13 +10,10 @@ export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
 
   const uri = `${tmpDir}/test.js`
   const text = await FileSystem.readFile(uri)
-  const diagnostics = (await Command.executeExtensionCommand(
-    'eslint.lint',
-    {
-      text,
-      uri,
-    },
-  )) as any[]
+  const diagnostics = (await Command.executeExtensionCommand('eslint.lint', {
+    text,
+    uri,
+  })) as any[]
   if (diagnostics.length !== 1 || diagnostics[0].source !== 'no-debugger') {
     throw new Error(`Unexpected diagnostics: ${JSON.stringify(diagnostics)}`)
   }
