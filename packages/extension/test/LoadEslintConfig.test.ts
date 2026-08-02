@@ -51,6 +51,58 @@ test('transforms an esm default export to commonjs', async () => {
   expect(graph.modules[graph.entry]).toContain('exports.default')
 })
 
+test('reloads a config when its entry source changes', async () => {
+  setFiles({
+    '/workspace/eslint.config.js': `export default [{ rules: { semi: 'error' } }]`,
+  })
+  const first = await LoadEslintConfig.loadEslintConfig(
+    '/workspace/eslint.config.js',
+  )
+
+  setFiles({
+    '/workspace/eslint.config.js': `export default [{ rules: { semi: 'off' } }]`,
+  })
+  const second = await LoadEslintConfig.loadEslintConfig(
+    '/workspace/eslint.config.js',
+  )
+
+  expect(second).not.toBe(first)
+  expect(second.modules[second.entry]).toContain('off')
+})
+
+test('invalidates a cached graph when an imported config module changes', async () => {
+  setFiles({
+    '/workspace/config-change/eslint.config.js': `import rules from './rules.js'; export default [{ rules }]`,
+    '/workspace/config-change/rules.js': `export default { semi: 'error' }`,
+  })
+  const first = await LoadEslintConfig.loadEslintConfig(
+    '/workspace/config-change/eslint.config.js',
+  )
+
+  const invalidated = LoadEslintConfig.invalidateForFileChanges({
+    changed: ['file:///workspace/config-change/rules.js'],
+  })
+  setFiles({
+    '/workspace/config-change/eslint.config.js': `import rules from './rules.js'; export default [{ rules }]`,
+    '/workspace/config-change/rules.js': `export default { semi: 'off' }`,
+  })
+  const second = await LoadEslintConfig.loadEslintConfig(
+    '/workspace/config-change/eslint.config.js',
+  )
+
+  expect(invalidated).toBe(true)
+  expect(second).not.toBe(first)
+  expect(second.modules['/workspace/config-change/rules.js']).toContain('off')
+})
+
+test('requests a refresh when a new eslint config file changes', () => {
+  expect(
+    LoadEslintConfig.invalidateForFileChanges({
+      changed: ['file:///workspace/new/eslint.config.mjs'],
+    }),
+  ).toBe(true)
+})
+
 test('preloads a relative esm dependency', async () => {
   setFiles({
     '/workspace/eslint.config.js': `import rules from './rules.js'; export default [{ rules }]`,
