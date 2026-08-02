@@ -66,3 +66,14 @@ test('preserves warning severity and source locations', async () => {
     }),
   )
 })
+
+test('returns no diagnostics for a file ignored by flat config', async () => {
+  const results = await Lint.lint(
+    'console.log("ignored")',
+    '/workspace/ignored/file.js',
+    createGraph(
+      `module.exports = [{ ignores: ['ignored/**'] }, { files: ['**/*.js'], rules: { 'no-console': 'error' } }]`,
+    ),
+  )
+  expect(results).toEqual([])
+})
