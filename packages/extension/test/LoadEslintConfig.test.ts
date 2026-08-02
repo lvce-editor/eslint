@@ -69,6 +69,23 @@ test('transforms an esm default export to commonjs', async () => {
   expect(graph.modules[graph.entry]).toContain('exports.default')
 })
 
+test('preloads workspace source files into the virtual file system', async () => {
+  setFiles({
+    '/workspace/eslint.config.js': `module.exports = []`,
+    '/workspace/node_modules/example/index.js': `module.exports = true`,
+    '/workspace/src/file.ts': `export const value = 1`,
+    '/workspace/tsconfig.json': `{ "include": ["src"] }`,
+  })
+  const graph = await LoadEslintConfig.loadEslintConfig(
+    '/workspace/eslint.config.js',
+  )
+  expect(graph.files['/workspace/src/file.ts']).toBe(`export const value = 1`)
+  expect(graph.files['/workspace/tsconfig.json']).toBe(`{ "include": ["src"] }`)
+  expect(graph.files).not.toHaveProperty(
+    '/workspace/node_modules/example/index.js',
+  )
+})
+
 test('replaces import.meta.url for commonjs evaluation', async () => {
   setFiles({
     '/import-meta-workspace/eslint.config.js': `export default import.meta.url`,
@@ -394,6 +411,20 @@ test('preloads dependencies of an exported commonjs function', async () => {
       '/exported-function-workspace/eslint.config.js\0./dependency'
     ],
   ).toBe('/exported-function-workspace/dependency.js')
+})
+
+test('preloads dependencies of a named commonjs export', async () => {
+  setFiles({
+    '/named-export-workspace/dependency.js': `module.exports = true`,
+    '/named-export-workspace/eslint.config.js': `module.exports = require('./service')`,
+    '/named-export-workspace/service.js': `exports.createService = createService; function createService() { return require('./dependency') }`,
+  })
+  const graph = await LoadEslintConfig.loadEslintConfig(
+    '/named-export-workspace/eslint.config.js',
+  )
+  expect(
+    graph.resolutions['/named-export-workspace/service.js\0./dependency'],
+  ).toBe('/named-export-workspace/dependency.js')
 })
 
 test('preloads dependencies from an immediately invoked function', async () => {

@@ -51,6 +51,19 @@ test('runs a dynamically loaded plugin rule', async () => {
   ])
 })
 
+test('passes an absolute file path to parser services', async () => {
+  const configPath = '/workspace/eslint.config.js'
+  const graph: ModuleGraph = {
+    entry: configPath,
+    modules: {
+      [configPath]: `module.exports = [{ files: ['**/*.ts'], plugins: { test: { rules: { filename: { create(context) { return { Program(node) { context.report({ node, message: context.filename }) } } } } } } }, rules: { 'test/filename': 'error' } }]`,
+    },
+    resolutions: {},
+  }
+  const results = await Lint.lint('', '/workspace/source/file.ts', graph)
+  expect(results[0].message).toBe('/workspace/source/file.ts')
+})
+
 test('preserves warning severity and source locations', async () => {
   const results = await Lint.lint(
     'const unused = 1',

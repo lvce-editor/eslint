@@ -122,6 +122,24 @@ test('provides the node global alias to config dependencies', () => {
   expect(value).toEqual([true, true, true])
 })
 
+test('provides node immediate timer shims to config dependencies', () => {
+  const value = LoadModuleGraph.loadModuleGraph(
+    graph({
+      '/workspace/eslint.config.js': `const handle = setImmediate(() => {}); clearImmediate(handle); module.exports = [typeof setImmediate, typeof clearImmediate]`,
+    }),
+  )
+  expect(value).toEqual(['function', 'function'])
+})
+
+test('provides deep strict equality to config dependencies', () => {
+  const value = LoadModuleGraph.loadModuleGraph(
+    graph({
+      '/workspace/eslint.config.js': `const { isDeepStrictEqual } = require('node:util'); module.exports = [isDeepStrictEqual(['.ts'], ['.ts']), isDeepStrictEqual({ nested: [1] }, { nested: [2] })]`,
+    }),
+  )
+  expect(value).toEqual([true, false])
+})
+
 test('provides node module builtin metadata', () => {
   const value = LoadModuleGraph.loadModuleGraph(
     graph({
@@ -180,6 +198,18 @@ test('limits fs reads to preloaded virtual files', () => {
     }),
   )
   expect(value).toBe('safe')
+})
+
+test('exposes non-module workspace files with node buffer decoding', () => {
+  const value = LoadModuleGraph.loadModuleGraph({
+    ...graph({
+      '/workspace/eslint.config.js': `module.exports = require('fs').readFileSync('/workspace/source.ts').toString('utf8')`,
+    }),
+    files: {
+      '/workspace/source.ts': 'export const value = 1',
+    },
+  })
+  expect(value).toBe('export const value = 1')
 })
 
 test('provides virtual fs stat and realpath helpers', () => {
