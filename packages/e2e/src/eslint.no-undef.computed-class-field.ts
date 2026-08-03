@@ -5,7 +5,9 @@ export const name = 'eslint.no-undef.computed-class-field'
 const expectedDiagnostics = [{ source: 'no-undef', type: 'error' }]
 
 export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
-  const tmpDir = await FileSystem.getTmpDir()
+  const tmpDir = await FileSystem.loadFixture(
+    import.meta.resolve('../fixtures/eslint-project'),
+  )
   const uri = `${tmpDir}/test.js`
   const text = 'class Example { [missing] = 1 } new Example()'
   await FileSystem.writeFile(uri, text)

@@ -1,4 +1,4 @@
-import { Linter } from 'eslint'
+import type { Linter } from 'eslint'
 import type { ModuleGraph } from '../ModuleGraph/ModuleGraph.ts'
 import * as LoadModuleGraph from '../LoadModuleGraph/LoadModuleGraph.ts'
 import * as Path from '../Path/Path.ts'
@@ -17,7 +17,9 @@ export type LintResult = {
   }
 }
 
-type LintMessage = ReturnType<Linter['verify']>[number]
+export type LinterConstructor = typeof Linter
+
+type LintMessage = ReturnType<InstanceType<LinterConstructor>['verify']>[number]
 
 const isNoMatchingConfigMessage = (message: LintMessage): boolean => {
   return (
@@ -45,6 +47,7 @@ export const lint = async (
   text: string,
   filePath: string,
   graph: ModuleGraph | undefined,
+  Linter: LinterConstructor,
 ): Promise<LintResult[]> => {
   const loadedConfig = graph
     ? await LoadModuleGraph.loadModuleGraph(graph)

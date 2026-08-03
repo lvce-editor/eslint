@@ -5,7 +5,9 @@ export const name = 'eslint.no-unreachable.nested-loop-continue'
 const expectedDiagnostics = [{ source: 'no-unreachable', type: 'error' }]
 
 export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
-  const tmpDir = await FileSystem.getTmpDir()
+  const tmpDir = await FileSystem.loadFixture(
+    import.meta.resolve('../fixtures/eslint-project'),
+  )
   const uri = `${tmpDir}/test.js`
   const text =
     'let value = 0; while (value++ < 1) { for (;;) { continue; value } }'

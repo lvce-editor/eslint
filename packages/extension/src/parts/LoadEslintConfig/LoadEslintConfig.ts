@@ -111,8 +111,12 @@ export const invalidateForFileChanges = (
 }
 
 const normalize = (path: string): string => {
+  const normalizedSlashes = path.replaceAll('\\\\', '/')
+  const match = /^([a-z][a-z\d+.-]*:\/\/)(.*)$/i.exec(normalizedSlashes)
+  const prefix = match?.[1] ?? ''
+  const pathValue = match?.[2] ?? normalizedSlashes
   const parts: string[] = []
-  for (const part of path.replaceAll('\\\\', '/').split('/')) {
+  for (const part of pathValue.split('/')) {
     if (!part || part === '.') {
       continue
     }
@@ -122,13 +126,15 @@ const normalize = (path: string): string => {
       parts.push(part)
     }
   }
-  return `/${parts.join('/')}`
+  return `${prefix}/${parts.join('/')}`
 }
 
 const dirname = (path: string): string => {
   const normalized = normalize(path)
+  const match = /^([a-z][a-z\d+.-]*:\/\/)/i.exec(normalized)
+  const root = match ? `${match[1]}/` : '/'
   const index = normalized.lastIndexOf('/')
-  return index <= 0 ? '/' : normalized.slice(0, index)
+  return index < root.length ? root : normalized.slice(0, index)
 }
 
 const join = (...parts: readonly string[]): string => normalize(parts.join('/'))
@@ -235,7 +241,7 @@ const resolveAsFileOrDirectory = async (
     const entry =
       selectExport(exportsValue) ||
       (packageSubpath === '.' &&
-        (browserEntry || packageJson.module || packageJson.main))
+        (browserEntry || packageJson.main || packageJson.module))
     if (typeof entry === 'string') {
       const resolvedEntry = await resolveAsFileOrDirectory(
         join(candidate, entry),
@@ -320,7 +326,7 @@ const resolveBrowserReplacement = async (
   return undefined
 }
 
-const resolveModule = async (
+export const resolveModule = async (
   parent: string,
   specifier: string,
 ): Promise<string | undefined> => {
@@ -581,10 +587,8 @@ const transpile = (
   }
 }
 
-export const loadEslintConfig = async (
-  configFilePath: string,
-): Promise<ModuleGraph> => {
-  const entry = normalize(configFilePath)
+export const loadModule = async (modulePath: string): Promise<ModuleGraph> => {
+  const entry = normalize(modulePath)
   const entrySource = await FileSystem.readFile(entry)
   const cached = cache.get(entry)
   if (cached?.entrySource === entrySource) {
@@ -701,3 +705,5 @@ export const loadEslintConfig = async (
   cache.set(entry, { entrySource, graph })
   return graph
 }
+
+export const loadEslintConfig = loadModule

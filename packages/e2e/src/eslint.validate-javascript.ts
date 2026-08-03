@@ -3,7 +3,9 @@ import type { Test } from '@lvce-editor/test-with-playwright'
 export const name = 'eslint.validate-javascript'
 
 export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
-  const tmpDir = await FileSystem.getTmpDir()
+  const tmpDir = await FileSystem.loadFixture(
+    import.meta.resolve('../fixtures/eslint-project'),
+  )
   await FileSystem.writeFile(`${tmpDir}/test.js`, 'debugger')
   await Workspace.setPath(tmpDir)
   await Main.openUri(`${tmpDir}/test.js`)

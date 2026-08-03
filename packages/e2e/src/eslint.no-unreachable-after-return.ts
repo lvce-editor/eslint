@@ -13,7 +13,9 @@ const expectedDiagnostics = [
 ]
 
 export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
-  const tmpDir = await FileSystem.getTmpDir()
+  const tmpDir = await FileSystem.loadFixture(
+    import.meta.resolve('../fixtures/eslint-project'),
+  )
   const uri = `${tmpDir}/test.js`
   await FileSystem.writeFile(uri, 'function run() { return 1; 2 }\nrun()')
   await Workspace.setPath(tmpDir)

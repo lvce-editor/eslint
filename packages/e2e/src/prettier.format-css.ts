@@ -12,7 +12,9 @@ export const test: Test = async ({
   Main,
 }) => {
   // arrange
-  const tmpDir = await FileSystem.getTmpDir()
+  const tmpDir = await FileSystem.loadFixture(
+    import.meta.resolve('../fixtures/eslint-project'),
+  )
   await FileSystem.writeFile(
     `${tmpDir}/test.css`,
     `h1 {

@@ -19,7 +19,7 @@ export const state: { api: FileSystemApi } = {
 }
 
 const toFileUri = (path: string): string => {
-  if (path.startsWith('file://')) {
+  if (/^[a-z][a-z\d+.-]*:\/\//i.test(path)) {
     return path
   }
   return new URL(path, 'file://').href

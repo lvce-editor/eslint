@@ -5,7 +5,9 @@ export const name = 'eslint.no-debugger.static-block'
 const expectedDiagnostics = [{ source: 'no-debugger', type: 'error' }]
 
 export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
-  const tmpDir = await FileSystem.getTmpDir()
+  const tmpDir = await FileSystem.loadFixture(
+    import.meta.resolve('../fixtures/eslint-project'),
+  )
   const uri = `${tmpDir}/test.js`
   const text = 'class Example { static { debugger } } new Example()'
   await FileSystem.writeFile(uri, text)

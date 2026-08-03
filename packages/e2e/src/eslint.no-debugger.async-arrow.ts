@@ -5,7 +5,9 @@ export const name = 'eslint.no-debugger.async-arrow'
 const expectedDiagnostics = [{ source: 'no-debugger', type: 'error' }]
 
 export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
-  const tmpDir = await FileSystem.getTmpDir()
+  const tmpDir = await FileSystem.loadFixture(
+    import.meta.resolve('../fixtures/eslint-project'),
+  )
   const uri = `${tmpDir}/test.js`
   const text = 'const run = async () => { debugger }; run()'
   await FileSystem.writeFile(uri, text)

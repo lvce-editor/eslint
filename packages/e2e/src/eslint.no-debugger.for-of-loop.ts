@@ -5,7 +5,9 @@ export const name = 'eslint.no-debugger.for-of-loop'
 const expectedDiagnostics = [{ source: 'no-debugger', type: 'error' }]
 
 export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
-  const tmpDir = await FileSystem.getTmpDir()
+  const tmpDir = await FileSystem.loadFixture(
+    import.meta.resolve('../fixtures/eslint-project'),
+  )
   const uri = `${tmpDir}/test.js`
   const text = 'for (const value of [1]) { value; debugger }'
   await FileSystem.writeFile(uri, text)

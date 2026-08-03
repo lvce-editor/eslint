@@ -1,8 +1,7 @@
-import { build, context, type BuildOptions } from 'esbuild'
+import { build, context, type BuildOptions, type Metafile } from 'esbuild'
 import { root } from './root.js'
 import { join } from 'node:path'
 import { readFileSync, writeFileSync } from 'node:fs'
-import { createRequire } from 'node:module'
 import { pathToFileURL } from 'node:url'
 
 const getBuildOptions = (outfile: string): BuildOptions => {
@@ -45,6 +44,7 @@ const getBuildOptions = (outfile: string): BuildOptions => {
     ],
     packages: 'bundle',
     mainFields: ['module', 'main'],
+    metafile: true,
     conditions: ['import', 'module', 'default'],
     platform: 'browser',
     plugins: [
@@ -74,76 +74,6 @@ const getBuildOptions = (outfile: string): BuildOptions => {
                 // File might not exist yet, that's okay
               }
             }
-          })
-        },
-      },
-      {
-        name: 'ensure-eslint-bundled',
-        setup(build) {
-          // Ensure eslint is resolved and bundled
-          build.onResolve({ filter: /^eslint$/ }, (args) => {
-            // Don't mark as external - let it be bundled
-            return undefined
-          })
-        },
-      },
-      {
-        name: 'ensure-esquery-exports',
-        setup(build) {
-          // Intercept esquery resolution and use the ESM version
-          build.onResolve({ filter: /^esquery$/ }, (args) => {
-            const require = createRequire(import.meta.url)
-            // Resolve to the ESM version
-            const esqueryPath =
-              require.resolve('esquery/dist/esquery.esm.min.js')
-            return {
-              path: esqueryPath,
-            }
-          })
-        },
-      },
-      {
-        name: 'fix-esquery-usage',
-        setup(build) {
-          build.onLoad({ filter: /.*/ }, (args) => {
-            // Only process JavaScript files in node_modules
-            // Don't process TypeScript files or source files
-            if (
-              !args.path.includes('node_modules') ||
-              (!args.path.endsWith('.js') &&
-                !args.path.endsWith('.cjs') &&
-                !args.path.endsWith('.mjs'))
-            ) {
-              return undefined
-            }
-
-            try {
-              const contents = readFileSync(args.path, 'utf-8')
-              let modified = contents
-
-              // Fix esquery.parse to esquery.default.parse
-              // Handle various patterns: esquery.parse, esquery.match, etc.
-              modified = modified.replace(
-                /esquery\.(parse|match|query|traverse|matches)\s*\(/g,
-                'esquery.default.$1(',
-              )
-
-              // Also handle destructuring: const { parse, match } = esquery
-              // This is trickier, but we can handle the usage after destructuring
-              // by replacing the variable names
-
-              if (modified !== contents) {
-                return {
-                  contents: modified,
-                  loader: 'js',
-                }
-              }
-            } catch {
-              // If we can't read the file, let esbuild handle it
-              return undefined
-            }
-
-            return undefined
           })
         },
       },
@@ -319,8 +249,21 @@ const getBuildOptions = (outfile: string): BuildOptions => {
   }
 }
 
+const assertEslintNotBundled = (metafile: Metafile): void => {
+  const bundledEslintPath = Object.keys(metafile.inputs).find((input) =>
+    /(^|\/)node_modules\/eslint\//.test(input.replaceAll('\\', '/')),
+  )
+  if (bundledEslintPath) {
+    throw new Error(`ESLint must not be bundled: ${bundledEslintPath}`)
+  }
+}
+
 export const buildExtension = async (outfile: string): Promise<void> => {
-  await build(getBuildOptions(outfile))
+  const result = await build(getBuildOptions(outfile))
+  if (!result.metafile) {
+    throw new Error('Expected an esbuild metafile')
+  }
+  assertEslintNotBundled(result.metafile)
 }
 
 export const watchExtension = async (): Promise<void> => {

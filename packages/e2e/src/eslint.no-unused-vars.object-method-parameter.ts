@@ -5,7 +5,9 @@ export const name = 'eslint.no-unused-vars.object-method-parameter'
 const expectedDiagnostics = [{ source: 'no-unused-vars', type: 'warning' }]
 
 export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
-  const tmpDir = await FileSystem.getTmpDir()
+  const tmpDir = await FileSystem.loadFixture(
+    import.meta.resolve('../fixtures/eslint-project'),
+  )
   const uri = `${tmpDir}/test.js`
   const text = 'const object = { run(unused) { return 1 } }; object.run()'
   await FileSystem.writeFile(uri, text)

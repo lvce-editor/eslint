@@ -5,7 +5,9 @@ export const name = 'eslint.config-json-import'
 export const skip = 1
 
 export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
-  const tmpDir = await FileSystem.getTmpDir()
+  const tmpDir = await FileSystem.loadFixture(
+    import.meta.resolve('../fixtures/eslint-project'),
+  )
   await FileSystem.writeFiles([
     {
       content: `module.exports = require('./config.json')`,

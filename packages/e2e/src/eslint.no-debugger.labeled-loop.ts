@@ -5,7 +5,9 @@ export const name = 'eslint.no-debugger.labeled-loop'
 const expectedDiagnostics = [{ source: 'no-debugger', type: 'error' }]
 
 export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
-  const tmpDir = await FileSystem.getTmpDir()
+  const tmpDir = await FileSystem.loadFixture(
+    import.meta.resolve('../fixtures/eslint-project'),
+  )
   const uri = `${tmpDir}/test.js`
   const text = 'label: while (true) { debugger; break label }'
   await FileSystem.writeFile(uri, text)

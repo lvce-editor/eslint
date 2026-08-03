@@ -5,7 +5,9 @@ export const name = 'eslint.no-unreachable.while-continue'
 const expectedDiagnostics = [{ source: 'no-unreachable', type: 'error' }]
 
 export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
-  const tmpDir = await FileSystem.getTmpDir()
+  const tmpDir = await FileSystem.loadFixture(
+    import.meta.resolve('../fixtures/eslint-project'),
+  )
   const uri = `${tmpDir}/test.js`
   const text = 'let value = 0; while (value++ < 1) { continue; value }'
   await FileSystem.writeFile(uri, text)

@@ -5,7 +5,9 @@ export const name = 'eslint.no-debugger.class-field-arrow'
 const expectedDiagnostics = [{ source: 'no-debugger', type: 'error' }]
 
 export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
-  const tmpDir = await FileSystem.getTmpDir()
+  const tmpDir = await FileSystem.loadFixture(
+    import.meta.resolve('../fixtures/eslint-project'),
+  )
   const uri = `${tmpDir}/test.js`
   const text = 'class Example { run = () => { debugger } } new Example().run()'
   await FileSystem.writeFile(uri, text)

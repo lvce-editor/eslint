@@ -5,7 +5,9 @@ export const name = 'eslint.config-plugin'
 export const skip = 1
 
 export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
-  const tmpDir = await FileSystem.getTmpDir()
+  const tmpDir = await FileSystem.loadFixture(
+    import.meta.resolve('../fixtures/eslint-project'),
+  )
   const pluginDir = `${tmpDir}/node_modules/eslint-plugin-demo`
   await FileSystem.mkdir(`${tmpDir}/node_modules`)
   await FileSystem.mkdir(pluginDir)

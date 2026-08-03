@@ -2,6 +2,7 @@
 .tmp
 extension.tar.br
 dist2
+packages/e2e/fixtures/eslint-project/
 
 # Logs
 logs

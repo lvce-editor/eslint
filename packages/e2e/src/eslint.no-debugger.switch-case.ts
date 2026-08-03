@@ -5,7 +5,9 @@ export const name = 'eslint.no-debugger.switch-case'
 const expectedDiagnostics = [{ source: 'no-debugger', type: 'error' }]
 
 export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
-  const tmpDir = await FileSystem.getTmpDir()
+  const tmpDir = await FileSystem.loadFixture(
+    import.meta.resolve('../fixtures/eslint-project'),
+  )
   const uri = `${tmpDir}/test.js`
   const text = 'switch (1) { case 1: debugger; break }'
   await FileSystem.writeFile(uri, text)

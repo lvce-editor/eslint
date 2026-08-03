@@ -5,7 +5,9 @@ export const name = 'eslint.no-undef.switch-discriminant'
 const expectedDiagnostics = [{ source: 'no-undef', type: 'error' }]
 
 export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
-  const tmpDir = await FileSystem.getTmpDir()
+  const tmpDir = await FileSystem.loadFixture(
+    import.meta.resolve('../fixtures/eslint-project'),
+  )
   const uri = `${tmpDir}/test.js`
   const text = 'switch (missing) { default: break }'
   await FileSystem.writeFile(uri, text)

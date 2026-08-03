@@ -5,7 +5,9 @@ export const name = 'eslint.no-unused-vars.named-import'
 const expectedDiagnostics = [{ source: 'no-unused-vars', type: 'warning' }]
 
 export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
-  const tmpDir = await FileSystem.getTmpDir()
+  const tmpDir = await FileSystem.loadFixture(
+    import.meta.resolve('../fixtures/eslint-project'),
+  )
   const uri = `${tmpDir}/test.js`
   const text = "import { value as unused } from './module.js'"
   await FileSystem.writeFile(uri, text)

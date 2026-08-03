@@ -12,7 +12,9 @@ export const test: Test = async ({
   Main,
   Workspace,
 }) => {
-  const tmpDir = await FileSystem.getTmpDir()
+  const tmpDir = await FileSystem.loadFixture(
+    import.meta.resolve('../fixtures/eslint-project'),
+  )
   await FileSystem.writeFiles([
     {
       content: `export default [{ files: ['**/*.yml'], plugins: { demo: { processors: { yaml: { preprocess() { return ['debugger'] }, postprocess(messages) { return messages[0] } } } } }, processor: 'demo/yaml', rules: { 'no-debugger': 'error' } }]`,

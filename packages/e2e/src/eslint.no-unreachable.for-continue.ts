@@ -5,7 +5,9 @@ export const name = 'eslint.no-unreachable.for-continue'
 const expectedDiagnostics = [{ source: 'no-unreachable', type: 'error' }]
 
 export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
-  const tmpDir = await FileSystem.getTmpDir()
+  const tmpDir = await FileSystem.loadFixture(
+    import.meta.resolve('../fixtures/eslint-project'),
+  )
   const uri = `${tmpDir}/test.js`
   const text = 'for (let index = 0; index < 1; index++) { continue; index }'
   await FileSystem.writeFile(uri, text)
