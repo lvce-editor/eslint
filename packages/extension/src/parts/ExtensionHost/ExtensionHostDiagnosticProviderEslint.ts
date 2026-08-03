@@ -9,14 +9,32 @@ export const label = 'ESLint'
 
 export const languageId = 'javascript'
 
+const getErrorPosition = (
+  error: unknown,
+): { columnIndex: number; rowIndex: number } => {
+  if (!error || typeof error !== 'object') {
+    return { columnIndex: 0, rowIndex: 0 }
+  }
+  const location = (error as { loc?: unknown }).loc
+  if (!location || typeof location !== 'object') {
+    return { columnIndex: 0, rowIndex: 0 }
+  }
+  const { column, line } = location as { column?: unknown; line?: unknown }
+  return {
+    columnIndex: typeof column === 'number' ? Math.max(0, column) : 0,
+    rowIndex: typeof line === 'number' ? Math.max(0, line - 1) : 0,
+  }
+}
+
 export const provideDiagnostics = async (textDocument: {
   text: string
   uri: string
 }): Promise<readonly Diagnostic[]> => {
+  let configPath: string | null = null
   try {
     const { text } = textDocument
     const filePath = textDocument.uri ?? 'file.js'
-    const configPath = await FindEslintConfig.findEslintConfig(filePath)
+    configPath = await FindEslintConfig.findEslintConfig(filePath)
     const config = configPath
       ? await LoadEslintConfig.loadEslintConfig(configPath)
       : undefined
@@ -33,16 +51,19 @@ export const provideDiagnostics = async (textDocument: {
     }))
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
+    const { columnIndex, rowIndex } = getErrorPosition(error)
     return [
       {
-        columnIndex: 0,
-        endColumnIndex: 0,
-        endRowIndex: 0,
-        message: `ESLint: ${message}`,
-        rowIndex: 0,
+        columnIndex,
+        endColumnIndex: columnIndex,
+        endRowIndex: rowIndex,
+        message: configPath
+          ? `ESLint configuration error: ${message}`
+          : `ESLint: ${message}`,
+        rowIndex,
         source: 'eslint',
         type: 'error',
-        uri: textDocument.uri,
+        uri: configPath ?? textDocument.uri,
       },
     ]
   }
