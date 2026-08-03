@@ -44,3 +44,23 @@ test('attributes invalid config errors to the config location', async () => {
     },
   ])
 })
+
+test('loads config for a file uri with a single slash', async () => {
+  const diagnostics = await DiagnosticProvider.provideDiagnostics({
+    text: 'const value = 1',
+    uri: 'file:/workspace/src/file.ts',
+  })
+
+  expect(diagnostics).toEqual([
+    {
+      columnIndex: 0,
+      endColumnIndex: 0,
+      endRowIndex: 1,
+      message: 'ESLint configuration error: Unexpected token (2:0)',
+      rowIndex: 1,
+      source: 'eslint',
+      type: 'error',
+      uri: 'file:/workspace/eslint.config.js',
+    },
+  ])
+})

@@ -70,7 +70,7 @@ const clearResolutionCaches = (): void => {
 }
 
 const toPath = (uri: string): string => {
-  if (uri.startsWith('file://')) {
+  if (/^file:\/+/.test(uri)) {
     return decodeURIComponent(new URL(uri).pathname)
   }
   return uri
@@ -113,7 +113,7 @@ export const invalidateForFileChanges = (
 }
 
 const normalize = (path: string): string => {
-  const normalizedSlashes = path.replaceAll('\\', '/')
+  const normalizedSlashes = toPath(path).replaceAll('\\', '/')
   const match = /^([a-z][a-z\d+.-]*:\/\/)(.*)$/i.exec(normalizedSlashes)
   const prefix = match?.[1] ?? ''
   const pathValue = match?.[2] ?? normalizedSlashes
