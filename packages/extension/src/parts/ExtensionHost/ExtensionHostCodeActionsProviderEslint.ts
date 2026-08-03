@@ -1,6 +1,7 @@
 import * as FindEslintConfig from '../FindEslintConfig/FindEslintConfig.ts'
 import * as GetCodeActionsFromLintResults from '../GetCodeActionsFromLintResults/GetCodeActionsFromLintResults.ts'
 import * as Lint from '../Lint/Lint.ts'
+import * as LoadEslint from '../LoadEslint/LoadEslint.ts'
 import * as LoadEslintConfig from '../LoadEslintConfig/LoadEslintConfig.ts'
 
 export interface TextDocument {
@@ -18,7 +19,13 @@ export const provideCodeActions = async (
     const config = configPath
       ? await LoadEslintConfig.loadEslintConfig(configPath)
       : undefined
-    const lintResults = await Lint.lint(textDocument.text, filePath, config)
+    const Linter = await LoadEslint.loadEslint(filePath)
+    const lintResults = await Lint.lint(
+      textDocument.text,
+      filePath,
+      config,
+      Linter,
+    )
     return GetCodeActionsFromLintResults.getCodeActionsFromLintResults(
       lintResults,
       offset,

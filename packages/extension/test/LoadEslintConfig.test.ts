@@ -211,6 +211,24 @@ test('uses package main when browser is a module replacement map', async () => {
   )
 })
 
+test('prefers package main over module for commonjs evaluation', async () => {
+  setFiles({
+    '/main-workspace/eslint.config.js': `module.exports = require('example')`,
+    '/main-workspace/node_modules/example/index.cjs': `module.exports = true`,
+    '/main-workspace/node_modules/example/index.mjs': `export default true`,
+    '/main-workspace/node_modules/example/package.json': JSON.stringify({
+      main: './index.cjs',
+      module: './index.mjs',
+    }),
+  })
+  const graph = await LoadEslintConfig.loadEslintConfig(
+    '/main-workspace/eslint.config.js',
+  )
+  expect(graph.resolutions['/main-workspace/eslint.config.js\0example']).toBe(
+    '/main-workspace/node_modules/example/index.cjs',
+  )
+})
+
 test('resolves dependencies through a package browser replacement map', async () => {
   setFiles({
     '/browser-workspace/eslint.config.js': `module.exports = require('example')`,

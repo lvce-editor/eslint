@@ -5,7 +5,25 @@ export const name = 'eslint.no-unused-vars-arrow-parameter'
 const expectedDiagnostics = [{ source: 'no-unused-vars', type: 'warning' }]
 
 export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
-  const tmpDir = await FileSystem.getTmpDir()
+  const tmpDir = await FileSystem.getTmpDir({ scheme: 'file' })
+  const eslintDirectory = `${tmpDir}/node_modules/eslint`
+  const eslintEntry = decodeURIComponent(
+    new URL(
+      import.meta.resolve('../../../node_modules/eslint/lib/api.js'),
+    ).pathname.replace(/^\/remote/, ''),
+  )
+  await FileSystem.mkdir(`${tmpDir}/node_modules`)
+  await FileSystem.mkdir(eslintDirectory)
+  await FileSystem.setFiles([
+    {
+      content: JSON.stringify({ main: 'index.cjs', name: 'eslint' }),
+      uri: `${eslintDirectory}/package.json`,
+    },
+    {
+      content: `module.exports = require(${JSON.stringify(eslintEntry)})`,
+      uri: `${eslintDirectory}/index.cjs`,
+    },
+  ])
   const uri = `${tmpDir}/test.js`
   await FileSystem.writeFile(uri, 'const fn = (unused) => 1; fn()')
   await Workspace.setPath(tmpDir)

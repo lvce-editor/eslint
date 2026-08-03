@@ -1,4 +1,4 @@
-import { Linter } from 'eslint'
+import type { Linter } from 'eslint'
 import type { ModuleGraph } from '../ModuleGraph/ModuleGraph.ts'
 import * as LoadModuleGraph from '../LoadModuleGraph/LoadModuleGraph.ts'
 import * as Path from '../Path/Path.ts'
@@ -17,7 +17,9 @@ export type LintResult = {
   }
 }
 
-type LintMessage = ReturnType<Linter['verify']>[number]
+export type LinterConstructor = typeof Linter
+
+type LintMessage = ReturnType<InstanceType<LinterConstructor>['verify']>[number]
 
 const isNoMatchingConfigMessage = (message: LintMessage): boolean => {
   return (
@@ -41,20 +43,29 @@ const defaultConfig = {
   },
 }
 
+const toLinterPath = (path: string): string => {
+  if (!/^[a-z][a-z\d+.-]*:\/\//i.test(path)) {
+    return path
+  }
+  return decodeURIComponent(new URL(path).pathname)
+}
+
 export const lint = async (
   text: string,
   filePath: string,
   graph: ModuleGraph | undefined,
+  Linter: LinterConstructor,
 ): Promise<LintResult[]> => {
   const loadedConfig = graph
     ? await LoadModuleGraph.loadModuleGraph(graph)
     : defaultConfig
   const config = Array.isArray(loadedConfig) ? loadedConfig : [loadedConfig]
+  const linterFilePath = toLinterPath(filePath)
   const baseDirectory = graph
-    ? Path.dirname(graph.entry)
-    : Path.dirname(filePath)
+    ? Path.dirname(toLinterPath(graph.entry))
+    : Path.dirname(linterFilePath)
   const linter = new Linter({ configType: 'flat', cwd: baseDirectory })
-  const messages = linter.verify(text, config, { filename: filePath })
+  const messages = linter.verify(text, config, { filename: linterFilePath })
   return messages
     .filter((message) => !isNoMatchingConfigMessage(message))
     .map((message) => ({

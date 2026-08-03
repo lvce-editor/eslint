@@ -42,3 +42,8 @@ test('preserves an existing file uri', async () => {
   await FileSystem.readFile('file:///workspace/a.js')
   expect(readFile).toHaveBeenCalledWith('file:///workspace/a.js')
 })
+
+test('preserves a virtual file system uri', async () => {
+  await FileSystem.readFile('memfs:///workspace/a.js')
+  expect(readFile).toHaveBeenCalledWith('memfs:///workspace/a.js')
+})
