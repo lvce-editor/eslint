@@ -17,3 +17,9 @@ test('joins virtual file system uri paths', () => {
     'memfs:///workspace/node_modules/eslint',
   )
 })
+
+test('normalizes windows paths', () => {
+  expect(Path.normalize(String.raw`D:\workspace\src\..\file.js`)).toBe(
+    '/D:/workspace/file.js',
+  )
+})

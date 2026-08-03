@@ -1,5 +1,5 @@
 export const normalize = (path: string): string => {
-  const normalizedSlashes = path.replaceAll('\\\\', '/')
+  const normalizedSlashes = path.replaceAll('\\', '/')
   const match = /^([a-z][a-z\d+.-]*:\/\/)(.*)$/i.exec(normalizedSlashes)
   const prefix = match?.[1] ?? ''
   const pathValue = match?.[2] ?? normalizedSlashes
