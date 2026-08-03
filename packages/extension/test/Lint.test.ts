@@ -21,6 +21,18 @@ test('uses the secure default config when no project config exists', async () =>
   ])
 })
 
+test('converts a virtual document uri to an absolute linter path', async () => {
+  const results = await Lint.lint(
+    'debugger',
+    'memfs:///workspace/file.js',
+    undefined,
+    Linter,
+  )
+  expect(results).toEqual([
+    expect.objectContaining({ ruleId: 'no-debugger', severity: 'error' }),
+  ])
+})
+
 test('uses rules from a loaded flat config', async () => {
   const results = await Lint.lint(
     'if (value == null) {}',

@@ -43,6 +43,13 @@ const defaultConfig = {
   },
 }
 
+const toLinterPath = (path: string): string => {
+  if (!/^[a-z][a-z\d+.-]*:\/\//i.test(path)) {
+    return path
+  }
+  return decodeURIComponent(new URL(path).pathname)
+}
+
 export const lint = async (
   text: string,
   filePath: string,
@@ -53,11 +60,12 @@ export const lint = async (
     ? await LoadModuleGraph.loadModuleGraph(graph)
     : defaultConfig
   const config = Array.isArray(loadedConfig) ? loadedConfig : [loadedConfig]
+  const linterFilePath = toLinterPath(filePath)
   const baseDirectory = graph
-    ? Path.dirname(graph.entry)
-    : Path.dirname(filePath)
+    ? Path.dirname(toLinterPath(graph.entry))
+    : Path.dirname(linterFilePath)
   const linter = new Linter({ configType: 'flat', cwd: baseDirectory })
-  const messages = linter.verify(text, config, { filename: filePath })
+  const messages = linter.verify(text, config, { filename: linterFilePath })
   return messages
     .filter((message) => !isNoMatchingConfigMessage(message))
     .map((message) => ({

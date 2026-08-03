@@ -17,7 +17,7 @@ export const loadEslint = async (
       `Cannot find ESLint in project node_modules for ${filePath}`,
     )
   }
-  const graph = await LoadEslintConfig.loadModule(entry)
+  const graph = await LoadEslintConfig.loadModule(entry, true)
   let eslint = loadedModules.get(graph)
   if (!eslint) {
     eslint = LoadModuleGraph.loadModuleGraph(graph) as EslintModule

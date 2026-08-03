@@ -94,14 +94,16 @@ export const invalidateForFileChanges = (
 ): boolean => {
   const changedPaths = getChangedPaths(changes)
   let shouldRefresh = changedPaths.some(isConfigFile)
-  for (const [entry, cached] of cache) {
+  for (const [cacheKey, cached] of cache) {
     const hasChangedModule = changedPaths.some(
-      (path) => path === entry || Object.hasOwn(cached.graph.modules, path),
+      (path) =>
+        path === cached.graph.entry ||
+        Object.hasOwn(cached.graph.modules, path),
     )
     if (!hasChangedModule) {
       continue
     }
-    cache.delete(entry)
+    cache.delete(cacheKey)
     shouldRefresh = true
   }
   if (shouldRefresh) {
@@ -208,13 +210,10 @@ const selectExport = (value: any): string | undefined => {
 const resolveAsFile = async (
   candidate: string,
 ): Promise<string | undefined> => {
-  for (const extension of extensions) {
-    const path = `${candidate}${extension}`
-    if (await isFile(path)) {
-      return normalize(path)
-    }
-  }
-  return undefined
+  const candidates = extensions.map((extension) => `${candidate}${extension}`)
+  const matches = await Promise.all(candidates.map(isFile))
+  const index = matches.indexOf(true)
+  return index === -1 ? undefined : normalize(candidates[index])
 }
 
 const resolveAsFileOrDirectory = async (
@@ -265,65 +264,69 @@ const parsePackageSpecifier = (
   return { packageName, subpath: rest ? `./${rest}` : '.' }
 }
 
-/* eslint-disable sonarjs/cognitive-complexity */
+const getAncestorDirectories = (parent: string): readonly string[] => {
+  const directories: string[] = []
+  let directory = dirname(parent)
+  while (true) {
+    directories.push(directory)
+    const next = dirname(directory)
+    if (next === directory) {
+      return directories
+    }
+    directory = next
+  }
+}
+
 const resolvePackage = async (
   parent: string,
   specifier: string,
 ): Promise<string | undefined> => {
   const { packageName, subpath } = parsePackageSpecifier(specifier)
-  let directory = dirname(parent)
-  while (true) {
-    const packageDirectory = join(directory, 'node_modules', packageName)
-    if (await isDirectory(packageDirectory)) {
-      if (subpath !== '.') {
-        const packageJson = await readPackageJson(packageDirectory)
-        const exportMap =
-          typeof packageJson?.exports === 'object'
-            ? packageJson.exports
-            : undefined
-        const exported = selectExport(exportMap?.[subpath])
-        if (exported) {
-          const resolvedExport = await resolveAsFileOrDirectory(
-            join(packageDirectory, exported),
-          )
-          if (resolvedExport) {
-            return resolvedExport
-          }
-        }
-        return resolveAsFileOrDirectory(
-          join(packageDirectory, subpath.slice(2)),
-        )
-      }
-      return resolveAsFileOrDirectory(packageDirectory)
-    }
-    if (directory === '/') {
-      return undefined
-    }
-    directory = dirname(directory)
+  const packageDirectories = getAncestorDirectories(parent).map((directory) =>
+    join(directory, 'node_modules', packageName),
+  )
+  const matches = await Promise.all(packageDirectories.map(isDirectory))
+  const index = matches.indexOf(true)
+  if (index === -1) {
+    return undefined
   }
+  const packageDirectory = packageDirectories[index]
+  if (subpath !== '.') {
+    const packageJson = await readPackageJson(packageDirectory)
+    const exportMap =
+      typeof packageJson?.exports === 'object' ? packageJson.exports : undefined
+    const exported = selectExport(exportMap?.[subpath])
+    if (exported) {
+      const resolvedExport = await resolveAsFileOrDirectory(
+        join(packageDirectory, exported),
+      )
+      if (resolvedExport) {
+        return resolvedExport
+      }
+    }
+    return resolveAsFileOrDirectory(join(packageDirectory, subpath.slice(2)))
+  }
+  return resolveAsFileOrDirectory(packageDirectory)
 }
-/* eslint-enable sonarjs/cognitive-complexity */
 
 const resolveBrowserReplacement = async (
   parent: string,
   specifier: string,
 ): Promise<string | undefined> => {
-  let directory = dirname(parent)
-  while (directory !== '/') {
-    const packageJson = await readPackageJson(directory)
-    if (packageJson) {
-      const { browser } = packageJson
-      if (!browser || typeof browser === 'string') {
-        return undefined
-      }
-      const replacement = browser[specifier]
-      return typeof replacement === 'string'
-        ? resolveAsFileOrDirectory(join(directory, replacement))
-        : undefined
-    }
-    directory = dirname(directory)
+  const directories = getAncestorDirectories(parent)
+  const packageManifests = await Promise.all(directories.map(readPackageJson))
+  const index = packageManifests.findIndex(Boolean)
+  if (index === -1) {
+    return undefined
   }
-  return undefined
+  const browser = packageManifests[index]?.browser
+  if (!browser || typeof browser === 'string') {
+    return undefined
+  }
+  const replacement = browser[specifier]
+  return typeof replacement === 'string'
+    ? resolveAsFileOrDirectory(join(directories[index], replacement))
+    : undefined
 }
 
 export const resolveModule = async (
@@ -548,9 +551,19 @@ const getDependencies = (ast: unknown): DependencyAnalysis => {
 }
 /* eslint-enable sonarjs/cognitive-complexity */
 
+const getCommonJsSpecifiers = (source: string): readonly string[] => {
+  const specifiers = new Set<string>()
+  const requireCall = /\brequire(?:\.resolve)?\s*\(\s*["']([^"'\\]+)["']/g
+  for (const match of source.matchAll(requireCall)) {
+    specifiers.add(match[1])
+  }
+  return [...specifiers]
+}
+
 const transpile = (
   path: string,
   source: string,
+  scanCommonJs: boolean,
 ): DependencyAnalysis & { source: string } => {
   if (path.endsWith('.json')) {
     return {
@@ -558,6 +571,26 @@ const transpile = (
       source,
       usesLazyLoadingRuleMap: false,
       usesReaddirSync: false,
+    }
+  }
+  const hasModuleSyntax = source.split('\n').some((line) => {
+    const trimmed = line.trimStart()
+    return trimmed.startsWith('export ') || trimmed.startsWith('import ')
+  })
+  if (scanCommonJs && !path.endsWith('.mjs') && !hasModuleSyntax) {
+    const lazyRuleMapIndex = source.indexOf('new LazyLoadingRuleMap')
+    const dependencySource =
+      lazyRuleMapIndex === -1 ? source : source.slice(0, lazyRuleMapIndex)
+    return {
+      dependencies: getCommonJsSpecifiers(dependencySource).map(
+        (specifier) => ({
+          optional: true,
+          specifier,
+        }),
+      ),
+      source,
+      usesLazyLoadingRuleMap: lazyRuleMapIndex !== -1,
+      usesReaddirSync: /\breaddirSync\s*\(/.test(source),
     }
   }
   const ast = packages.parser.parse(source, {
@@ -587,10 +620,14 @@ const transpile = (
   }
 }
 
-export const loadModule = async (modulePath: string): Promise<ModuleGraph> => {
+export const loadModule = async (
+  modulePath: string,
+  scanCommonJs = false,
+): Promise<ModuleGraph> => {
   const entry = normalize(modulePath)
   const entrySource = await FileSystem.readFile(entry)
-  const cached = cache.get(entry)
+  const cacheKey = `${scanCommonJs ? 'commonjs' : 'module'}:${entry}`
+  const cached = cache.get(cacheKey)
   if (cached?.entrySource === entrySource) {
     return cached.graph
   }
@@ -598,9 +635,17 @@ export const loadModule = async (modulePath: string): Promise<ModuleGraph> => {
   const files: Record<string, string> = {}
   const modules: Record<string, string> = {}
   const resolutions: Record<string, string> = {}
+  const preloadedDependencies: Array<{
+    path: string
+    specifier: string
+  }> = []
+  const pendingVisits = new Map<string, Promise<void>>()
   let totalBytes = 0
 
-  const visit = async (path: string, knownSource?: string): Promise<void> => {
+  const visitModule = async (
+    path: string,
+    knownSource?: string,
+  ): Promise<void> => {
     if (Object.hasOwn(modules, path)) {
       return
     }
@@ -609,7 +654,8 @@ export const loadModule = async (modulePath: string): Promise<ModuleGraph> => {
         `ESLint config exceeds the ${maxModuleCount} module limit`,
       )
     }
-    const source = knownSource ?? (await FileSystem.readFile(path))
+    const source =
+      knownSource ?? files[path] ?? (await FileSystem.readFile(path))
     totalBytes += source.length
     if (totalBytes > maxTotalBytes) {
       throw new Error('ESLint config exceeds the 64 MB module limit')
@@ -619,24 +665,45 @@ export const loadModule = async (modulePath: string): Promise<ModuleGraph> => {
       source: transformed,
       usesLazyLoadingRuleMap,
       usesReaddirSync,
-    } = transpile(path, source)
+    } = transpile(path, source, scanCommonJs)
+    delete files[path]
     modules[path] = transformed
-    for (const { optional, specifier } of dependencies) {
-      const resolved = await resolveModule(path, specifier)
-      if (!resolved) {
-        if (optional) {
-          continue
+    await Promise.all(
+      dependencies.map(async ({ optional, specifier }) => {
+        const resolved = await resolveModule(path, specifier)
+        if (!resolved) {
+          if (optional) {
+            return
+          }
+          throw new Error(`Cannot resolve module '${specifier}' from ${path}`)
         }
-        throw new Error(`Cannot resolve module '${specifier}' from ${path}`)
-      }
-      resolutions[`${path}\0${specifier}`] = resolved
-      if (!resolved.startsWith('node:')) {
-        await visit(resolved)
-      }
-    }
+        resolutions[`${path}\0${specifier}`] = resolved
+        if (!resolved.startsWith('node:')) {
+          await visit(resolved)
+        }
+      }),
+    )
     if (usesLazyLoadingRuleMap || usesReaddirSync) {
-      await visitDirectory(dirname(path))
+      const directory = dirname(path)
+      if (scanCommonJs) {
+        await preloadVirtualFiles(directory, new Set())
+      } else {
+        await visitDirectory(directory)
+      }
     }
+  }
+
+  const visit = (path: string, knownSource?: string): Promise<void> => {
+    if (Object.hasOwn(modules, path)) {
+      return Promise.resolve()
+    }
+    const pending = pendingVisits.get(path)
+    if (pending) {
+      return pending
+    }
+    const promise = visitModule(path, knownSource)
+    pendingVisits.set(path, promise)
+    return promise
   }
 
   const visitDirectory = async (directory: string): Promise<void> => {
@@ -659,40 +726,61 @@ export const loadModule = async (modulePath: string): Promise<ModuleGraph> => {
     ignoredDirectories: ReadonlySet<string>,
   ): Promise<void> => {
     const entries = await FileSystem.readDirWithFileTypes(directory)
-    for (const entry of entries) {
-      const path = join(directory, entry.name)
-      if (entry.isDirectory) {
-        if (!ignoredDirectories.has(entry.name)) {
-          await preloadVirtualFiles(path, ignoredDirectories)
+    await Promise.all(
+      entries.map(async (entry) => {
+        const path = join(directory, entry.name)
+        if (entry.isDirectory) {
+          if (!ignoredDirectories.has(entry.name)) {
+            await preloadVirtualFiles(path, ignoredDirectories)
+          }
+          return
         }
-        continue
-      }
-      if (
-        !entry.isFile ||
-        virtualFileExtensions.every((extension) => !path.endsWith(extension)) ||
-        Object.hasOwn(modules, path)
-      ) {
-        continue
-      }
-      if (
-        Object.keys(modules).length + Object.keys(files).length >=
-        maxModuleCount
-      ) {
-        throw new Error(
-          `ESLint config exceeds the ${maxModuleCount} file limit`,
-        )
-      }
-      const source = await FileSystem.readFile(path)
-      totalBytes += source.length
-      if (totalBytes > maxTotalBytes) {
-        throw new Error('ESLint config exceeds the 64 MB file limit')
-      }
-      files[path] = source
-    }
+        if (
+          !entry.isFile ||
+          virtualFileExtensions.every(
+            (extension) => !path.endsWith(extension),
+          ) ||
+          Object.hasOwn(modules, path)
+        ) {
+          return
+        }
+        if (
+          Object.keys(modules).length + Object.keys(files).length >=
+          maxModuleCount
+        ) {
+          throw new Error(
+            `ESLint config exceeds the ${maxModuleCount} file limit`,
+          )
+        }
+        const source = await FileSystem.readFile(path)
+        totalBytes += source.length
+        if (totalBytes > maxTotalBytes) {
+          throw new Error('ESLint config exceeds the 64 MB file limit')
+        }
+        files[path] = source
+        if (scanCommonJs && !path.endsWith('.json')) {
+          for (const specifier of getCommonJsSpecifiers(source)) {
+            if (!specifier.startsWith('.') && !specifier.startsWith('/')) {
+              preloadedDependencies.push({ path, specifier })
+            }
+          }
+        }
+      }),
+    )
   }
 
   await visit(entry, entrySource)
   await preloadVirtualFiles(dirname(entry), ignoredWorkspaceDirectories)
+  for (const { path, specifier } of preloadedDependencies) {
+    const resolved = await resolveModule(path, specifier)
+    if (!resolved) {
+      continue
+    }
+    resolutions[`${path}\0${specifier}`] = resolved
+    if (!resolved.startsWith('node:')) {
+      await visit(resolved)
+    }
+  }
   const typeScriptLibDirectories = new Set(
     Object.keys(modules)
       .filter((path) => path.includes('/node_modules/typescript/lib/'))
@@ -702,7 +790,7 @@ export const loadModule = async (modulePath: string): Promise<ModuleGraph> => {
     await preloadVirtualFiles(directory, new Set())
   }
   const graph = { entry, files, modules, resolutions }
-  cache.set(entry, { entrySource, graph })
+  cache.set(cacheKey, { entrySource, graph })
   return graph
 }
 

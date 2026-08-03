@@ -225,6 +225,20 @@ const encodeVirtualFile = (content: string): Uint8Array => {
 
 const createBuiltins = (graph: ModuleGraph): Readonly<Record<string, any>> => {
   const virtualFiles = { ...graph.files, ...graph.modules }
+  const virtualDirectories = new Set<string>()
+  const virtualDirectoryEntries = new Map<string, Set<string>>()
+  for (const filePath of Object.keys(virtualFiles)) {
+    let child = filePath
+    let parent = Path.dirname(child)
+    while (parent !== child) {
+      virtualDirectories.add(parent)
+      const entries = virtualDirectoryEntries.get(parent) ?? new Set<string>()
+      entries.add(Path.basename(child))
+      virtualDirectoryEntries.set(parent, entries)
+      child = parent
+      parent = Path.dirname(child)
+    }
+  }
   const path = createPathModule()
   path.posix = path
   path.win32 = path
@@ -243,16 +257,7 @@ const createBuiltins = (graph: ModuleGraph): Readonly<Record<string, any>> => {
   }
   const readdirSync = (directory: string): readonly string[] => {
     const normalized = Path.normalize(directory).replace(/\/$/, '')
-    const prefix = `${normalized}/`
-    const entries = new Set<string>()
-    for (const path of Object.keys(virtualFiles)) {
-      if (!path.startsWith(prefix)) {
-        continue
-      }
-      const relative = path.slice(prefix.length)
-      entries.add(relative.split('/', 1)[0])
-    }
-    return [...entries]
+    return [...(virtualDirectoryEntries.get(normalized) ?? [])]
   }
   const realpathSync = Object.assign(
     (path: string): string => Path.normalize(path),
@@ -263,10 +268,7 @@ const createBuiltins = (graph: ModuleGraph): Readonly<Record<string, any>> => {
   const statSync = (path: string) => {
     const normalized = Path.normalize(path).replace(/\/$/, '')
     const isFile = Object.hasOwn(virtualFiles, normalized)
-    const prefix = `${normalized}/`
-    const isDirectory = Object.keys(virtualFiles).some((modulePath) =>
-      modulePath.startsWith(prefix),
-    )
+    const isDirectory = virtualDirectories.has(normalized)
     return {
       isDirectory: (): boolean => isDirectory,
       isFile: (): boolean => isFile,
@@ -425,6 +427,7 @@ const getDefaultExport = (value: any): any => {
 export const loadModuleGraph = (graph: ModuleGraph): any => {
   const cache = new Map<string, CommonJsModule>()
   const builtins = createBuiltins(graph)
+  const files = graph.files ?? {}
   const resolvePreloadedPath = (specifier: string): string | undefined => {
     if (!specifier.startsWith('/')) {
       return undefined
@@ -441,8 +444,10 @@ export const loadModuleGraph = (graph: ModuleGraph): any => {
       Path.join(normalized, 'index.mjs'),
       Path.join(normalized, 'index.json'),
     ]
-    return candidates.find((candidate) =>
-      Object.hasOwn(graph.modules, candidate),
+    return candidates.find(
+      (candidate) =>
+        Object.hasOwn(graph.modules, candidate) ||
+        Object.hasOwn(files, candidate),
     )
   }
   const resolveKnownSpecifier = (specifier: string): string | undefined => {
@@ -464,10 +469,10 @@ export const loadModuleGraph = (graph: ModuleGraph): any => {
     if (cached) {
       return cached.exports
     }
-    if (!Object.hasOwn(graph.modules, id)) {
+    if (!Object.hasOwn(graph.modules, id) && !Object.hasOwn(files, id)) {
       throw new Error(`Module is not in the preloaded graph: ${id}`)
     }
-    const source = graph.modules[id]
+    const source = graph.modules[id] ?? files[id]
     const module: CommonJsModule = { exports: {} }
     cache.set(id, module)
     if (id.endsWith('.json')) {
