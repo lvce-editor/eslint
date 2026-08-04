@@ -1,4 +1,8 @@
-import type { FileChanges } from '@lvce-editor/api'
+import {
+  createRpc,
+  type CreateRpcOptions,
+  type FileChanges,
+} from '@lvce-editor/api'
 import type { ModuleGraph } from '../ModuleGraph/ModuleGraph.ts'
 import * as FileSystem from '../FileSystem/FileSystem.ts'
 
@@ -9,33 +13,28 @@ export interface Rpc {
   ) => Promise<any>
 }
 
-declare const vscode: {
-  readonly createRpc: (options: {
-    readonly commandMap: Readonly<Record<string, unknown>>
-    readonly id: string
-  }) => Promise<Rpc>
-}
-
 const commandMap = {
   'FileSystem.readDirWithFileTypes': FileSystem.readDirWithFileTypes,
   'FileSystem.readFile': FileSystem.readFile,
   'FileSystem.stat': FileSystem.stat,
 }
 
-type CreateRpc = typeof vscode.createRpc
+type CreateRpc = (options: CreateRpcOptions) => Promise<Rpc>
 
 export const state: {
   createRpc: CreateRpc
   rpcPromise: Promise<Rpc> | undefined
 } = {
-  createRpc: (options) => vscode.createRpc(options),
+  createRpc,
   rpcPromise: undefined,
 }
 
 const getRpc = (): Promise<Rpc> => {
   state.rpcPromise ||= state.createRpc({
     commandMap,
-    id: 'builtin.eslint.module-resolution-worker',
+    contentSecurityPolicy: "default-src 'none'; script-src 'self'",
+    name: 'ESLint Module Resolution Worker',
+    url: new URL('moduleResolutionWorkerMain.js', import.meta.url).href,
   })
   return state.rpcPromise
 }
