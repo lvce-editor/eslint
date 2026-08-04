@@ -188,6 +188,9 @@ const getFileType = async (path: string): Promise<FileType> => {
       }
       return stat.isDirectory ? 'directory' : 'missing'
     } catch {
+      if (!/^[a-z][a-z\d+.-]*:\/\//i.test(normalized)) {
+        return 'missing'
+      }
       try {
         return await getFileTypeFromParent(normalized)
       } catch {
