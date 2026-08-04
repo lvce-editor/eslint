@@ -75,6 +75,57 @@ test('runs a dynamically loaded plugin rule', async () => {
   ])
 })
 
+test('reuses loaded config modules until the graph changes', async () => {
+  const configPath = '/workspace/eslint.config.js'
+  const pluginPath = '/workspace/plugin.js'
+  const graph: ModuleGraph = {
+    entry: configPath,
+    files: {},
+    modules: {
+      [configPath]: `const plugin = require('./plugin.js'); module.exports = [{ plugins: { test: plugin }, rules: { 'test/count': 'error' } }]`,
+      [pluginPath]: `let count = 0; module.exports = { rules: { count: { create(context) { const message = String(++count); return { Program(node) { context.report({ node, message }) } } } } } }`,
+    },
+    resolutions: {
+      [`${configPath}\0./plugin.js`]: pluginPath,
+    },
+  }
+
+  const first = await Lint.lint('', '/workspace/file.js', graph, Linter)
+  const second = await Lint.lint('', '/workspace/file.js', graph, Linter)
+  const reloaded = await Lint.lint(
+    '',
+    '/workspace/file.js',
+    { ...graph },
+    Linter,
+  )
+
+  expect(first[0].message).toBe('1')
+  expect(second[0].message).toBe('2')
+  expect(reloaded[0].message).toBe('1')
+})
+
+test('reuses the linter for the same graph', async () => {
+  let constructions = 0
+  class CountingLinter extends Linter {
+    constructor(options: ConstructorParameters<typeof Linter>[0]) {
+      super(options)
+      constructions++
+    }
+  }
+  const graph = createGraph(`module.exports = [{ rules: {} }]`)
+
+  await Lint.lint('', '/workspace/file.js', graph, CountingLinter)
+  await Lint.lint('', '/workspace/file.js', graph, CountingLinter)
+  await Lint.lint(
+    '',
+    '/workspace/file.js',
+    createGraph(`module.exports = [{ rules: {} }]`),
+    CountingLinter,
+  )
+
+  expect(constructions).toBe(2)
+})
+
 test('passes an absolute file path to parser services', async () => {
   const configPath = '/workspace/eslint.config.js'
   const graph: ModuleGraph = {
