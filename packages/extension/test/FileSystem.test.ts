@@ -6,6 +6,7 @@ const readDirWithFileTypes = jest.fn(async (_uri: string) => [
 ])
 const readFile = jest.fn(async (_uri: string) => 'content')
 const stat = jest.fn(async (_uri: string) => 7)
+const appendLine = jest.fn(async (_text: string) => {})
 
 beforeEach(() => {
   jest.clearAllMocks()
@@ -14,6 +15,10 @@ beforeEach(() => {
     readFile,
     stat,
   }
+  FileSystem.state.now = () => 0
+  FileSystem.state.outputChannel = {
+    appendLine,
+  }
 })
 
 test('readFile converts an absolute path to a file uri', async () => {
@@ -21,6 +26,31 @@ test('readFile converts an absolute path to a file uri', async () => {
     'content',
   )
   expect(readFile).toHaveBeenCalledWith('file:///workspace/a%20b.js')
+  expect(appendLine).toHaveBeenCalledWith(
+    'Read file:///workspace/a%20b.js in 0.00ms',
+  )
+})
+
+test('readFile logs how long the file read took', async () => {
+  const now = jest
+    .fn<() => number>()
+    .mockReturnValueOnce(10)
+    .mockReturnValueOnce(12.345)
+  FileSystem.state.now = now
+
+  await FileSystem.readFile('/workspace/file.js')
+
+  expect(appendLine).toHaveBeenCalledWith(
+    'Read file:///workspace/file.js in 2.35ms',
+  )
+})
+
+test('readFile preserves the read result when output logging fails', async () => {
+  appendLine.mockRejectedValueOnce(new Error('Failed to write output'))
+
+  await expect(FileSystem.readFile('/workspace/file.js')).resolves.toBe(
+    'content',
+  )
 })
 
 test('readDirWithFileTypes converts an absolute path to a file uri', async () => {

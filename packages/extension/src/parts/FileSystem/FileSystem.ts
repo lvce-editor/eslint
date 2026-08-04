@@ -1,8 +1,11 @@
 import {
+  type OutputChannel,
   readDirWithFileTypes as readDirWithFileTypesApi,
   readFile as readFileApi,
   stat as statApi,
 } from '@lvce-editor/api'
+import { outputChannel } from '../EslintOutputChannel/EslintOutputChannel.ts'
+import * as Logger from '../Logger/Logger.ts'
 
 interface FileSystemApi {
   readonly readDirWithFileTypes: typeof readDirWithFileTypesApi
@@ -10,12 +13,18 @@ interface FileSystemApi {
   readonly stat: typeof statApi
 }
 
-export const state: { api: FileSystemApi } = {
+export const state: {
+  api: FileSystemApi
+  now: () => number
+  outputChannel: Pick<OutputChannel, 'appendLine'>
+} = {
   api: {
     readDirWithFileTypes: readDirWithFileTypesApi,
     readFile: readFileApi,
     stat: statApi,
   },
+  now: () => performance.now(),
+  outputChannel,
 }
 
 const toFileUri = (path: string): string => {
@@ -26,7 +35,20 @@ const toFileUri = (path: string): string => {
 }
 
 export const readFile = async (path: string): Promise<string> => {
-  return state.api.readFile(toFileUri(path))
+  const uri = toFileUri(path)
+  const startTime = state.now()
+  try {
+    return await state.api.readFile(uri)
+  } finally {
+    const duration = state.now() - startTime
+    try {
+      await state.outputChannel.appendLine(
+        `Read ${uri} in ${duration.toFixed(2)}ms`,
+      )
+    } catch (error) {
+      Logger.warn('Failed to write ESLint file read timing', error)
+    }
+  }
 }
 
 export const readDirWithFileTypes = async (
