@@ -23,8 +23,7 @@
         "src/parts/CommandNotFoundError/CommandNotFoundError.ts",
         "src/parts/ErrorCodes/ErrorCodes.ts",
         "src/parts/ExtensionHost/ExtensionHostFormattingProviderPrettier.ts",
-        "src/parts/Format/Format.ts",
-        "src/parts/Logger/Logger.ts"
+        "src/parts/Format/Format.ts"
       ],
       "ignoreIssues": {
         "src/parts/ExtensionHost/ExtensionHostCodeActionsProviderEslint.ts": [
@@ -35,6 +34,7 @@
           "exports"
         ],
         "src/parts/LoadEslintConfig/LoadEslintConfig.ts": ["duplicates"],
+        "src/parts/Logger/Logger.ts": ["exports"],
         "src/parts/Main/Main.ts": ["exports"]
       }
     },
