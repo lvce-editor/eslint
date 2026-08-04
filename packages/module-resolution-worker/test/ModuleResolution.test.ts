@@ -75,6 +75,37 @@ test('transforms an esm default export to commonjs', async () => {
   expect(graph.modules[graph.entry]).toContain('exports.default')
 })
 
+test('transforms a typescript config dependency to commonjs', async () => {
+  setFiles({
+    '/workspace/eslint.config.js': `import { rules } from './plugin.ts'; export default [{ rules }]`,
+    '/workspace/plugin.ts': `import type { Rule } from './types.ts'; const rules: Record<string, Rule> = {}; export { rules }`,
+    '/workspace/types.ts': `export type Rule = { meta: string }`,
+  })
+  const graph = await LoadEslintConfig.loadEslintConfig(
+    '/workspace/eslint.config.js',
+  )
+
+  expect(graph.modules['/workspace/plugin.ts']).toContain('exports.rules')
+  expect(graph.modules['/workspace/plugin.ts']).not.toContain('import type')
+  expect(graph.modules['/workspace/plugin.ts']).not.toContain('Record<string')
+  expect(graph.modules).not.toHaveProperty('/workspace/types.ts')
+})
+
+test('loads typescript rules discovered with top-level await', async () => {
+  setFiles({
+    '/dynamic-workspace/eslint.config.js': `import * as plugin from './plugin/index.ts'; export default [{ plugins: { local: plugin } }]`,
+    '/dynamic-workspace/plugin/first.ts': `export default { meta: {} }`,
+    '/dynamic-workspace/plugin/index.ts': `import fs from 'fs'; import path from 'path'; const rules = {}; await Promise.all(fs.readdirSync(import.meta.dirname).filter(file => file === 'first.ts').map(async file => { rules[path.basename(file, '.ts')] = (await import('./' + file)).default })); export { rules }`,
+  })
+  const graph = await LoadEslintConfig.loadEslintConfig(
+    '/dynamic-workspace/eslint.config.js',
+  )
+
+  expect(graph.modules['/dynamic-workspace/plugin/first.ts']).toContain(
+    'exports.default',
+  )
+})
+
 test('preloads workspace source files into the virtual file system', async () => {
   setFiles({
     '/workspace/eslint.config.js': `module.exports = []`,
@@ -92,11 +123,61 @@ test('preloads workspace source files into the virtual file system', async () =>
   )
 })
 
-test('replaces import.meta.url for commonjs evaluation', async () => {
+test('preloads only the active typescript project in a large workspace', async () => {
   setFiles({
-    '/import-meta-workspace/eslint.config.js': `export default import.meta.url`,
+    '/large-workspace/eslint.config.js': `module.exports = []`,
+    '/large-workspace/project-a/src/file.ts': `export const value = 1`,
+    '/large-workspace/project-a/tsconfig.json': `{
+      // Shared options and declarations live outside this project.
+      "extends": "../tsconfig.base",
+      "include": ["src", "../types/shared.d.ts"],
+    }`,
+    '/large-workspace/project-b/src/other.ts': `export const other = 2`,
+    '/large-workspace/project-b/tsconfig.json': `{ "include": ["src"] }`,
+    '/large-workspace/tsconfig.base.json': `{ "compilerOptions": { "strict": true } }`,
+    '/large-workspace/types/shared.d.ts': `declare const shared: string`,
   })
   const graph = await LoadEslintConfig.loadEslintConfig(
+    '/large-workspace/eslint.config.js',
+    '/large-workspace/project-a/src/file.ts',
+  )
+
+  expect(graph.files['/large-workspace/project-a/src/file.ts']).toBe(
+    `export const value = 1`,
+  )
+  expect(graph.files['/large-workspace/project-a/tsconfig.json']).toBe(
+    `{
+      // Shared options and declarations live outside this project.
+      "extends": "../tsconfig.base",
+      "include": ["src", "../types/shared.d.ts"],
+    }`,
+  )
+  expect(
+    Object.keys(graph.files).toSorted((left, right) =>
+      left.localeCompare(right),
+    ),
+  ).toEqual([
+    '/large-workspace/project-a/src/file.ts',
+    '/large-workspace/project-a/tsconfig.json',
+    '/large-workspace/tsconfig.base.json',
+    '/large-workspace/types/shared.d.ts',
+  ])
+  expect(graph.files).not.toHaveProperty(
+    '/large-workspace/project-b/src/other.ts',
+  )
+})
+
+test('replaces import.meta paths for commonjs evaluation', async () => {
+  setFiles({
+    '/import-meta-workspace/eslint.config.js': `export default [import.meta.dirname, import.meta.filename, import.meta.url]`,
+  })
+  const graph = await LoadEslintConfig.loadEslintConfig(
+    '/import-meta-workspace/eslint.config.js',
+  )
+  expect(graph.modules['/import-meta-workspace/eslint.config.js']).toContain(
+    '/import-meta-workspace',
+  )
+  expect(graph.modules['/import-meta-workspace/eslint.config.js']).toContain(
     '/import-meta-workspace/eslint.config.js',
   )
   expect(graph.modules['/import-meta-workspace/eslint.config.js']).toContain(
@@ -215,6 +296,24 @@ test('does not invalidate a cached graph for files outside its workspace', async
       changed: ['file:///other/a.ts'],
     }),
   ).toBe(false)
+})
+
+test('invalidates a cached graph when a preloaded project file changes', async () => {
+  setFiles({
+    '/workspace/project-change/eslint.config.js': `export default []`,
+    '/workspace/project-change/src/file.ts': `export const value = 1`,
+    '/workspace/project-change/tsconfig.json': `{ "include": ["src"] }`,
+  })
+  await LoadEslintConfig.loadEslintConfig(
+    '/workspace/project-change/eslint.config.js',
+    '/workspace/project-change/src/file.ts',
+  )
+
+  const invalidated = LoadEslintConfig.invalidateForFileChanges({
+    changed: ['file:///workspace/project-change/tsconfig.json'],
+  })
+
+  expect(invalidated).toBe(true)
 })
 
 test('requests a refresh when a new eslint config file changes', () => {
@@ -406,6 +505,33 @@ test('preloads json modules without transforming them', async () => {
   )
 })
 
+test('preloads package manifests for sandbox file reads', async () => {
+  setFiles({
+    '/manifest-workspace/eslint.config.js': `module.exports = require('plugin')`,
+    '/manifest-workspace/node_modules/plugin/index.js': `const fs = require('fs'); const path = require('path'); module.exports = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8')).name`,
+    '/manifest-workspace/node_modules/plugin/package.json': `{"main":"index.js","name":"plugin"}`,
+  })
+  const graph = await LoadEslintConfig.loadEslintConfig(
+    '/manifest-workspace/eslint.config.js',
+  )
+
+  expect(
+    graph.files['/manifest-workspace/node_modules/plugin/package.json'],
+  ).toBe(`{"main":"index.js","name":"plugin"}`)
+})
+
+test('preloads support files referenced by a config', async () => {
+  setFiles({
+    '/support-workspace/.eslint-ignore': `dist`,
+    '/support-workspace/eslint.config.js': `import fs from 'fs'; import path from 'path'; export default fs.readFileSync(path.join(import.meta.dirname, '.eslint-ignore'), 'utf8')`,
+  })
+  const graph = await LoadEslintConfig.loadEslintConfig(
+    '/support-workspace/eslint.config.js',
+  )
+
+  expect(graph.files['/support-workspace/.eslint-ignore']).toBe('dist')
+})
+
 test('allows an explicitly supported node builtin', async () => {
   setFiles({
     '/workspace/eslint.config.js': `const path = require('node:path'); module.exports = [{ name: path.basename('/a/b') }]`,
@@ -428,6 +554,38 @@ test('allows the worker_threads builtin', async () => {
   expect(
     graph.resolutions['/workspace/eslint.config.js\0node:worker_threads'],
   ).toBe('node:worker_threads')
+})
+
+test('allows the vm builtin', async () => {
+  setFiles({
+    '/workspace/eslint.config.js': `module.exports = require('vm')`,
+  })
+  const graph = await LoadEslintConfig.loadEslintConfig(
+    '/workspace/eslint.config.js',
+  )
+  expect(graph.resolutions['/workspace/eslint.config.js\0vm']).toBe('node:vm')
+})
+
+test('allows the tty builtin', async () => {
+  setFiles({
+    '/workspace/eslint.config.js': `module.exports = require('tty')`,
+  })
+  const graph = await LoadEslintConfig.loadEslintConfig(
+    '/workspace/eslint.config.js',
+  )
+  expect(graph.resolutions['/workspace/eslint.config.js\0tty']).toBe('node:tty')
+})
+
+test('allows the stream builtin', async () => {
+  setFiles({
+    '/workspace/eslint.config.js': `module.exports = require('stream')`,
+  })
+  const graph = await LoadEslintConfig.loadEslintConfig(
+    '/workspace/eslint.config.js',
+  )
+  expect(graph.resolutions['/workspace/eslint.config.js\0stream']).toBe(
+    'node:stream',
+  )
 })
 
 test('allows child_process through a non-executing sandbox shim', async () => {
@@ -572,6 +730,28 @@ test('preloads modules discovered by a top-level readdirSync call', async () => 
   expect(
     graph.modules['/readdir-workspace/node_modules/plugin/rules/first.js'],
   ).toBe('module.exports = true')
+})
+
+test('preloads typescript modules discovered by a top-level glob sync call', async () => {
+  setFiles({
+    '/glob-workspace/eslint.config.js': `import plugin from './plugin/index.ts'; export default [plugin]`,
+    '/glob-workspace/node_modules/glob/index.js': `module.exports = { sync: () => [] }`,
+    '/glob-workspace/node_modules/glob/package.json': `{"main":"index.js"}`,
+    '/glob-workspace/plugin/first.ts': `export default true`,
+    '/glob-workspace/plugin/index.ts': `import glob from 'glob'; glob.sync('*.ts'); export default {}`,
+    '/glob-workspace/plugin/tests/failing.ts': `import './missing.ts'`,
+    '/glob-workspace/plugin/types.d.ts': `export type Missing = import('./missing').Missing`,
+  })
+  const graph = await LoadEslintConfig.loadEslintConfig(
+    '/glob-workspace/eslint.config.js',
+  )
+  expect(graph.modules['/glob-workspace/plugin/first.ts']).toContain(
+    'exports.default',
+  )
+  expect(graph.modules).not.toHaveProperty('/glob-workspace/plugin/types.d.ts')
+  expect(graph.modules).not.toHaveProperty(
+    '/glob-workspace/plugin/tests/failing.ts',
+  )
 })
 
 test('preloads sibling modules referenced by a LazyLoadingRuleMap', async () => {

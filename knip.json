@@ -17,6 +17,11 @@
       "project": ["**/*.{css,js,json,ts,yml}"],
       "ignoreDependencies": ["eslint"]
     },
+    "packages/e2e/fixtures/large-typescript-workspace": {
+      "entry": [".eslint-plugin-local/*.ts", "eslint.config.js", "src/test.ts"],
+      "project": ["**/*.{js,json,ts}"],
+      "ignoreDependencies": ["eslint"]
+    },
     "packages/extension": {
       "entry": ["src/eslintMain.ts", "test/**/*.test.ts"],
       "project": ["src/**/*.ts", "test/**/*.ts"],

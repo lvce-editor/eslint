@@ -41,8 +41,6 @@ export const extname = (path: string): string => {
 export const join = (...parts: readonly string[]): string =>
   normalize(parts.join('/'))
 
-export const resolve = (...parts: readonly string[]): string => join(...parts)
-
 export const toFileSystemPath = (path: string): string => {
   if (!/^[a-z][a-z\d+.-]*:\/\//i.test(path)) {
     return path

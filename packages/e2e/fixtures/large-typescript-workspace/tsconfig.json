@@ -1,0 +1,4 @@
+{
+  "extends": "../../tsconfig.large-repository-base.json",
+  "include": ["src/**/*", "../../types/large-repository.d.ts"]
+}

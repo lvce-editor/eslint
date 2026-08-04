@@ -96,6 +96,15 @@ test('provides path posix and win32 entry points', () => {
   expect(value).toEqual(['b', 'b'])
 })
 
+test('resolves paths with node semantics', () => {
+  const value = LoadModuleGraph.loadModuleGraph(
+    graph({
+      '/workspace/eslint.config.js': `const path = require('path'); module.exports = [path.resolve('/workspace', '/'), path.resolve('/workspace', 'src'), path.resolve('src')]`,
+    }),
+  )
+  expect(value).toEqual(['/', '/workspace/src', '/workspace/src'])
+})
+
 test('provides the performance hooks shim', () => {
   const value = LoadModuleGraph.loadModuleGraph(
     graph({
@@ -105,13 +114,58 @@ test('provides the performance hooks shim', () => {
   expect(value).toBe('number')
 })
 
+test('provides a single-cpu os shim', () => {
+  const value = LoadModuleGraph.loadModuleGraph(
+    graph({
+      '/workspace/eslint.config.js': `const os = require('os'); module.exports = [os.cpus().length, os.availableParallelism(), os.release()]`,
+    }),
+  )
+  expect(value).toEqual([1, 1, ''])
+})
+
 test('provides a safe process shim to config dependencies', () => {
   const value = LoadModuleGraph.loadModuleGraph(
     graph({
-      '/workspace/eslint.config.js': `const processModule = require('node:process'); module.exports = [processModule.version, processModule.versions.node, processModule.argv.length, processModule.features.typescript, typeof processModule.hrtime.bigint()]`,
+      '/workspace/eslint.config.js': `const processModule = require('node:process'); module.exports = [processModule.version, processModule.versions.node, processModule.argv.length, processModule.features.typescript, typeof processModule.hrtime.bigint(), processModule.platform, processModule.stdout.isTTY, processModule.stderr.fd]`,
     }),
   )
-  expect(value).toEqual(['v0.0.0', '0.0.0', 0, false, 'bigint'])
+  expect(value).toEqual([
+    'v0.0.0',
+    '0.0.0',
+    0,
+    false,
+    'bigint',
+    'linux',
+    false,
+    2,
+  ])
+})
+
+test('provides process as a commonjs module global', () => {
+  const value = LoadModuleGraph.loadModuleGraph(
+    graph({
+      '/workspace/eslint.config.js': `module.exports = process.cwd()`,
+    }),
+  )
+  expect(value).toBe('/workspace')
+})
+
+test('provides a non-interactive tty shim', () => {
+  const value = LoadModuleGraph.loadModuleGraph(
+    graph({
+      '/workspace/eslint.config.js': `module.exports = require('tty').isatty(2)`,
+    }),
+  )
+  expect(value).toBe(false)
+})
+
+test('provides a readable stream shim for synchronous dependencies', () => {
+  const value = LoadModuleGraph.loadModuleGraph(
+    graph({
+      '/workspace/eslint.config.js': `const { Readable } = require('stream'); const stream = new Readable(); const values = []; stream.on('data', value => values.push(value)); stream.push('value'); stream.push(null); module.exports = values`,
+    }),
+  )
+  expect(value).toEqual(['value'])
 })
 
 test('provides the node global alias to config dependencies', () => {
@@ -150,6 +204,15 @@ test('provides node module builtin metadata', () => {
   expect(value).toEqual([true, false, true])
 })
 
+test('provides commonjs extension metadata', () => {
+  const value = LoadModuleGraph.loadModuleGraph(
+    graph({
+      '/workspace/eslint.config.js': `module.exports = Object.keys(require.extensions)`,
+    }),
+  )
+  expect(value).toEqual(['.js', '.json'])
+})
+
 test('provides a chainable crypto hash shim', () => {
   const value = LoadModuleGraph.loadModuleGraph(
     graph({
@@ -158,6 +221,15 @@ test('provides a chainable crypto hash shim', () => {
   )
   expect(typeof value).toBe('string')
   expect(value).not.toHaveLength(0)
+})
+
+test('validates vm source without evaluating it', () => {
+  const value = LoadModuleGraph.loadModuleGraph(
+    graph({
+      '/workspace/eslint.config.js': `const vm = require('vm'); globalThis.__eslintVmExecuted = false; vm.runInNewContext('globalThis.__eslintVmExecuted = true'); let rejected = false; try { vm.runInNewContext('const =') } catch { rejected = true }; module.exports = [globalThis.__eslintVmExecuted, rejected]`,
+    }),
+  )
+  expect(value).toEqual([false, true])
 })
 
 test('prevents child process execution', () => {
