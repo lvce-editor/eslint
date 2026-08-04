@@ -41,8 +41,8 @@
       }
     },
     "packages/node-shims": {
-      "entry": ["src/NodeShims.ts"],
-      "project": ["src/**/*.ts"],
+      "entry": ["src/NodeShims.ts", "test/**/*.test.ts"],
+      "project": ["src/**/*.ts", "test/**/*.ts"],
       "ignoreFiles": ["src/NodeShimsBanner.ts", "src/RequireShim.ts"]
     },
     "packages/server": {
