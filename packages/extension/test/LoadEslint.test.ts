@@ -66,6 +66,39 @@ test('loads Linter from the closest project node_modules', async () => {
   expect(Linter.name).toBe('ProjectLinter')
 })
 
+test('loads Linter when a non-file filesystem does not implement stat', async () => {
+  const files: Record<string, string> = {
+    'html:///workspace/node_modules/eslint/index.js':
+      'class ProjectLinter {}; module.exports = { Linter: ProjectLinter }',
+    'html:///workspace/node_modules/eslint/package.json': '{"main":"index.js"}',
+  }
+  FileSystem.state.api = {
+    readDirWithFileTypes: async (uri: string) => {
+      const prefix = `${uri.replace(/\/$/, '')}/`
+      const entries = new Map<string, { name: string; type: number }>()
+      for (const file of Object.keys(files)) {
+        if (!file.startsWith(prefix)) {
+          continue
+        }
+        const relative = file.slice(prefix.length)
+        const slashIndex = relative.indexOf('/')
+        const name =
+          slashIndex === -1 ? relative : relative.slice(0, slashIndex)
+        entries.set(name, { name, type: slashIndex === -1 ? 7 : 3 })
+      }
+      return entries.values().toArray()
+    },
+    readFile: async (uri: string) => files[uri],
+    stat: async () => {
+      throw new Error('stat is not implemented')
+    },
+  }
+
+  const Linter = await LoadEslint.loadEslint('html:///workspace/src/file.js')
+
+  expect(Linter.name).toBe('ProjectLinter')
+})
+
 test('reports when eslint is not installed in the project', async () => {
   await expect(
     LoadEslint.loadEslint('/missing-workspace/src/file.js'),

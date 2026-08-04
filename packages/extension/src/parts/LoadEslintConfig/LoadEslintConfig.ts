@@ -61,10 +61,15 @@ const ignoredWorkspaceDirectories = new Set([
 const maxModuleCount = 8192
 const maxTotalBytes = 64 * 1024 * 1024
 const cache = new Map<string, { entrySource: string; graph: ModuleGraph }>()
+const directoryEntriesCache = new Map<
+  string,
+  Promise<Awaited<ReturnType<typeof FileSystem.readDirWithFileTypes>>>
+>()
 const fileTypeCache = new Map<string, Promise<FileType>>()
 const packageJsonCache = new Map<string, Promise<PackageJson | undefined>>()
 
 const clearResolutionCaches = (): void => {
+  directoryEntriesCache.clear()
   fileTypeCache.clear()
   packageJsonCache.clear()
 }
@@ -141,6 +146,34 @@ const dirname = (path: string): string => {
 
 const join = (...parts: readonly string[]): string => normalize(parts.join('/'))
 
+const readDirectoryEntries = (
+  directory: string,
+): Promise<Awaited<ReturnType<typeof FileSystem.readDirWithFileTypes>>> => {
+  const normalized = normalize(directory)
+  const cached = directoryEntriesCache.get(normalized)
+  if (cached) {
+    return cached
+  }
+  const entries = FileSystem.readDirWithFileTypes(normalized)
+  directoryEntriesCache.set(normalized, entries)
+  return entries
+}
+
+const getFileTypeFromParent = async (path: string): Promise<FileType> => {
+  const parent = dirname(path)
+  if (parent === path) {
+    await readDirectoryEntries(path)
+    return 'directory'
+  }
+  const name = path.slice(path.lastIndexOf('/') + 1)
+  const entries = await readDirectoryEntries(parent)
+  const entry = entries.find((candidate) => candidate.name === name)
+  if (entry?.isFile) {
+    return 'file'
+  }
+  return entry?.isDirectory ? 'directory' : 'missing'
+}
+
 const getFileType = async (path: string): Promise<FileType> => {
   const normalized = normalize(path)
   const cached = fileTypeCache.get(normalized)
@@ -155,7 +188,14 @@ const getFileType = async (path: string): Promise<FileType> => {
       }
       return stat.isDirectory ? 'directory' : 'missing'
     } catch {
-      return 'missing'
+      if (!/^[a-z][a-z\d+.-]*:\/\//i.test(normalized)) {
+        return 'missing'
+      }
+      try {
+        return await getFileTypeFromParent(normalized)
+      } catch {
+        return 'missing'
+      }
     }
   })()
   fileTypeCache.set(normalized, result)
