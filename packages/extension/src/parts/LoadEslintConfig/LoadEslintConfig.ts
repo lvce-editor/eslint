@@ -95,6 +95,19 @@ const isConfigFile = (path: string): boolean => {
   return fileName === configFileName || fileName === suppressionsFileName
 }
 
+const isVirtualWorkspaceFile = (path: string, entry: string): boolean => {
+  const workspaceDirectory = dirname(entry)
+  if (!path.startsWith(`${workspaceDirectory}/`)) {
+    return false
+  }
+  const relativePath = path.slice(workspaceDirectory.length + 1)
+  const pathParts = relativePath.split('/')
+  return (
+    pathParts.every((part) => !ignoredWorkspaceDirectories.has(part)) &&
+    virtualFileExtensions.some((extension) => path.endsWith(extension))
+  )
+}
+
 export const invalidateForFileChanges = (
   changes: Readonly<FileChanges>,
 ): boolean => {
@@ -104,7 +117,8 @@ export const invalidateForFileChanges = (
     const hasChangedModule = changedPaths.some(
       (path) =>
         path === cached.graph.entry ||
-        Object.hasOwn(cached.graph.modules, path),
+        Object.hasOwn(cached.graph.modules, path) ||
+        isVirtualWorkspaceFile(path, cached.graph.entry),
     )
     if (!hasChangedModule) {
       continue
