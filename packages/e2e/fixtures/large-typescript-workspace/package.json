@@ -1,0 +1,11 @@
+{
+  "name": "fixture-large-typescript-workspace",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "eslint": "10.8.0",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.63.0"
+  }
+}

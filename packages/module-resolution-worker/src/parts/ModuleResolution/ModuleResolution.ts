@@ -44,12 +44,15 @@ const builtins = new Set([
   'path/win32',
   'perf_hooks',
   'process',
+  'stream',
+  'tty',
   'url',
   'util',
   'util/types',
+  'vm',
   'worker_threads',
 ])
-const extensions = ['', '.js', '.cjs', '.mjs', '.json']
+const extensions = ['', '.js', '.cjs', '.mjs', '.json', '.ts', '.tsx']
 const virtualFileExtensions = [
   '.cjs',
   '.js',
@@ -126,6 +129,7 @@ export const invalidateForFileChanges = (
       (path) =>
         path === cached.graph.entry ||
         Object.hasOwn(cached.graph.modules, path) ||
+        Object.hasOwn(cached.graph.files, path) ||
         isVirtualWorkspaceFile(path, cached.graph.entry),
     )
     if (!hasChangedModule) {
@@ -230,6 +234,79 @@ const isFile = async (path: string): Promise<boolean> =>
 
 const isDirectory = async (path: string): Promise<boolean> =>
   (await getFileType(path)) === 'directory'
+
+const isWithinDirectory = (directory: string, path: string): boolean =>
+  path === directory || path.startsWith(`${directory}/`)
+
+const findTypeScriptProjectDirectory = async (
+  workspaceDirectory: string,
+  filePath: string,
+): Promise<string> => {
+  let directory = dirname(normalize(filePath))
+  while (isWithinDirectory(workspaceDirectory, directory)) {
+    if (await isFile(join(directory, 'tsconfig.json'))) {
+      return directory
+    }
+    if (directory === workspaceDirectory) {
+      break
+    }
+    directory = dirname(directory)
+  }
+  return dirname(normalize(filePath))
+}
+
+type TypeScriptConfigPaths = {
+  readonly extendsPaths: readonly string[]
+  readonly filePaths: readonly string[]
+  readonly referencePaths: readonly string[]
+}
+
+const getObjectProperty = (object: any, name: string): any => {
+  if (object?.type !== 'ObjectExpression') {
+    return undefined
+  }
+  return object.properties.find(
+    (property: any) =>
+      property.type === 'ObjectProperty' &&
+      ((property.key.type === 'Identifier' && property.key.name === name) ||
+        (property.key.type === 'StringLiteral' && property.key.value === name)),
+  )?.value
+}
+
+const getStringValues = (value: any): readonly string[] => {
+  if (value?.type === 'StringLiteral') {
+    return [value.value]
+  }
+  if (value?.type !== 'ArrayExpression') {
+    return []
+  }
+  return value.elements
+    .filter((element: any) => element?.type === 'StringLiteral')
+    .map((element: any) => element.value)
+}
+
+const getTypeScriptConfigPaths = (source: string): TypeScriptConfigPaths => {
+  try {
+    const config = packages.parser.parseExpression(`(${source})`)
+    const references = getObjectProperty(config, 'references')
+    const referencePaths =
+      references?.type === 'ArrayExpression'
+        ? references.elements.flatMap((reference: any) =>
+            getStringValues(getObjectProperty(reference, 'path')),
+          )
+        : []
+    return {
+      extendsPaths: getStringValues(getObjectProperty(config, 'extends')),
+      filePaths: [
+        ...getStringValues(getObjectProperty(config, 'files')),
+        ...getStringValues(getObjectProperty(config, 'include')),
+      ],
+      referencePaths,
+    }
+  } catch {
+    return { extendsPaths: [], filePaths: [], referencePaths: [] }
+  }
+}
 
 const readPackageJson = async (
   directory: string,
@@ -420,6 +497,8 @@ type Dependency = {
 
 type DependencyAnalysis = {
   readonly dependencies: readonly Dependency[]
+  readonly fileSpecifiers: readonly string[]
+  readonly usesGlobSync: boolean
   readonly usesLazyLoadingRuleMap: boolean
   readonly usesReaddirSync: boolean
 }
@@ -490,7 +569,9 @@ const getCommonJsExportedValue = (statement: any): any => {
 /* eslint-disable sonarjs/cognitive-complexity */
 const getDependencies = (ast: unknown): DependencyAnalysis => {
   const dependencies = new Map<string, boolean>()
+  const fileSpecifiers = new Set<string>()
   const seen = new WeakSet<object>()
+  let usesGlobSync = false
   let usesLazyLoadingRuleMap = false
   let usesReaddirSync = false
   const addDependency = (specifier: string, optional: boolean): void => {
@@ -544,6 +625,16 @@ const getDependencies = (ast: unknown): DependencyAnalysis => {
         : value.callee
     if (
       value.type === 'CallExpression' &&
+      directCallee?.type === 'MemberExpression' &&
+      directCallee.object?.type === 'Identifier' &&
+      directCallee.object.name === 'glob' &&
+      directCallee.property?.type === 'Identifier' &&
+      directCallee.property.name === 'sync'
+    ) {
+      usesGlobSync = true
+    }
+    if (
+      value.type === 'CallExpression' &&
       ((directCallee?.type === 'Identifier' &&
         directCallee.name === 'readdirSync') ||
         (directCallee?.type === 'MemberExpression' &&
@@ -551,6 +642,39 @@ const getDependencies = (ast: unknown): DependencyAnalysis => {
           directCallee.property.name === 'readdirSync'))
     ) {
       usesReaddirSync = true
+    }
+    if (
+      value.type === 'CallExpression' &&
+      directCallee?.type === 'MemberExpression' &&
+      directCallee.property?.type === 'Identifier' &&
+      directCallee.property.name === 'readFileSync'
+    ) {
+      const argument = value.arguments?.[0]
+      if (argument?.type === 'StringLiteral') {
+        fileSpecifiers.add(argument.value)
+      } else if (
+        argument?.type === 'CallExpression' &&
+        argument.callee?.type === 'MemberExpression' &&
+        argument.callee.property?.type === 'Identifier' &&
+        ['join', 'resolve'].includes(argument.callee.property.name)
+      ) {
+        const parts = argument.arguments
+          .filter((part: any) => part.type === 'StringLiteral')
+          .map((part: any) => part.value)
+        const hasModuleDirectory = argument.arguments.some(
+          (part: any) =>
+            (part.type === 'Identifier' && part.name === '__dirname') ||
+            (part.type === 'MemberExpression' &&
+              part.object?.type === 'MetaProperty' &&
+              part.object.meta?.name === 'import' &&
+              part.object.property?.name === 'meta' &&
+              part.property?.type === 'Identifier' &&
+              part.property.name === 'dirname'),
+        )
+        if (hasModuleDirectory && parts.length > 0) {
+          fileSpecifiers.add(parts.join('/'))
+        }
+      }
     }
     if (
       value.type === 'CallExpression' &&
@@ -565,8 +689,20 @@ const getDependencies = (ast: unknown): DependencyAnalysis => {
       'ExportNamedDeclaration',
       'ImportDeclaration',
     ]
+    const isTypeOnlyImport =
+      value.importKind === 'type' ||
+      value.importKind === 'typeof' ||
+      value.exportKind === 'type' ||
+      (value.type === 'ImportDeclaration' &&
+        value.specifiers?.length > 0 &&
+        value.specifiers.every(
+          (specifier: any) =>
+            specifier.importKind === 'type' ||
+            specifier.importKind === 'typeof',
+        ))
     if (
       importTypes.includes(value.type) &&
+      !isTypeOnlyImport &&
       value.source?.type === 'StringLiteral'
     ) {
       addDependency(value.source.value, optional)
@@ -608,6 +744,8 @@ const getDependencies = (ast: unknown): DependencyAnalysis => {
       optional,
       specifier,
     })),
+    fileSpecifiers: [...fileSpecifiers],
+    usesGlobSync,
     usesLazyLoadingRuleMap,
     usesReaddirSync,
   }
@@ -623,6 +761,41 @@ const getCommonJsSpecifiers = (source: string): readonly string[] => {
   return [...specifiers]
 }
 
+const transformDynamicModuleLoading = ({ types }: any) => ({
+  visitor: {
+    AwaitExpression: {
+      exit(path: any): void {
+        const { argument } = path.node
+        if (
+          argument?.type === 'ImportExpression' ||
+          (argument?.type === 'CallExpression' &&
+            argument.callee?.type === 'Import')
+        ) {
+          const arguments_ =
+            argument.type === 'ImportExpression'
+              ? [argument.source]
+              : argument.arguments
+          path.replaceWith(
+            types.callExpression(types.identifier('require'), arguments_),
+          )
+          return
+        }
+        const isTopLevelPromiseAll =
+          path.parentPath?.isExpressionStatement() &&
+          argument?.type === 'CallExpression' &&
+          argument.callee?.type === 'MemberExpression' &&
+          argument.callee.object?.type === 'Identifier' &&
+          argument.callee.object.name === 'Promise' &&
+          argument.callee.property?.type === 'Identifier' &&
+          argument.callee.property.name === 'all'
+        if (isTopLevelPromiseAll) {
+          path.replaceWith(argument)
+        }
+      },
+    },
+  },
+})
+
 const transpile = (
   path: string,
   source: string,
@@ -631,7 +804,9 @@ const transpile = (
   if (path.endsWith('.json')) {
     return {
       dependencies: [],
+      fileSpecifiers: [],
       source,
+      usesGlobSync: false,
       usesLazyLoadingRuleMap: false,
       usesReaddirSync: false,
     }
@@ -651,12 +826,20 @@ const transpile = (
           specifier,
         }),
       ),
+      fileSpecifiers: [],
       source,
+      usesGlobSync: false,
       usesLazyLoadingRuleMap: lazyRuleMapIndex !== -1,
       usesReaddirSync: /\breaddirSync\s*\(/.test(source),
     }
   }
+  const isTypeScript = path.endsWith('.ts') || path.endsWith('.tsx')
+  const isTsx = path.endsWith('.tsx')
+  const parserPlugins: any[] = isTypeScript
+    ? [['typescript', { isTSX: isTsx }]]
+    : []
   const ast = packages.parser.parse(source, {
+    plugins: parserPlugins,
     sourceType: 'unambiguous',
   })
   const analysis = getDependencies(ast)
@@ -668,7 +851,15 @@ const transpile = (
     comments: false,
     configFile: false,
     filename: path,
-    plugins: ['transform-modules-commonjs'],
+    plugins: [
+      ...(isTypeScript
+        ? ([
+            ['transform-typescript', { allExtensions: true, isTSX: isTsx }],
+          ] as const)
+        : []),
+      transformDynamicModuleLoading,
+      'transform-modules-commonjs',
+    ],
     sourceMaps: false,
     sourceType: 'unambiguous',
   })
@@ -678,18 +869,24 @@ const transpile = (
   return {
     ...analysis,
     source: result.code
+      .split('import.meta.dirname')
+      .join(JSON.stringify(dirname(path)))
+      .split('import.meta.filename')
+      .join(JSON.stringify(path))
       .split('import.meta.url')
       .join(JSON.stringify(`file://${path}`)),
   }
 }
 
+/* eslint-disable sonarjs/cognitive-complexity */
 const loadModule = async (
   modulePath: string,
   scanCommonJs = false,
+  virtualFilePath?: string,
 ): Promise<ModuleGraph> => {
   const entry = normalize(modulePath)
   const entrySource = await FileSystem.readFile(entry)
-  const cacheKey = `${scanCommonJs ? 'commonjs' : 'module'}:${entry}`
+  const cacheKey = `${scanCommonJs ? 'commonjs' : 'module'}:${entry}:${virtualFilePath ?? ''}`
   const cached = cache.get(cacheKey)
   if (cached?.entrySource === entrySource) {
     return cached.graph
@@ -725,12 +922,32 @@ const loadModule = async (
     }
     const {
       dependencies,
+      fileSpecifiers,
       source: transformed,
+      usesGlobSync,
       usesLazyLoadingRuleMap,
       usesReaddirSync,
     } = transpile(path, source, scanCommonJs)
     delete files[path]
     modules[path] = transformed
+    for (const specifier of fileSpecifiers) {
+      const filePath = specifier.startsWith('/')
+        ? normalize(specifier)
+        : join(dirname(path), specifier)
+      if (
+        Object.hasOwn(modules, filePath) ||
+        Object.hasOwn(files, filePath) ||
+        !(await isFile(filePath))
+      ) {
+        continue
+      }
+      const content = await FileSystem.readFile(filePath)
+      totalBytes += content.length
+      if (totalBytes > maxTotalBytes) {
+        throw new Error('ESLint config exceeds the 64 MB file limit')
+      }
+      files[filePath] = content
+    }
     await Promise.all(
       dependencies.map(async ({ optional, specifier }) => {
         const resolved = await resolveModule(path, specifier)
@@ -746,10 +963,12 @@ const loadModule = async (
         }
       }),
     )
-    if (usesLazyLoadingRuleMap || usesReaddirSync) {
+    if (usesGlobSync || usesLazyLoadingRuleMap || usesReaddirSync) {
       const directory = dirname(path)
       if (scanCommonJs) {
         await preloadVirtualFiles(directory, new Set())
+      } else if (usesGlobSync) {
+        await visitDirectoryFiles(directory)
       } else {
         await visitDirectory(directory)
       }
@@ -777,6 +996,21 @@ const loadModule = async (
         await visitDirectory(path)
       } else if (
         entry.isFile &&
+        !path.endsWith('.d.ts') &&
+        extensions.some((extension) => extension && path.endsWith(extension))
+      ) {
+        await visit(path)
+      }
+    }
+  }
+
+  const visitDirectoryFiles = async (directory: string): Promise<void> => {
+    const entries = await FileSystem.readDirWithFileTypes(directory)
+    for (const entry of entries) {
+      const path = join(directory, entry.name)
+      if (
+        entry.isFile &&
+        !path.endsWith('.d.ts') &&
         extensions.some((extension) => extension && path.endsWith(extension))
       ) {
         await visit(path)
@@ -832,8 +1066,118 @@ const loadModule = async (
     )
   }
 
+  const preloadFile = async (path: string): Promise<void> => {
+    if (
+      Object.hasOwn(modules, path) ||
+      Object.hasOwn(files, path) ||
+      !(await isFile(path))
+    ) {
+      return
+    }
+    const source = await FileSystem.readFile(path)
+    totalBytes += source.length
+    if (totalBytes > maxTotalBytes) {
+      throw new Error('ESLint config exceeds the 64 MB file limit')
+    }
+    files[path] = source
+  }
+
+  const resolveTypeScriptConfigPath = async (
+    directory: string,
+    specifier: string,
+  ): Promise<string | undefined> => {
+    if (!specifier.startsWith('.') && !specifier.startsWith('/')) {
+      return undefined
+    }
+    const candidate = specifier.startsWith('/')
+      ? normalize(specifier)
+      : join(directory, specifier)
+    if (await isFile(candidate)) {
+      return candidate
+    }
+    if (await isDirectory(candidate)) {
+      const index = join(candidate, 'tsconfig.json')
+      return (await isFile(index)) ? index : undefined
+    }
+    const jsonCandidate = `${candidate}.json`
+    return (await isFile(jsonCandidate)) ? jsonCandidate : undefined
+  }
+
+  const preloadedTypeScriptConfigs = new Set<string>()
+  const preloadTypeScriptConfig = async (
+    configPath: string,
+    projectDirectory: string,
+  ): Promise<void> => {
+    if (preloadedTypeScriptConfigs.has(configPath)) {
+      return
+    }
+    preloadedTypeScriptConfigs.add(configPath)
+    await preloadFile(configPath)
+    const source = files[configPath]
+    if (!source) {
+      return
+    }
+    const configDirectory = dirname(configPath)
+    const { extendsPaths, filePaths, referencePaths } =
+      getTypeScriptConfigPaths(source)
+    for (const specifier of extendsPaths) {
+      const extendedConfig = await resolveTypeScriptConfigPath(
+        configDirectory,
+        specifier,
+      )
+      if (extendedConfig) {
+        await preloadTypeScriptConfig(extendedConfig, projectDirectory)
+      }
+    }
+    for (const specifier of referencePaths) {
+      const referencedConfig = await resolveTypeScriptConfigPath(
+        configDirectory,
+        specifier,
+      )
+      if (referencedConfig) {
+        await preloadTypeScriptConfig(
+          referencedConfig,
+          dirname(referencedConfig),
+        )
+      }
+    }
+    for (const specifier of filePaths) {
+      const path = join(configDirectory, specifier)
+      const wildcardIndex = path.search(/[?*[\]{}]/)
+      if (wildcardIndex === -1) {
+        if (await isDirectory(path)) {
+          if (!isWithinDirectory(projectDirectory, path)) {
+            await preloadVirtualFiles(path, ignoredWorkspaceDirectories)
+          }
+        } else {
+          await preloadFile(path)
+        }
+        continue
+      }
+      const prefix = path.slice(0, wildcardIndex)
+      const directory = prefix.endsWith('/')
+        ? prefix.slice(0, -1)
+        : dirname(prefix)
+      if (
+        directory &&
+        !isWithinDirectory(projectDirectory, directory) &&
+        (await isDirectory(directory))
+      ) {
+        await preloadVirtualFiles(directory, ignoredWorkspaceDirectories)
+      }
+    }
+  }
+
   await visit(entry, entrySource)
-  await preloadVirtualFiles(dirname(entry), ignoredWorkspaceDirectories)
+  const workspaceDirectory = dirname(entry)
+  const virtualFileDirectory = virtualFilePath
+    ? await findTypeScriptProjectDirectory(workspaceDirectory, virtualFilePath)
+    : workspaceDirectory
+  await preloadVirtualFiles(virtualFileDirectory, ignoredWorkspaceDirectories)
+  const typeScriptConfigPath = join(virtualFileDirectory, 'tsconfig.json')
+  if (await isFile(typeScriptConfigPath)) {
+    await preloadTypeScriptConfig(typeScriptConfigPath, virtualFileDirectory)
+  }
   for (const { path, specifier } of preloadedDependencies) {
     const resolved = await resolveModule(path, specifier)
     if (!resolved) {
@@ -852,6 +1196,38 @@ const loadModule = async (
   for (const directory of typeScriptLibDirectories) {
     await preloadVirtualFiles(directory, new Set())
   }
+  const packageDirectories = new Set<string>()
+  for (const path of Object.keys(modules)) {
+    const marker = '/node_modules/'
+    const markerIndex = path.lastIndexOf(marker)
+    if (markerIndex === -1) {
+      continue
+    }
+    const packagePath = path.slice(markerIndex + marker.length)
+    const parts = packagePath.split('/')
+    const packagePartCount = packagePath.startsWith('@') ? 2 : 1
+    packageDirectories.add(
+      `${path.slice(0, markerIndex + marker.length)}${parts
+        .slice(0, packagePartCount)
+        .join('/')}`,
+    )
+  }
+  for (const directory of packageDirectories) {
+    const manifestPath = join(directory, 'package.json')
+    if (
+      Object.hasOwn(modules, manifestPath) ||
+      Object.hasOwn(files, manifestPath) ||
+      !(await isFile(manifestPath))
+    ) {
+      continue
+    }
+    const source = await FileSystem.readFile(manifestPath)
+    totalBytes += source.length
+    if (totalBytes > maxTotalBytes) {
+      throw new Error('ESLint config exceeds the 64 MB file limit')
+    }
+    files[manifestPath] = source
+  }
   const graph = {
     entry,
     files,
@@ -862,8 +1238,12 @@ const loadModule = async (
   cache.set(cacheKey, { entrySource, graph })
   return graph
 }
+/* eslint-enable sonarjs/cognitive-complexity */
 
-export const loadEslintConfig = loadModule
+export const loadEslintConfig = (
+  modulePath: string,
+  filePath?: string,
+): Promise<ModuleGraph> => loadModule(modulePath, false, filePath)
 
 export const loadEslintModule = async (
   filePath: string,

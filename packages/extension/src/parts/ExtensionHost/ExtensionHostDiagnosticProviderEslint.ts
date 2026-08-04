@@ -48,7 +48,7 @@ export const provideDiagnostics = async (textDocument: {
     const filePath = textDocument.uri ?? 'file.js'
     configPath = await FindEslintConfig.findEslintConfig(filePath)
     const config = configPath
-      ? await LoadEslintConfig.loadEslintConfig(configPath)
+      ? await LoadEslintConfig.loadEslintConfig(configPath, filePath)
       : undefined
     const suppressions = await LoadSuppressions.loadSuppressions(
       filePath,

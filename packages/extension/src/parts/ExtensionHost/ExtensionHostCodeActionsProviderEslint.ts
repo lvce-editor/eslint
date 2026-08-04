@@ -17,7 +17,7 @@ export const provideCodeActions = async (
     const filePath = textDocument.uri ?? 'file.js'
     const configPath = await FindEslintConfig.findEslintConfig(filePath)
     const config = configPath
-      ? await LoadEslintConfig.loadEslintConfig(configPath)
+      ? await LoadEslintConfig.loadEslintConfig(configPath, filePath)
       : undefined
     const Linter = await LoadEslint.loadEslint(filePath)
     const lintResults = await Lint.lint(

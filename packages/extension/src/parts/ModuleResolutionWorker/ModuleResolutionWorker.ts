@@ -52,8 +52,11 @@ export const invalidateForFileChanges = (
   return invoke('ModuleResolution.invalidateForFileChanges', changes)
 }
 
-export const loadEslintConfig = (path: string): Promise<ModuleGraph> => {
-  return invoke('ModuleResolution.loadEslintConfig', path)
+export const loadEslintConfig = (
+  path: string,
+  filePath?: string,
+): Promise<ModuleGraph> => {
+  return invoke('ModuleResolution.loadEslintConfig', path, filePath)
 }
 
 export const loadEslintModule = (path: string): Promise<ModuleGraph> => {

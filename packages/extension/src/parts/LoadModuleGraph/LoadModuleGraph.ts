@@ -8,6 +8,7 @@ type CommonJsModule = {
 
 type CommonJsRequire = {
   (specifier: string): any
+  extensions: Readonly<Record<string, unknown>>
   resolve(specifier: string): string
 }
 
@@ -32,7 +33,7 @@ const assert = (
   }
 }
 
-const createPathModule = () => ({
+const createPathModule = (cwd: string) => ({
   basename: Path.basename,
   delimiter: ':',
   dirname: Path.dirname,
@@ -53,7 +54,17 @@ const createPathModule = () => ({
   },
   posix: undefined as unknown,
   relative: Path.relative,
-  resolve: Path.resolve,
+  resolve: (...paths: readonly string[]): string => {
+    let resolved = ''
+    for (const path of paths) {
+      if (path.startsWith('/')) {
+        resolved = path
+      } else {
+        resolved = Path.join(resolved || cwd, path)
+      }
+    }
+    return Path.normalize(resolved || cwd)
+  },
   sep: '/',
   win32: undefined as unknown,
 })
@@ -87,6 +98,19 @@ const workerThreadsUnavailable = (): never => {
     'Worker threads are not available in the ESLint config sandbox',
   )
 }
+
+const runInNewContext = (source: string): undefined => {
+  const compiled = new Function(`'use strict';\n${source}`)
+  Object.freeze(compiled)
+  return undefined
+}
+
+const createOutputStream = (fd: number) => ({
+  columns: undefined,
+  fd,
+  isTTY: false,
+  write: (): boolean => true,
+})
 
 const isIPv4 = (value: string): boolean => {
   const parts = value.split('.')
@@ -205,8 +229,10 @@ const createVirtualProcess = (graph: ModuleGraph) => {
     }),
     nextTick: (callback: () => void): void => queueMicrotask(callback),
     pid: 1,
-    platform: 'browser',
+    platform: 'linux',
     ppid: 0,
+    stderr: createOutputStream(2),
+    stdout: createOutputStream(1),
     version: 'v0.0.0',
     versions: Object.freeze({ node: '0.0.0' }),
   }
@@ -239,7 +265,7 @@ const createBuiltins = (graph: ModuleGraph): Readonly<Record<string, any>> => {
       parent = Path.dirname(child)
     }
   }
-  const path = createPathModule()
+  const path = createPathModule(Path.dirname(graph.entry))
   path.posix = path
   path.win32 = path
   const existsSync = (filePath: string): boolean =>
@@ -331,6 +357,21 @@ const createBuiltins = (graph: ModuleGraph): Readonly<Record<string, any>> => {
       return this
     }
   }
+  class Readable extends EventEmitter {
+    destroy(): this {
+      this.emit('close')
+      return this
+    }
+
+    push(value: unknown): boolean {
+      if (value === null) {
+        this.emit('end')
+        return false
+      }
+      this.emit('data', value)
+      return true
+    }
+  }
   const events = Object.assign(EventEmitter, {
     default: EventEmitter,
     EventEmitter,
@@ -374,9 +415,18 @@ const createBuiltins = (graph: ModuleGraph): Readonly<Record<string, any>> => {
     },
     'node:os': {
       arch: (): string => 'x64',
+      availableParallelism: (): number => 1,
+      cpus: () => [
+        {
+          model: 'browser',
+          speed: 0,
+          times: { idle: 0, irq: 0, nice: 0, sys: 0, user: 0 },
+        },
+      ],
       EOL: '\n',
       homedir: (): string => '/',
-      platform: (): string => 'browser',
+      platform: (): string => 'linux',
+      release: (): string => '',
       tmpdir: (): string => '/tmp',
     },
     'node:path': path,
@@ -386,6 +436,12 @@ const createBuiltins = (graph: ModuleGraph): Readonly<Record<string, any>> => {
       performance: globalThis.performance,
     },
     'node:process': process,
+    'node:stream': {
+      Readable,
+    },
+    'node:tty': {
+      isatty: (): boolean => false,
+    },
     'node:url': {
       fileURLToPath: (url: string | URL): string => new URL(url).pathname,
       pathToFileURL: (filePath: string): URL =>
@@ -401,6 +457,9 @@ const createBuiltins = (graph: ModuleGraph): Readonly<Record<string, any>> => {
       types: utilTypes,
     },
     'node:util/types': utilTypes,
+    'node:vm': {
+      runInNewContext,
+    },
     'node:worker_threads': {
       isMainThread: true,
       MessageChannel,
@@ -512,6 +571,7 @@ export const loadModuleGraph = (graph: ModuleGraph): any => {
       }
       return load(resolved)
     }) as CommonJsRequire
+    require.extensions = Object.freeze({ '.js': undefined, '.json': undefined })
     require.resolve = (specifier: string): string => {
       const normalizedBuiltin = specifier.startsWith('node:')
         ? specifier
@@ -543,20 +603,29 @@ export const loadModuleGraph = (graph: ModuleGraph): any => {
       '__filename',
       '__dirname',
       'global',
+      'process',
       'clearImmediate',
       'setImmediate',
       `'use strict';\n${source}\n//# sourceURL=${id}`,
     )
-    evaluate(
-      module,
-      module.exports,
-      require,
-      id,
-      Path.dirname(id),
-      globalThis,
-      clearImmediate,
-      setImmediate,
-    )
+    try {
+      evaluate(
+        module,
+        module.exports,
+        require,
+        id,
+        Path.dirname(id),
+        globalThis,
+        builtins['node:process'],
+        clearImmediate,
+        setImmediate,
+      )
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      throw new Error(`Failed to evaluate ESLint module ${id}: ${message}`, {
+        cause: error,
+      })
+    }
     return module.exports
   }
 
