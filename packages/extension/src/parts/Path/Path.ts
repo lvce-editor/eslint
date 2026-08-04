@@ -43,6 +43,13 @@ export const join = (...parts: readonly string[]): string =>
 
 export const resolve = (...parts: readonly string[]): string => join(...parts)
 
+export const toFileSystemPath = (path: string): string => {
+  if (!/^[a-z][a-z\d+.-]*:\/\//i.test(path)) {
+    return path
+  }
+  return decodeURIComponent(new URL(path).pathname)
+}
+
 export const relative = (from: string, to: string): string => {
   const fromParts = normalize(from).split('/').filter(Boolean)
   const toParts = normalize(to).split('/').filter(Boolean)

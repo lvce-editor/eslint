@@ -2,6 +2,7 @@ import type { FileChanges } from '@lvce-editor/api'
 import { packages, transform } from '@babel/standalone'
 import * as FileSystem from '../FileSystem/FileSystem.ts'
 import { configFileName } from '../FindEslintConfig/FindEslintConfig.ts'
+import { suppressionsFileName } from '../LoadSuppressions/LoadSuppressions.ts'
 
 export interface ModuleGraph {
   readonly entry: string
@@ -91,7 +92,7 @@ const getChangedPaths = (changes: Readonly<FileChanges>): readonly string[] => {
 
 const isConfigFile = (path: string): boolean => {
   const fileName = path.slice(path.lastIndexOf('/') + 1)
-  return fileName === configFileName
+  return fileName === configFileName || fileName === suppressionsFileName
 }
 
 export const invalidateForFileChanges = (

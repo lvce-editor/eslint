@@ -193,3 +193,22 @@ test('preserves fixes returned by ESLint rules', async () => {
     }),
   )
 })
+
+test('applies loaded bulk suppressions', async () => {
+  const results = await Lint.lint(
+    'debugger; missing',
+    '/workspace/src/file.js',
+    createGraph(
+      `module.exports = [{ rules: { 'no-debugger': 'error', 'no-undef': 'error' } }]`,
+    ),
+    Linter,
+    {
+      baseDirectory: '/workspace',
+      suppressions: {
+        'src/file.js': { 'no-debugger': { count: 1 } },
+      },
+    },
+  )
+
+  expect(results.map((result) => result.ruleId)).toEqual(['no-undef'])
+})
