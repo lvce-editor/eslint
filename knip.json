@@ -1,0 +1,47 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "workspaces": {
+    ".": {
+      "project": ["*.js", "scripts/*.js"]
+    },
+    "packages/build": {
+      "project": ["src/**/*.js", "src/**/*.ts"],
+      "ignoreFiles": ["src/esbuild-node-shim-plugin.ts"]
+    },
+    "packages/e2e": {
+      "entry": ["src/**/*.ts"],
+      "project": ["src/**/*.ts"]
+    },
+    "packages/extension": {
+      "entry": ["src/eslintMain.ts", "test/**/*.test.ts"],
+      "project": ["src/**/*.ts", "test/**/*.ts"],
+      "ignoreFiles": [
+        "src/parts/Assert/Assert.ts",
+        "src/parts/AssertionError/AssertionError.ts",
+        "src/parts/Command/Command.ts",
+        "src/parts/CommandMap/CommandMap.ts",
+        "src/parts/CommandNotFoundError/CommandNotFoundError.ts",
+        "src/parts/ErrorCodes/ErrorCodes.ts",
+        "src/parts/ExtensionHost/ExtensionHostFormattingProviderPrettier.ts",
+        "src/parts/Format/Format.ts",
+        "src/parts/Logger/Logger.ts",
+        "src/parts/NodeShims/NodeShimsBanner.ts",
+        "src/parts/NodeShims/RequireShim.ts"
+      ],
+      "ignoreIssues": {
+        "src/parts/ExtensionHost/ExtensionHostCodeActionsProviderEslint.ts": [
+          "exports",
+          "types"
+        ],
+        "src/parts/ExtensionHost/ExtensionHostDiagnosticProviderEslint.ts": [
+          "exports"
+        ],
+        "src/parts/LoadEslintConfig/LoadEslintConfig.ts": ["duplicates"],
+        "src/parts/Main/Main.ts": ["exports"]
+      }
+    },
+    "packages/server": {
+      "project": ["src/**/*.js"]
+    }
+  }
+}

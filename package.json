@@ -12,7 +12,7 @@
     "e2e": "npm run e2e --workspace=packages/e2e",
     "e2e:headless": "npm run e2e:headless --workspace=packages/e2e",
     "format": "prettier --write .",
-    "lint": "eslint . && prettier --check .",
+    "lint": "eslint . && prettier --check . && knip --no-config-hints",
     "test": "npm test --workspaces --if-present",
     "test:watch": "node --unhandled-rejections=warn --experimental-vm-modules ./node_modules/jest/bin/jest.js --watch",
     "type-check": "tsc -b"
@@ -24,6 +24,7 @@
   "devDependencies": {
     "@lvce-editor/eslint-config": "^18.1.0",
     "eslint": "^10.8.0",
+    "knip": "^6.29.0",
     "prettier": "^3.9.6",
     "typescript": "^6.0.3"
   }
