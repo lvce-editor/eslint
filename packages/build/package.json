@@ -9,6 +9,7 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
+    "@lvce-editor/node-shims": "*",
     "@lvce-editor/package-extension": "^3.7.0",
     "@types/node": "^26.1.2",
     "esbuild": "^0.28.1",

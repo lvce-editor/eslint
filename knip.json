@@ -24,9 +24,7 @@
         "src/parts/ErrorCodes/ErrorCodes.ts",
         "src/parts/ExtensionHost/ExtensionHostFormattingProviderPrettier.ts",
         "src/parts/Format/Format.ts",
-        "src/parts/Logger/Logger.ts",
-        "src/parts/NodeShims/NodeShimsBanner.ts",
-        "src/parts/NodeShims/RequireShim.ts"
+        "src/parts/Logger/Logger.ts"
       ],
       "ignoreIssues": {
         "src/parts/ExtensionHost/ExtensionHostCodeActionsProviderEslint.ts": [
@@ -39,6 +37,11 @@
         "src/parts/LoadEslintConfig/LoadEslintConfig.ts": ["duplicates"],
         "src/parts/Main/Main.ts": ["exports"]
       }
+    },
+    "packages/node-shims": {
+      "entry": ["src/NodeShims.ts"],
+      "project": ["src/**/*.ts"],
+      "ignoreFiles": ["src/NodeShimsBanner.ts", "src/RequireShim.ts"]
     },
     "packages/server": {
       "project": ["src/**/*.js"]
