@@ -1,16 +1,6 @@
 import * as FileSystem from '../FileSystem/FileSystem.ts'
 
-export const configFileNames = [
-  'eslint.config.js',
-  'eslint.config.mjs',
-  'eslint.config.cjs',
-  '.eslintrc.js',
-  '.eslintrc.cjs',
-  '.eslintrc.json',
-  '.eslintrc.yaml',
-  '.eslintrc.yml',
-  '.eslintrc',
-]
+export const configFileName = 'eslint.config.js'
 
 export const findEslintConfig = async (
   filePath: string,
@@ -33,12 +23,12 @@ export const findEslintConfig = async (
   while (depth < maxDepth) {
     try {
       const entries = await FileSystem.readDirWithFileTypes(currentDir)
-      const configFile = entries.find(
-        (entry) => entry.isFile && configFileNames.includes(entry.name),
+      const hasConfigFile = entries.some(
+        (entry) => entry.isFile && entry.name === configFileName,
       )
 
-      if (configFile) {
-        return `${currentDir}/${configFile.name}`
+      if (hasConfigFile) {
+        return `${currentDir}/${configFileName}`
       }
 
       // Move up one directory

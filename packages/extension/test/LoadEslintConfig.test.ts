@@ -148,9 +148,17 @@ test('invalidates a cached graph when an imported config module changes', async 
 test('requests a refresh when a new eslint config file changes', () => {
   expect(
     LoadEslintConfig.invalidateForFileChanges({
-      changed: ['file:///workspace/new/eslint.config.mjs'],
+      changed: ['file:///workspace/new/eslint.config.js'],
     }),
   ).toBe(true)
+})
+
+test('does not request a refresh for an unsupported eslint config file', () => {
+  expect(
+    LoadEslintConfig.invalidateForFileChanges({
+      changed: ['file:///workspace/new/eslint.config.mjs'],
+    }),
+  ).toBe(false)
 })
 
 test('preloads a relative esm dependency', async () => {
