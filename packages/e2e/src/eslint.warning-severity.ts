@@ -57,8 +57,9 @@ export const test: Test = async ({
   ])
 
   const warningSquiggly = Locator('.DiagnosticWarning')
+  const errorSquiggly = Locator('.DiagnosticError')
   await expect(warningSquiggly).toBeVisible()
-  await expect(Locator('.DiagnosticError')).toHaveCount(0)
+  await expect(errorSquiggly).toHaveCount(0)
 
   await Panel.open('Problems')
   const problems = Locator('.Viewlet.Problems')
