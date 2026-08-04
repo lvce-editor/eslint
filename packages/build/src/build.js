@@ -1,11 +1,17 @@
 import { packageExtension } from '@lvce-editor/package-extension'
 import fs from 'node:fs'
 import path, { join } from 'node:path'
-import { buildExtension } from './build-watch.ts'
+import { buildExtension, buildModuleResolutionWorker } from './build-watch.ts'
 import { root } from './root.js'
 
 const extension = path.join(root, 'packages', 'extension')
 const extensionOutput = join(root, 'dist', 'dist', 'eslintMain.js')
+const moduleResolutionWorkerOutput = join(
+  root,
+  'dist',
+  'dist',
+  'moduleResolutionWorkerMain.js',
+)
 
 fs.rmSync(join(root, 'dist'), { recursive: true, force: true })
 
@@ -19,7 +25,10 @@ fs.copyFileSync(
 fs.cpSync(join(extension, 'media'), join(root, 'dist', 'media'), {
   recursive: true,
 })
-await buildExtension(extensionOutput)
+await Promise.all([
+  buildExtension(extensionOutput),
+  buildModuleResolutionWorker(moduleResolutionWorkerOutput),
+])
 
 await packageExtension({
   highestCompression: true,

@@ -4,6 +4,7 @@
   "references": [
     { "path": "./packages/e2e" },
     { "path": "./packages/extension" },
+    { "path": "./packages/module-resolution-worker" },
     { "path": "./packages/node-shims" },
     { "path": "./packages/build" },
     { "path": "./packages/server" }

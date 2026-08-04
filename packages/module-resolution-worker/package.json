@@ -1,0 +1,35 @@
+{
+  "name": "module-resolution-worker",
+  "version": "0.0.0-dev",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "test": "node --unhandled-rejections=warn --experimental-vm-modules ../../node_modules/jest/bin/jest.js --detectOpenHandles --forceExit"
+  },
+  "jest": {
+    "injectGlobals": false,
+    "extensionsToTreatAsEsm": [
+      ".ts"
+    ],
+    "moduleNameMapper": {
+      "^(\\.{1,2}/.*)\\.js$": "$1"
+    },
+    "transform": {
+      "^.+\\.tsx?$": [
+        "ts-jest",
+        {
+          "useESM": true
+        }
+      ]
+    }
+  },
+  "dependencies": {
+    "@babel/standalone": "^8.0.4"
+  },
+  "devDependencies": {
+    "@jest/globals": "^30.4.1",
+    "@types/babel__standalone": "^7.1.9",
+    "jest": "^30.4.2",
+    "ts-jest": "^29.4.12"
+  }
+}

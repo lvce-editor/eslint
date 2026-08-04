@@ -1,6 +1,6 @@
 import { beforeEach, expect, test } from '@jest/globals'
 import * as FileSystem from '../src/parts/FileSystem/FileSystem.ts'
-import * as LoadEslintConfig from '../src/parts/LoadEslintConfig/LoadEslintConfig.ts'
+import * as LoadEslintConfig from '../src/parts/ModuleResolution/ModuleResolution.ts'
 
 const state: { files: Record<string, string> } = { files: {} }
 
@@ -15,21 +15,23 @@ const readFile = async (uri: string): Promise<string> => {
   return state.files[path]
 }
 
-const stat = async (uri: string): Promise<number> => {
+const stat = async (
+  uri: string,
+): Promise<{ isDirectory: boolean; isFile: boolean }> => {
   const path = toPath(uri)
   if (path in state.files) {
-    return 7
+    return { isDirectory: false, isFile: true }
   }
   const prefix = `${path.replace(/\/$/, '')}/`
   if (Object.keys(state.files).some((file) => file.startsWith(prefix))) {
-    return 3
+    return { isDirectory: true, isFile: false }
   }
   throw new Error(`File not found: ${path}`)
 }
 
 const readDirWithFileTypes = async (
   uri: string,
-): Promise<Array<{ name: string; type: number }>> => {
+): Promise<Array<{ isDirectory: boolean; isFile: boolean; name: string }>> => {
   const path = toPath(uri).replace(/\/$/, '')
   const prefix = `${path}/`
   const entries = new Map<string, number>()
@@ -42,7 +44,11 @@ const readDirWithFileTypes = async (
     const name = slashIndex === -1 ? relative : relative.slice(0, slashIndex)
     entries.set(name, slashIndex === -1 ? 7 : 3)
   }
-  return Array.from(entries, ([name, type]) => ({ name, type }))
+  return Array.from(entries, ([name, type]) => ({
+    isDirectory: type === 3,
+    isFile: type === 7,
+    name,
+  }))
 }
 
 const setFiles = (value: Record<string, string>): void => {
@@ -592,4 +598,85 @@ test('handles circular dependencies', async () => {
     '/workspace/eslint.config.js',
   )
   expect(Object.keys(graph.modules)).toHaveLength(3)
+})
+
+test('loads the closest project ESLint package as a graph', async () => {
+  setFiles({
+    '/workspace/node_modules/eslint/index.js':
+      'class ProjectLinter {}; module.exports = { Linter: ProjectLinter }',
+    '/workspace/node_modules/eslint/package.json': '{"main":"index.js"}',
+  })
+
+  const graph = await LoadEslintConfig.loadEslintModule(
+    '/workspace/src/file.js',
+  )
+
+  expect(graph.entry).toBe('/workspace/node_modules/eslint/index.js')
+  expect(graph.modules[graph.entry]).toContain('ProjectLinter')
+})
+
+test('loads ESLint when a non-file filesystem does not implement stat', async () => {
+  const files: Record<string, string> = {
+    'html:///workspace/node_modules/eslint/index.js':
+      'class ProjectLinter {}; module.exports = { Linter: ProjectLinter }',
+    'html:///workspace/node_modules/eslint/package.json': '{"main":"index.js"}',
+  }
+  FileSystem.state.api = {
+    readDirWithFileTypes: async (uri: string) => {
+      const prefix = `${uri.replace(/\/$/, '')}/`
+      const entries = new Map<
+        string,
+        { isDirectory: boolean; isFile: boolean; name: string }
+      >()
+      for (const file of Object.keys(files)) {
+        if (!file.startsWith(prefix)) {
+          continue
+        }
+        const relative = file.slice(prefix.length)
+        const slashIndex = relative.indexOf('/')
+        const name =
+          slashIndex === -1 ? relative : relative.slice(0, slashIndex)
+        entries.set(name, {
+          isDirectory: slashIndex !== -1,
+          isFile: slashIndex === -1,
+          name,
+        })
+      }
+      return entries.values().toArray()
+    },
+    readFile: async (uri: string) => files[uri],
+    stat: async () => {
+      throw new Error('stat is not implemented')
+    },
+  }
+
+  const graph = await LoadEslintConfig.loadEslintModule(
+    'html:///workspace/src/file.js',
+  )
+
+  expect(graph.entry).toBe('html:///workspace/node_modules/eslint/index.js')
+  expect(graph.modules[graph.entry]).toContain('ProjectLinter')
+})
+
+test('reports when ESLint is not installed in the project', async () => {
+  await expect(
+    LoadEslintConfig.loadEslintModule('/missing-workspace/src/file.js'),
+  ).rejects.toThrow(
+    'Cannot find ESLint in project node_modules for /missing-workspace/src/file.js',
+  )
+})
+
+test('keeps a stable graph id for cached results', async () => {
+  setFiles({
+    '/graph-id-workspace/eslint.config.js': 'module.exports = []',
+  })
+
+  const first = await LoadEslintConfig.loadEslintConfig(
+    '/graph-id-workspace/eslint.config.js',
+  )
+  const second = await LoadEslintConfig.loadEslintConfig(
+    '/graph-id-workspace/eslint.config.js',
+  )
+
+  expect(second.id).toBe(first.id)
 })

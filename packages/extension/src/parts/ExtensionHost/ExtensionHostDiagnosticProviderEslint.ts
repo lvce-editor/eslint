@@ -19,7 +19,17 @@ const getErrorPosition = (
   }
   const location = (error as { loc?: unknown }).loc
   if (!location || typeof location !== 'object') {
-    return { columnIndex: 0, rowIndex: 0 }
+    const { message } = error as { message?: unknown }
+    const match =
+      typeof message === 'string' ? /\((\d+):(\d+)\)/.exec(message) : undefined
+    if (!match) {
+      return { columnIndex: 0, rowIndex: 0 }
+    }
+    const [, line, column] = match
+    return {
+      columnIndex: Number(column),
+      rowIndex: Math.max(0, Number(line) - 1),
+    }
   }
   const { column, line } = location as { column?: unknown; line?: unknown }
   return {

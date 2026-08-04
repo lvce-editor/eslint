@@ -3,8 +3,9 @@ import { Linter } from 'eslint'
 import type { ModuleGraph } from '../src/parts/ModuleGraph/ModuleGraph.ts'
 import * as Lint from '../src/parts/Lint/Lint.ts'
 
-const createGraph = (config: string): ModuleGraph => ({
+const createGraph = (config: string, id = config): ModuleGraph => ({
   entry: '/workspace/eslint.config.js',
+  id,
   modules: { '/workspace/eslint.config.js': config },
   resolutions: {},
 })
@@ -52,6 +53,7 @@ test('runs a dynamically loaded plugin rule', async () => {
   const pluginPath = '/workspace/node_modules/eslint-plugin-demo/index.js'
   const graph: ModuleGraph = {
     entry: configPath,
+    id: 'plugin-graph',
     modules: {
       [configPath]: `const demo = require('eslint-plugin-demo'); module.exports = [{ plugins: { demo }, rules: { 'demo/no-foo': 'error' } }]`,
       [pluginPath]: `module.exports = { rules: { 'no-foo': { create(context) { return { Identifier(node) { if (node.name === 'foo') context.report({ node, message: 'Do not use foo' }) } } } } } }`,
@@ -81,6 +83,7 @@ test('reuses loaded config modules until the graph changes', async () => {
   const graph: ModuleGraph = {
     entry: configPath,
     files: {},
+    id: 'reused-graph',
     modules: {
       [configPath]: `const plugin = require('./plugin.js'); module.exports = [{ plugins: { test: plugin }, rules: { 'test/count': 'error' } }]`,
       [pluginPath]: `let count = 0; module.exports = { rules: { count: { create(context) { const message = String(++count); return { Program(node) { context.report({ node, message }) } } } } } }`,
@@ -95,7 +98,7 @@ test('reuses loaded config modules until the graph changes', async () => {
   const reloaded = await Lint.lint(
     '',
     '/workspace/file.js',
-    { ...graph },
+    { ...graph, id: 'reloaded-graph' },
     Linter,
   )
 
@@ -119,7 +122,7 @@ test('reuses the linter for the same graph', async () => {
   await Lint.lint(
     '',
     '/workspace/file.js',
-    createGraph(`module.exports = [{ rules: {} }]`),
+    createGraph(`module.exports = [{ rules: {} }]`, 'different-graph'),
     CountingLinter,
   )
 
@@ -130,6 +133,7 @@ test('passes an absolute file path to parser services', async () => {
   const configPath = '/workspace/eslint.config.js'
   const graph: ModuleGraph = {
     entry: configPath,
+    id: 'parser-services-graph',
     modules: {
       [configPath]: `module.exports = [{ files: ['**/*.ts'], plugins: { test: { rules: { filename: { create(context) { return { Program(node) { context.report({ node, message: context.filename }) } } } } } } }, rules: { 'test/filename': 'error' } }]`,
     },
