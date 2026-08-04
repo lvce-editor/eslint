@@ -1,11 +1,18 @@
 import { beforeEach, expect, test } from '@jest/globals'
 import * as DiagnosticProvider from '../src/parts/ExtensionHost/ExtensionHostDiagnosticProviderEslint.ts'
 import * as FileSystem from '../src/parts/FileSystem/FileSystem.ts'
+import * as ModuleResolutionWorker from '../src/parts/ModuleResolutionWorker/ModuleResolutionWorker.ts'
 
 const toPath = (uri: string): string =>
   decodeURIComponent(new URL(uri).pathname)
 
 beforeEach(() => {
+  ModuleResolutionWorker.state.rpcPromise = undefined
+  ModuleResolutionWorker.state.createRpc = async () => ({
+    invoke: async () => {
+      throw new SyntaxError('Unexpected token (2:0)')
+    },
+  })
   FileSystem.state.api = {
     readDirWithFileTypes: async (uri: string) => {
       const path = toPath(uri)

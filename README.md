@@ -1,8 +1,9 @@
 # ESLint
 
-The extension runs ESLint in a dedicated browser worker. Project flat configs are
-read by the extension host, transformed from ESM to CommonJS, and sent to the
-worker as a bounded in-memory module graph. Relative imports, package `main`,
+The extension runs ESLint in a dedicated browser worker. A separate module
+resolution worker reads project flat configs, transforms ESM to CommonJS, and
+returns a bounded in-memory module graph to the extension worker for evaluation.
+Relative imports, package `main`,
 conditional `exports`, scoped packages, package subpaths, JSON modules, and
 CommonJS `require` are supported.
 

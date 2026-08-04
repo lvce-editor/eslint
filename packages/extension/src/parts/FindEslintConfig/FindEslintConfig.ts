@@ -1,6 +1,6 @@
 import * as FileSystem from '../FileSystem/FileSystem.ts'
 
-export const configFileName = 'eslint.config.js'
+const configFileName = 'eslint.config.js'
 
 export const findEslintConfig = async (
   filePath: string,

@@ -36,8 +36,14 @@
         "src/parts/ExtensionHost/ExtensionHostDiagnosticProviderEslint.ts": [
           "exports"
         ],
-        "src/parts/LoadEslintConfig/LoadEslintConfig.ts": ["duplicates"],
         "src/parts/Main/Main.ts": ["exports"]
+      }
+    },
+    "packages/module-resolution-worker": {
+      "entry": ["src/moduleResolutionWorkerMain.ts", "test/**/*.test.ts"],
+      "project": ["src/**/*.ts", "test/**/*.ts"],
+      "ignoreIssues": {
+        "src/parts/ModuleResolution/ModuleResolution.ts": ["duplicates"]
       }
     },
     "packages/node-shims": {

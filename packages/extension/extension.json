@@ -11,6 +11,15 @@
     "default-src 'none'",
     "script-src 'self' 'unsafe-eval'"
   ],
+  "rpc": [
+    {
+      "id": "builtin.eslint.module-resolution-worker",
+      "type": "web-worker",
+      "name": "ESLint Module Resolution Worker",
+      "url": "dist/moduleResolutionWorkerMain.js",
+      "contentSecurityPolicy": ["default-src 'none'", "script-src 'self'"]
+    }
+  ],
   "categories": [],
   "activation": [
     "onDiagnostic:javascript",

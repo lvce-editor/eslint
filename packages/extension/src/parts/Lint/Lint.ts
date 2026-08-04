@@ -28,10 +28,11 @@ type LintContext = {
   readonly linter: InstanceType<LinterConstructor>
 }
 
-const graphContexts = new WeakMap<
-  ModuleGraph,
-  WeakMap<LinterConstructor, LintContext>
->()
+const graphContexts = new Map<string, WeakMap<LinterConstructor, LintContext>>()
+
+export const clearCache = (): void => {
+  graphContexts.clear()
+}
 
 const isNoMatchingConfigMessage = (message: LintMessage): boolean => {
   return (
@@ -80,10 +81,10 @@ const getContext = (
     const baseDirectory = Path.dirname(linterFilePath)
     return createContext(graph, baseDirectory, Linter)
   }
-  let contexts = graphContexts.get(graph)
+  let contexts = graphContexts.get(graph.id)
   if (!contexts) {
     contexts = new WeakMap()
-    graphContexts.set(graph, contexts)
+    graphContexts.set(graph.id, contexts)
   }
   const cached = contexts.get(Linter)
   if (cached) {

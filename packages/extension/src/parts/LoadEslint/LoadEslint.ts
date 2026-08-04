@@ -6,26 +6,24 @@ interface EslintModule {
   readonly Linter?: LinterConstructor
 }
 
-const loadedModules = new WeakMap<object, EslintModule>()
+const loadedModules = new Map<string, EslintModule>()
+
+export const clearCache = (): void => {
+  loadedModules.clear()
+}
 
 export const loadEslint = async (
   filePath: string,
 ): Promise<LinterConstructor> => {
-  const entry = await LoadEslintConfig.resolveModule(filePath, 'eslint')
-  if (!entry) {
-    throw new Error(
-      `Cannot find ESLint in project node_modules for ${filePath}`,
-    )
-  }
-  const graph = await LoadEslintConfig.loadModule(entry, true)
-  let eslint = loadedModules.get(graph)
+  const graph = await LoadEslintConfig.loadEslintModule(filePath)
+  let eslint = loadedModules.get(graph.id)
   if (!eslint) {
     eslint = LoadModuleGraph.loadModuleGraph(graph) as EslintModule
-    loadedModules.set(graph, eslint)
+    loadedModules.set(graph.id, eslint)
   }
   if (typeof eslint.Linter !== 'function') {
     throw new TypeError(
-      `Project ESLint module does not export Linter: ${entry}`,
+      `Project ESLint module does not export Linter: ${graph.entry}`,
     )
   }
   return eslint.Linter

@@ -7,6 +7,7 @@ const graph = (
   resolutions: Record<string, string> = {},
 ): ModuleGraph => ({
   entry: '/workspace/eslint.config.js',
+  id: 'test-graph',
   modules,
   resolutions,
 })

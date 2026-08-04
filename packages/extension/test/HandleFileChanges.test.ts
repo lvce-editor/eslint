@@ -6,6 +6,7 @@ test('refreshes all diagnostics after an eslint config change', async () => {
     () => true,
   )
   const updateAllDiagnostics = jest.fn<() => Promise<void>>()
+  const clearCaches = jest.fn<() => void>()
   updateAllDiagnostics.mockResolvedValue()
   const changes = {
     changed: ['file:///workspace/eslint.config.js'],
@@ -15,9 +16,11 @@ test('refreshes all diagnostics after an eslint config change', async () => {
     changes,
     invalidateForFileChanges,
     updateAllDiagnostics,
+    clearCaches,
   )
 
   expect(invalidateForFileChanges).toHaveBeenCalledWith(changes)
+  expect(clearCaches).toHaveBeenCalledWith()
   expect(updateAllDiagnostics).toHaveBeenCalledWith()
 })
 
@@ -26,6 +29,7 @@ test('does not refresh diagnostics for an unrelated file change', async () => {
     () => false,
   )
   const updateAllDiagnostics = jest.fn<() => Promise<void>>()
+  const clearCaches = jest.fn<() => void>()
   updateAllDiagnostics.mockResolvedValue()
   const changes = {
     changed: ['file:///workspace/readme.md'],
@@ -35,8 +39,10 @@ test('does not refresh diagnostics for an unrelated file change', async () => {
     changes,
     invalidateForFileChanges,
     updateAllDiagnostics,
+    clearCaches,
   )
 
   expect(invalidateForFileChanges).toHaveBeenCalledWith(changes)
+  expect(clearCaches).not.toHaveBeenCalled()
   expect(updateAllDiagnostics).not.toHaveBeenCalled()
 })

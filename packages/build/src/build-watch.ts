@@ -243,6 +243,29 @@ const getBuildOptions = (outfile: string): BuildOptions => {
   }
 }
 
+const getModuleResolutionWorkerBuildOptions = (
+  outfile: string,
+): BuildOptions => ({
+  bundle: true,
+  conditions: ['import', 'module', 'default'],
+  entryPoints: [
+    join(
+      root,
+      'packages',
+      'module-resolution-worker',
+      'src',
+      'moduleResolutionWorkerMain.ts',
+    ),
+  ],
+  external: ['electron', 'node:buffer', 'node:worker_threads', 'ws'],
+  format: 'esm',
+  mainFields: ['module', 'main'],
+  outfile,
+  packages: 'bundle',
+  platform: 'browser',
+  resolveExtensions: ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'],
+})
+
 const assertEslintNotBundled = (metafile: Metafile): void => {
   const bundledEslintPath = Object.keys(metafile.inputs).find((input) =>
     /(^|\/)node_modules\/eslint\//.test(input.replaceAll('\\', '/')),
@@ -260,10 +283,35 @@ export const buildExtension = async (outfile: string): Promise<void> => {
   assertEslintNotBundled(result.metafile)
 }
 
+export const buildModuleResolutionWorker = async (
+  outfile: string,
+): Promise<void> => {
+  await build(getModuleResolutionWorkerBuildOptions(outfile))
+}
+
 export const watchExtension = async (): Promise<void> => {
-  const outfile = join(root, 'packages', 'extension', 'dist', 'eslintMain.js')
-  const ctx = await context(getBuildOptions(outfile))
-  await ctx.watch()
+  const extensionOutput = join(
+    root,
+    'packages',
+    'extension',
+    'dist',
+    'eslintMain.js',
+  )
+  const moduleResolutionWorkerOutput = join(
+    root,
+    'packages',
+    'extension',
+    'dist',
+    'moduleResolutionWorkerMain.js',
+  )
+  const extensionContext = await context(getBuildOptions(extensionOutput))
+  const moduleResolutionWorkerContext = await context(
+    getModuleResolutionWorkerBuildOptions(moduleResolutionWorkerOutput),
+  )
+  await Promise.all([
+    extensionContext.watch(),
+    moduleResolutionWorkerContext.watch(),
+  ])
   // eslint-disable-next-line no-console
   console.log('Watching for changes...')
 }
