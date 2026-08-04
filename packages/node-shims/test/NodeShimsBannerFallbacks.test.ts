@@ -1,3 +1,4 @@
+/* eslint-disable no-restricted-syntax, unicorn/no-global-object-property-assignment, unicorn/no-top-level-assignment-in-function */
 import { afterAll, beforeAll, describe, expect, test } from '@jest/globals'
 
 const originalBuffer = Object.getOwnPropertyDescriptor(globalThis, 'Buffer')
@@ -7,10 +8,10 @@ const originalProcess = Object.getOwnPropertyDescriptor(globalThis, 'process')
 const originalRequire = globalThis.require
 
 interface BufferShim {
-  readonly bigint: undefined
   alloc: (size: number) => Uint8Array
   allocUnsafe: (size: number) => Uint8Array
   allocUnsafeSlow: (size: number) => Uint8Array
+  readonly bigint: undefined
   byteLength: (value: unknown) => number
   compare: (left: number, right: number) => number
   concat: (values: readonly unknown[], totalLength?: number) => Uint8Array
@@ -19,11 +20,11 @@ interface BufferShim {
 }
 
 interface StreamShim {
-  readonly fd: number
-  readonly isTTY: boolean
   destroy: () => void
   emit: () => void
   end: () => void
+  readonly fd: number
+  readonly isTTY: boolean
   on: () => void
   once: () => void
   pause: () => void
@@ -39,17 +40,8 @@ interface StreamShim {
 interface ProcessShim {
   readonly arch: string
   readonly argv: readonly unknown[]
-  readonly env: Readonly<Record<string, string>>
-  readonly pid: number
-  readonly platform: string
-  readonly ppid: number
-  readonly stderr: StreamShim
-  readonly stdin: StreamShim
-  readonly stdout: StreamShim
-  readonly title: string
-  readonly version: string
-  readonly versions: Readonly<Record<string, string>>
   cwd: () => string
+  readonly env: Readonly<Record<string, string>>
   exit: () => void
   hrtime: {
     (time?: readonly [number, number]): [number, number]
@@ -57,12 +49,24 @@ interface ProcessShim {
   }
   memoryUsage: () => Readonly<Record<string, number>>
   nextTick: (fn: () => void) => void
+  readonly pid: number
+  readonly platform: string
+  readonly ppid: number
+  readonly stderr: StreamShim
+  readonly stdin: StreamShim
+  readonly stdout: StreamShim
+  readonly title: string
   uptime: () => number
+  readonly version: string
+  readonly versions: Readonly<Record<string, string>>
 }
 
 let bufferShim: BufferShim
 let processShim: ProcessShim
-let randomBytesWithoutCrypto: { length: number; toString: (encoding: string) => string }
+let randomBytesWithoutCrypto: {
+  length: number
+  toString: (encoding: string) => string
+}
 
 const restoreProperty = (
   name: 'Buffer' | 'crypto' | 'process',
@@ -78,20 +82,22 @@ const restoreProperty = (
 beforeAll(async () => {
   globalThis.modules = {}
   Reflect.deleteProperty(globalThis, 'require')
-  Object.defineProperty(globalThis, 'Buffer', {
-    configurable: true,
-    value: undefined,
-    writable: true,
-  })
-  Object.defineProperty(globalThis, 'crypto', {
-    configurable: true,
-    value: undefined,
-    writable: true,
-  })
-  Object.defineProperty(globalThis, 'process', {
-    configurable: true,
-    value: undefined,
-    writable: true,
+  Object.defineProperties(globalThis, {
+    Buffer: {
+      configurable: true,
+      value: undefined,
+      writable: true,
+    },
+    crypto: {
+      configurable: true,
+      value: undefined,
+      writable: true,
+    },
+    process: {
+      configurable: true,
+      value: undefined,
+      writable: true,
+    },
   })
 
   await import('../src/NodeShimsBanner.ts')
@@ -122,13 +128,12 @@ afterAll(() => {
 })
 
 describe('banner Buffer fallback', () => {
-  test.each([
-    ['alloc'],
-    ['allocUnsafe'],
-    ['allocUnsafeSlow'],
-  ])('%s creates a Uint8Array of the requested size', (method) => {
-    expect(bufferShim[method](4)).toEqual(new Uint8Array(4))
-  })
+  test.each([['alloc'], ['allocUnsafe'], ['allocUnsafeSlow']])(
+    '%s creates a Uint8Array of the requested size',
+    (method) => {
+      expect(bufferShim[method](4)).toEqual(new Uint8Array(4))
+    },
+  )
 
   test('exposes the compatibility bigint property', () => {
     expect(bufferShim.bigint).toBeUndefined()
@@ -209,36 +214,44 @@ describe('banner process fallback', () => {
   })
 
   test('schedules nextTick callbacks', async () => {
+    let called = false
     await new Promise<void>((resolve) => {
-      processShim.nextTick(resolve)
+      processShim.nextTick(() => {
+        called = true
+        resolve()
+      })
     })
+    expect(called).toBe(true)
   })
 
   test('reports non-negative uptime', () => {
     expect(processShim.uptime()).toBeGreaterThanOrEqual(0)
   })
 
-  test.each(['stdin', 'stdout', 'stderr'])('%s provides stream methods', (name) => {
-    const stream = processShim[name]
-    expect(stream.fd).toBe(0)
-    expect(stream.isTTY).toBe(false)
-    expect(stream.destroy()).toBeUndefined()
-    expect(stream.emit()).toBeUndefined()
-    expect(stream.end()).toBeUndefined()
-    expect(stream.on()).toBeUndefined()
-    expect(stream.once()).toBeUndefined()
-    expect(stream.pause()).toBeUndefined()
-    expect(stream.pipe()).toBeUndefined()
-    expect(stream.read()).toBeNull()
-    expect(stream.removeListener()).toBeUndefined()
-    expect(stream.resume()).toBeUndefined()
-    expect(stream.setEncoding()).toBeUndefined()
-    expect(stream.unpipe()).toBeUndefined()
-    expect(stream.write()).toBeUndefined()
-  })
+  test.each(['stdin', 'stdout', 'stderr'])(
+    '%s provides stream methods',
+    (name) => {
+      const stream = processShim[name]
+      expect(stream.fd).toBe(0)
+      expect(stream.isTTY).toBe(false)
+      expect(stream.destroy()).toBeUndefined()
+      expect(stream.emit()).toBeUndefined()
+      expect(stream.end()).toBeUndefined()
+      expect(stream.on()).toBeUndefined()
+      expect(stream.once()).toBeUndefined()
+      expect(stream.pause()).toBeUndefined()
+      expect(stream.pipe()).toBeUndefined()
+      expect(stream.read()).toBeNull()
+      expect(stream.removeListener()).toBeUndefined()
+      expect(stream.resume()).toBeUndefined()
+      expect(stream.setEncoding()).toBeUndefined()
+      expect(stream.unpipe()).toBeUndefined()
+      expect(stream.write()).toBeUndefined()
+    },
+  )
 })
 
 test('randomBytes falls back when Web Crypto is unavailable', () => {
-  expect(randomBytesWithoutCrypto.length).toBe(4)
+  expect(randomBytesWithoutCrypto).toHaveLength(4)
   expect(randomBytesWithoutCrypto.toString('hex')).toHaveLength(8)
 })

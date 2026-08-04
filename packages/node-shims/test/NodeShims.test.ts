@@ -1,3 +1,4 @@
+/* eslint-disable no-restricted-syntax, unicorn/no-global-object-property-assignment */
 import { afterAll, beforeAll, describe, expect, test } from '@jest/globals'
 
 const originalModules = globalThis.modules
@@ -119,16 +120,19 @@ describe('assert shim', () => {
     expect(() => globalThis.modules['node:assert'][method](1, 1)).not.toThrow()
   })
 
-  test.each(['equal', 'strictEqual'])('%s describes unequal values', (method) => {
-    expect(() => globalThis.modules['node:assert'][method](1, 2)).toThrow(
-      'Expected 2, but got 1',
-    )
-  })
+  test.each(['equal', 'strictEqual'])(
+    '%s describes unequal values',
+    (method) => {
+      expect(() => globalThis.modules['node:assert'][method](1, 2)).toThrow(
+        'Expected 2, but got 1',
+      )
+    },
+  )
 
   test('uses a custom equality message', () => {
-    expect(() => globalThis.modules['node:assert'].equal(1, 2, 'custom')).toThrow(
-      'custom',
-    )
+    expect(() =>
+      globalThis.modules['node:assert'].equal(1, 2, 'custom'),
+    ).toThrow('custom')
   })
 
   test('ok accepts truthy values', () => {
@@ -177,6 +181,8 @@ describe('module registry and require shim', () => {
   })
 
   test('rejects non-prefixed modules', () => {
-    expect(() => globalThis.require('path')).toThrow("Cannot find module 'path'")
+    expect(() => globalThis.require('path')).toThrow(
+      "Cannot find module 'path'",
+    )
   })
 })

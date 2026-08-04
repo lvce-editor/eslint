@@ -1,11 +1,13 @@
+/* eslint-disable no-restricted-syntax, unicorn/no-global-object-property-assignment */
 import { afterAll, beforeAll, describe, expect, test } from '@jest/globals'
 
 const originalModules = globalThis.modules
 const originalRequire = globalThis.require
 const testModule = { value: 42 }
+const testModules = { 'node:test-module': testModule }
 
 beforeAll(async () => {
-  globalThis.modules = { 'node:test-module': testModule }
+  globalThis.modules = testModules
   Reflect.deleteProperty(globalThis, 'require')
   await import('../src/RequireShim.ts')
 })
@@ -41,11 +43,10 @@ describe('require shim', () => {
   })
 
   test('rejects a module when the registry is unavailable', () => {
-    const modules = globalThis.modules
     Reflect.deleteProperty(globalThis, 'modules')
     expect(() => globalThis.require('node:test-module')).toThrow(
       "Cannot find module 'node:test-module'",
     )
-    globalThis.modules = modules
+    globalThis.modules = testModules
   })
 })

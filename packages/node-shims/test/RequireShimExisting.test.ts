@@ -1,3 +1,4 @@
+/* eslint-disable no-restricted-syntax, unicorn/no-global-object-property-assignment */
 import { afterAll, beforeAll, expect, test } from '@jest/globals'
 
 const originalRequire = globalThis.require

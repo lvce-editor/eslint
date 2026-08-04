@@ -1,7 +1,16 @@
-import { afterAll, beforeAll, describe, expect, jest, test } from '@jest/globals'
+/* eslint-disable no-restricted-syntax, unicorn/no-global-object-property-assignment */
+import {
+  afterAll,
+  beforeAll,
+  describe,
+  expect,
+  jest,
+  test,
+} from '@jest/globals'
 
 const originalModules = globalThis.modules
 const originalRequire = globalThis.require
+const deprecatedFunction = (): number => 42
 
 beforeAll(async () => {
   globalThis.modules = { sentinel: 'preserved' }
@@ -152,8 +161,9 @@ describe('banner file system shims', () => {
 
 describe('banner util shim', () => {
   test('deprecate returns the original function', () => {
-    const fn = (): number => 42
-    expect(globalThis.modules['node:util'].deprecate(fn, 'old')).toBe(fn)
+    expect(
+      globalThis.modules['node:util'].deprecate(deprecatedFunction, 'old'),
+    ).toBe(deprecatedFunction)
   })
 
   test('inspect formats values as indented JSON', () => {
@@ -211,10 +221,12 @@ describe('banner assert and os shims', () => {
   })
 
   test('assert methods honor custom messages', () => {
-    expect(() => globalThis.modules['node:assert'].equal(1, 2, 'equal')).toThrow(
-      'equal',
+    expect(() =>
+      globalThis.modules['node:assert'].equal(1, 2, 'equal'),
+    ).toThrow('equal')
+    expect(() => globalThis.modules['node:assert'].ok(false, 'ok')).toThrow(
+      'ok',
     )
-    expect(() => globalThis.modules['node:assert'].ok(false, 'ok')).toThrow('ok')
   })
 
   test('ok accepts truthy values and reports falsy values', () => {
@@ -266,14 +278,12 @@ describe('banner url and crypto shims', () => {
     const numberHash = globalThis.modules['node:crypto'].createHash('sha256')
     numberHash.update(42)
     expect(numberHash.digest('base64')).toMatch(/^[0-9a-f]+$/)
-    expect(globalThis.modules.crypto).toBe(
-      globalThis.modules['node:crypto'],
-    )
+    expect(globalThis.modules.crypto).toBe(globalThis.modules['node:crypto'])
   })
 
   test('creates buffer-like random bytes', () => {
     const bytes = globalThis.modules['node:crypto'].randomBytes(8)
-    expect(bytes.length).toBe(8)
+    expect(bytes).toHaveLength(8)
     expect(bytes.toString('hex')).toHaveLength(16)
     expect(bytes.toString('utf8')).toHaveLength(8)
   })
@@ -285,9 +295,7 @@ describe('banner events and module shims', () => {
     expect(globalThis.modules['node:module'].createRequire('/file.js')).toBe(
       globalThis.require,
     )
-    expect(globalThis.modules.module).toBe(
-      globalThis.modules['node:module'],
-    )
+    expect(globalThis.modules.module).toBe(globalThis.modules['node:module'])
   })
 
   test('event emitters add, invoke, and remove listeners', () => {
@@ -300,18 +308,17 @@ describe('banner events and module shims', () => {
     expect(emitter.removeListener('event', listener)).toBe(emitter)
     expect(emitter.removeListener('event', listener)).toBe(emitter)
     expect(emitter.emit('event')).toBe(false)
-    expect(globalThis.modules.events).toBe(
-      globalThis.modules['node:events'],
-    )
+    expect(globalThis.modules.events).toBe(globalThis.modules['node:events'])
   })
 })
 
 describe('banner compatibility classes and registry', () => {
   test('provides tty and stream compatibility classes', () => {
-    expect(globalThis.modules['node:tty'].isatty()).toBe(false)
-    expect(new globalThis.modules['node:tty'].ReadStream()).toBeDefined()
-    expect(new globalThis.modules['node:tty'].WriteStream()).toBeDefined()
-    expect(globalThis.modules.tty).toBe(globalThis.modules['node:tty'])
+    const tty = globalThis.modules['node:tty']
+    expect(tty.isatty()).toBe(false)
+    Reflect.construct(tty.ReadStream, [])
+    Reflect.construct(tty.WriteStream, [])
+    expect(globalThis.modules.tty).toBe(tty)
 
     for (const name of [
       'Duplex',
@@ -320,7 +327,7 @@ describe('banner compatibility classes and registry', () => {
       'Transform',
       'Writable',
     ]) {
-      expect(new globalThis.modules['node:stream'][name]()).toBeDefined()
+      Reflect.construct(globalThis.modules['node:stream'][name], [])
     }
     expect(globalThis.modules.stream).toBe(globalThis.modules['node:stream'])
   })
