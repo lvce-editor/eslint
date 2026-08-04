@@ -20,5 +20,5 @@
     "tsBuildInfoFile": "./node_modules/.cache/tsconfig.tsbuildinfo",
     "noUnusedLocals": true
   },
-  "include": ["src"]
+  "include": ["src", "test"]
 }
