@@ -1,0 +1,10 @@
+{
+  "name": "fixture-eslint-plugin-package-json",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "eslint": "10.8.0",
+    "eslint-plugin-package-json": "1.5.0"
+  }
+}

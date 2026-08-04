@@ -12,6 +12,11 @@
       "entry": ["src/**/*.ts"],
       "project": ["src/**/*.ts"]
     },
+    "packages/e2e/fixtures/*": {
+      "entry": ["eslint.config.js", "test.{js,ts}"],
+      "project": ["**/*.{css,js,json,ts,yml}"],
+      "ignoreDependencies": ["eslint"]
+    },
     "packages/extension": {
       "entry": ["src/eslintMain.ts", "test/**/*.test.ts"],
       "project": ["src/**/*.ts", "test/**/*.ts"],

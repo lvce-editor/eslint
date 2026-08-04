@@ -1,0 +1,10 @@
+{
+  "name": "fixture-eslint-plugin-yml",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "eslint": "10.8.0",
+    "eslint-plugin-yml": "3.6.0"
+  }
+}
