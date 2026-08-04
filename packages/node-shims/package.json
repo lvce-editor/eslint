@@ -1,0 +1,13 @@
+{
+  "name": "@lvce-editor/node-shims",
+  "version": "0.0.0-dev",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "main": "src/NodeShims.ts",
+  "exports": {
+    ".": "./src/NodeShims.ts",
+    "./banner": "./src/NodeShimsBanner.ts",
+    "./require": "./src/RequireShim.ts"
+  }
+}

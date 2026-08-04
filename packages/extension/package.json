@@ -27,6 +27,7 @@
   },
   "dependencies": {
     "@babel/standalone": "^8.0.4",
+    "@lvce-editor/node-shims": "*",
     "jiti": "^2.7.0"
   },
   "devDependencies": {

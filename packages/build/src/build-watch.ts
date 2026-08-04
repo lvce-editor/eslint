@@ -2,20 +2,14 @@ import { build, context, type BuildOptions, type Metafile } from 'esbuild'
 import { root } from './root.js'
 import { join } from 'node:path'
 import { readFileSync, writeFileSync } from 'node:fs'
-import { pathToFileURL } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+
+const nodeShimsBannerPath = fileURLToPath(
+  import.meta.resolve('@lvce-editor/node-shims/banner'),
+)
 
 const getBuildOptions = (outfile: string): BuildOptions => {
-  const bannerPath = join(
-    root,
-    'packages',
-    'extension',
-    'src',
-    'parts',
-    'NodeShims',
-    'NodeShimsBanner.ts',
-  )
-
-  const bannerCode = readFileSync(bannerPath, 'utf-8')
+  const bannerCode = readFileSync(nodeShimsBannerPath, 'utf-8')
 
   return {
     entryPoints: [join(root, 'packages', 'extension', 'src', 'eslintMain.ts')],
