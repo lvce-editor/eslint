@@ -30,6 +30,12 @@
       "label": "ESLint: Lint Document"
     }
   ],
+  "outputChannels": [
+    {
+      "id": "eslint",
+      "label": "ESLint"
+    }
+  ],
   "diagnosticProviders": [
     {
       "id": "eslint.javascript",
