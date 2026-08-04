@@ -32,7 +32,6 @@ export const state: {
 const getRpc = (): Promise<Rpc> => {
   state.rpcPromise ||= state.createRpc({
     commandMap,
-    contentSecurityPolicy: "default-src 'none'; script-src 'self'",
     name: 'ESLint Module Resolution Worker',
     url: new URL('moduleResolutionWorkerMain.js', import.meta.url).href,
   })

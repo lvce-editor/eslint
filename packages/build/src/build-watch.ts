@@ -257,6 +257,7 @@ const getModuleResolutionWorkerBuildOptions = (
       'moduleResolutionWorkerMain.ts',
     ),
   ],
+  external: ['electron', 'node:buffer', 'node:worker_threads', 'ws'],
   format: 'esm',
   mainFields: ['module', 'main'],
   outfile,

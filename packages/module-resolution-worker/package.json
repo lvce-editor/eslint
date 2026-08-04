@@ -24,7 +24,8 @@
     }
   },
   "dependencies": {
-    "@babel/standalone": "^8.0.4"
+    "@babel/standalone": "^8.0.4",
+    "@lvce-editor/rpc": "^6.16.0"
   },
   "devDependencies": {
     "@jest/globals": "^30.4.1",

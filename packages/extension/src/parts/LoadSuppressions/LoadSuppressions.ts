@@ -5,7 +5,7 @@ import type {
 import * as FileSystem from '../FileSystem/FileSystem.ts'
 import * as Path from '../Path/Path.ts'
 
-export const suppressionsFileName = 'eslint-suppressions.json'
+const suppressionsFileName = 'eslint-suppressions.json'
 
 const maxDepth = 10
 
