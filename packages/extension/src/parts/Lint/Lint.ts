@@ -21,6 +21,16 @@ export type LinterConstructor = typeof Linter
 
 type LintMessage = ReturnType<InstanceType<LinterConstructor>['verify']>[number]
 
+type LintContext = {
+  readonly config: any[]
+  readonly linter: InstanceType<LinterConstructor>
+}
+
+const graphContexts = new WeakMap<
+  ModuleGraph,
+  WeakMap<LinterConstructor, LintContext>
+>()
+
 const isNoMatchingConfigMessage = (message: LintMessage): boolean => {
   return (
     message.ruleId === null &&
@@ -50,21 +60,54 @@ const toLinterPath = (path: string): string => {
   return decodeURIComponent(new URL(path).pathname)
 }
 
+const createContext = (
+  graph: ModuleGraph | undefined,
+  baseDirectory: string,
+  Linter: LinterConstructor,
+): LintContext => {
+  const loadedConfig = graph
+    ? LoadModuleGraph.loadModuleGraph(graph)
+    : defaultConfig
+  const config = Array.isArray(loadedConfig) ? loadedConfig : [loadedConfig]
+  const linter = new Linter({
+    configType: 'flat',
+    cwd: baseDirectory,
+  })
+  return { config, linter }
+}
+
+const getContext = (
+  graph: ModuleGraph | undefined,
+  linterFilePath: string,
+  Linter: LinterConstructor,
+): LintContext => {
+  if (!graph) {
+    const baseDirectory = Path.dirname(linterFilePath)
+    return createContext(graph, baseDirectory, Linter)
+  }
+  let contexts = graphContexts.get(graph)
+  if (!contexts) {
+    contexts = new WeakMap()
+    graphContexts.set(graph, contexts)
+  }
+  const cached = contexts.get(Linter)
+  if (cached) {
+    return cached
+  }
+  const baseDirectory = Path.dirname(toLinterPath(graph.entry))
+  const context = createContext(graph, baseDirectory, Linter)
+  contexts.set(Linter, context)
+  return context
+}
+
 export const lint = async (
   text: string,
   filePath: string,
   graph: ModuleGraph | undefined,
   Linter: LinterConstructor,
 ): Promise<LintResult[]> => {
-  const loadedConfig = graph
-    ? await LoadModuleGraph.loadModuleGraph(graph)
-    : defaultConfig
-  const config = Array.isArray(loadedConfig) ? loadedConfig : [loadedConfig]
   const linterFilePath = toLinterPath(filePath)
-  const baseDirectory = graph
-    ? Path.dirname(toLinterPath(graph.entry))
-    : Path.dirname(linterFilePath)
-  const linter = new Linter({ configType: 'flat', cwd: baseDirectory })
+  const { config, linter } = getContext(graph, linterFilePath, Linter)
   const messages = linter.verify(text, config, { filename: linterFilePath })
   return messages
     .filter((message) => !isNoMatchingConfigMessage(message))
