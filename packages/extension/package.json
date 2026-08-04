@@ -10,6 +10,9 @@
   },
   "jest": {
     "injectGlobals": false,
+    "setupFiles": [
+      "fake-indexeddb/auto"
+    ],
     "extensionsToTreatAsEsm": [
       ".ts"
     ],
@@ -32,9 +35,10 @@
   },
   "devDependencies": {
     "@jest/globals": "^30.4.1",
-    "@lvce-editor/api": "^8.82.0",
+    "@lvce-editor/api": "^8.83.1",
     "@types/babel__standalone": "^7.1.9",
     "eslint": "^10.8.0",
+    "fake-indexeddb": "^6.2.5",
     "jest": "^30.4.2",
     "ts-jest": "^29.4.12"
   }
