@@ -3,7 +3,7 @@
   "name": "ESLint",
   "description": "ESLint extension",
   "repository": "https://github.com/lvce-editor/eslint",
-  "icon": "./icon.png",
+  "icon": "./media/icon.png",
   "browser": "dist/eslintMain.js",
   "workerName": "ESLint Worker",
   "isolated": true,

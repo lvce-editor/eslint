@@ -12,11 +12,13 @@ fs.rmSync(join(root, 'dist'), { recursive: true, force: true })
 fs.mkdirSync(path.join(root, 'dist'))
 
 fs.copyFileSync(join(root, 'README.md'), join(root, 'dist', 'README.md'))
-fs.copyFileSync(join(extension, 'icon.png'), join(root, 'dist', 'icon.png'))
 fs.copyFileSync(
   join(extension, 'extension.json'),
   join(root, 'dist', 'extension.json'),
 )
+fs.cpSync(join(extension, 'media'), join(root, 'dist', 'media'), {
+  recursive: true,
+})
 await buildExtension(extensionOutput)
 
 await packageExtension({
