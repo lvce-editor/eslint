@@ -145,6 +145,72 @@ test('invalidates a cached graph when an imported config module changes', async 
   expect(second.modules['/workspace/config-change/rules.js']).toContain('off')
 })
 
+test('invalidates a cached graph when a workspace source file is deleted', async () => {
+  setFiles({
+    '/workspace/delete/a.ts': `export const value = 1`,
+    '/workspace/delete/eslint.config.js': `module.exports = []`,
+    '/workspace/delete/main.ts': `import './a.ts'`,
+  })
+  const first = await LoadEslintConfig.loadEslintConfig(
+    '/workspace/delete/eslint.config.js',
+  )
+
+  const invalidated = LoadEslintConfig.invalidateForFileChanges({
+    deleted: ['file:///workspace/delete/a.ts'],
+  })
+  setFiles({
+    '/workspace/delete/eslint.config.js': `module.exports = []`,
+    '/workspace/delete/main.ts': `import './a.ts'`,
+  })
+  const second = await LoadEslintConfig.loadEslintConfig(
+    '/workspace/delete/eslint.config.js',
+  )
+
+  expect(invalidated).toBe(true)
+  expect(second).not.toBe(first)
+  expect(second.files).not.toHaveProperty('/workspace/delete/a.ts')
+})
+
+test('invalidates a cached graph when a workspace source file is created', async () => {
+  setFiles({
+    '/workspace/create/eslint.config.js': `module.exports = []`,
+    '/workspace/create/main.ts': `import './a.ts'`,
+  })
+  const first = await LoadEslintConfig.loadEslintConfig(
+    '/workspace/create/eslint.config.js',
+  )
+
+  const invalidated = LoadEslintConfig.invalidateForFileChanges({
+    changed: ['file:///workspace/create/a.ts'],
+  })
+  setFiles({
+    '/workspace/create/a.ts': `export const value = 1`,
+    '/workspace/create/eslint.config.js': `module.exports = []`,
+    '/workspace/create/main.ts': `import './a.ts'`,
+  })
+  const second = await LoadEslintConfig.loadEslintConfig(
+    '/workspace/create/eslint.config.js',
+  )
+
+  expect(invalidated).toBe(true)
+  expect(second).not.toBe(first)
+  expect(second.files['/workspace/create/a.ts']).toBe(`export const value = 1`)
+})
+
+test('does not invalidate a cached graph for files outside its workspace', async () => {
+  setFiles({
+    '/workspace/scope/eslint.config.js': `module.exports = []`,
+    '/workspace/scope/main.ts': `export const value = 1`,
+  })
+  await LoadEslintConfig.loadEslintConfig('/workspace/scope/eslint.config.js')
+
+  expect(
+    LoadEslintConfig.invalidateForFileChanges({
+      changed: ['file:///other/a.ts'],
+    }),
+  ).toBe(false)
+})
+
 test('requests a refresh when a new eslint config file changes', () => {
   expect(
     LoadEslintConfig.invalidateForFileChanges({
