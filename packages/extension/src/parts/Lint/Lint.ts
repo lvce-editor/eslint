@@ -1,5 +1,7 @@
 import type { Linter } from 'eslint'
+import type { LoadedSuppressions } from '../ApplySuppressions/ApplySuppressions.ts'
 import type { ModuleGraph } from '../ModuleGraph/ModuleGraph.ts'
+import * as ApplySuppressions from '../ApplySuppressions/ApplySuppressions.ts'
 import * as LoadModuleGraph from '../LoadModuleGraph/LoadModuleGraph.ts'
 import * as Path from '../Path/Path.ts'
 
@@ -53,13 +55,6 @@ const defaultConfig = {
   },
 }
 
-const toLinterPath = (path: string): string => {
-  if (!/^[a-z][a-z\d+.-]*:\/\//i.test(path)) {
-    return path
-  }
-  return decodeURIComponent(new URL(path).pathname)
-}
-
 const createContext = (
   graph: ModuleGraph | undefined,
   baseDirectory: string,
@@ -94,7 +89,7 @@ const getContext = (
   if (cached) {
     return cached
   }
-  const baseDirectory = Path.dirname(toLinterPath(graph.entry))
+  const baseDirectory = Path.dirname(Path.toFileSystemPath(graph.entry))
   const context = createContext(graph, baseDirectory, Linter)
   contexts.set(Linter, context)
   return context
@@ -105,11 +100,17 @@ export const lint = async (
   filePath: string,
   graph: ModuleGraph | undefined,
   Linter: LinterConstructor,
+  loadedSuppressions?: LoadedSuppressions,
 ): Promise<LintResult[]> => {
-  const linterFilePath = toLinterPath(filePath)
+  const linterFilePath = Path.toFileSystemPath(filePath)
   const { config, linter } = getContext(graph, linterFilePath, Linter)
   const messages = linter.verify(text, config, { filename: linterFilePath })
-  return messages
+  const unsuppressedMessages = ApplySuppressions.applySuppressions(
+    messages,
+    linterFilePath,
+    loadedSuppressions,
+  )
+  return unsuppressedMessages
     .filter((message) => !isNoMatchingConfigMessage(message))
     .map((message) => ({
       column: message.column,

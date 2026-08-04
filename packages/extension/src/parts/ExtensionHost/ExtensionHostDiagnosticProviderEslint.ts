@@ -3,6 +3,7 @@ import * as FindEslintConfig from '../FindEslintConfig/FindEslintConfig.ts'
 import * as Lint from '../Lint/Lint.ts'
 import * as LoadEslint from '../LoadEslint/LoadEslint.ts'
 import * as LoadEslintConfig from '../LoadEslintConfig/LoadEslintConfig.ts'
+import * as LoadSuppressions from '../LoadSuppressions/LoadSuppressions.ts'
 
 export const id = 'eslint'
 
@@ -39,8 +40,18 @@ export const provideDiagnostics = async (textDocument: {
     const config = configPath
       ? await LoadEslintConfig.loadEslintConfig(configPath)
       : undefined
+    const suppressions = await LoadSuppressions.loadSuppressions(
+      filePath,
+      configPath,
+    )
     const Linter = await LoadEslint.loadEslint(filePath)
-    const lintResults = await Lint.lint(text, filePath, config, Linter)
+    const lintResults = await Lint.lint(
+      text,
+      filePath,
+      config,
+      Linter,
+      suppressions,
+    )
     return lintResults.map((result) => ({
       columnIndex: result.column - 1,
       endColumnIndex: (result.endColumn ?? result.column) - 1,

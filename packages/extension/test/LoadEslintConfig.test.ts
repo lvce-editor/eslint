@@ -161,6 +161,14 @@ test('does not request a refresh for an unsupported eslint config file', () => {
   ).toBe(false)
 })
 
+test('requests a refresh when eslint-suppressions.json changes', () => {
+  expect(
+    LoadEslintConfig.invalidateForFileChanges({
+      changed: ['file:///workspace/eslint-suppressions.json'],
+    }),
+  ).toBe(true)
+})
+
 test('preloads a relative esm dependency', async () => {
   setFiles({
     '/workspace/eslint.config.js': `import rules from './rules.js'; export default [{ rules }]`,
