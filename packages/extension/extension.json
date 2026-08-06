@@ -30,7 +30,9 @@
     "onCodeAction:yaml",
     "onCommand:eslint.lint",
     "onLanguage:javascript",
+    "onLanguage:javascriptreact",
     "onLanguage:typescript",
+    "onLanguage:typescriptreact",
     "onLanguage:yaml"
   ],
   "commands": [
@@ -51,8 +53,16 @@
       "languageId": "javascript"
     },
     {
+      "id": "eslint.javascriptreact",
+      "languageId": "javascriptreact"
+    },
+    {
       "id": "eslint.typescript",
       "languageId": "typescript"
+    },
+    {
+      "id": "eslint.typescriptreact",
+      "languageId": "typescriptreact"
     },
     {
       "id": "eslint.yaml",
