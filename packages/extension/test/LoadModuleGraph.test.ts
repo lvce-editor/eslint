@@ -150,6 +150,24 @@ test('provides process as a commonjs module global', () => {
   expect(value).toBe('/workspace')
 })
 
+test('allows a dependency to declare a process binding', () => {
+  const value = LoadModuleGraph.loadModuleGraph(
+    graph(
+      {
+        '/workspace/dependency.js': `const process = require('./process.js'); module.exports = process.name`,
+        '/workspace/eslint.config.js': `module.exports = require('./dependency.js')`,
+        '/workspace/process.js': `exports.name = 'local process module'`,
+      },
+      {
+        '/workspace/dependency.js\0./process.js': '/workspace/process.js',
+        '/workspace/eslint.config.js\0./dependency.js':
+          '/workspace/dependency.js',
+      },
+    ),
+  )
+  expect(value).toBe('local process module')
+})
+
 test('provides a non-interactive tty shim', () => {
   const value = LoadModuleGraph.loadModuleGraph(
     graph({

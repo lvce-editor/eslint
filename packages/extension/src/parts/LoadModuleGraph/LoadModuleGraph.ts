@@ -596,30 +596,26 @@ export const loadModuleGraph = (graph: ModuleGraph): any => {
       }
       return resolved
     }
-    const evaluate = new Function(
-      'module',
-      'exports',
-      'require',
-      '__filename',
-      '__dirname',
+    const createEvaluator = new Function(
       'global',
       'process',
       'clearImmediate',
       'setImmediate',
-      `'use strict';\n${source}\n//# sourceURL=${id}`,
+      `'use strict';
+      return function (module, exports, require, __filename, __dirname) {
+        'use strict';
+        ${source}
+        //# sourceURL=${id}
+      }`,
+    )
+    const evaluate = createEvaluator(
+      globalThis,
+      builtins['node:process'],
+      clearImmediate,
+      setImmediate,
     )
     try {
-      evaluate(
-        module,
-        module.exports,
-        require,
-        id,
-        Path.dirname(id),
-        globalThis,
-        builtins['node:process'],
-        clearImmediate,
-        setImmediate,
-      )
+      evaluate(module, module.exports, require, id, Path.dirname(id))
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       throw new Error(`Failed to evaluate ESLint module ${id}: ${message}`, {
