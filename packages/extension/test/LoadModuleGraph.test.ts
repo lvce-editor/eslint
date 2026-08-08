@@ -96,6 +96,20 @@ test('preserves trailing separators for directory joins', () => {
   expect(value).toEqual(['/workspace/', '/workspace/'])
 })
 
+test('preserves relative paths for relative joins and normalization', () => {
+  const value = LoadModuleGraph.loadModuleGraph(
+    graph({
+      '/workspace/eslint.config.js': `const path = require('node:path'); const root = path.normalize(path.join('/workspace/.eslint-plugin-local', '../')); const relative = path.normalize('/workspace/src/main.ts').substring(root.length); module.exports = [relative, path.posix.join(path.posix.dirname(relative), './vs/base/common/jsonc.js'), path.join('src', '../build'), path.normalize('src/../main.ts')]`,
+    }),
+  )
+  expect(value).toEqual([
+    'src/main.ts',
+    'src/vs/base/common/jsonc.js',
+    'build',
+    'main.ts',
+  ])
+})
+
 test('provides path posix and win32 entry points', () => {
   const value = LoadModuleGraph.loadModuleGraph(
     graph({
