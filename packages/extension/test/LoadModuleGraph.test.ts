@@ -87,6 +87,15 @@ test('provides the path shim', () => {
   expect(value).toBe('file')
 })
 
+test('preserves trailing separators for directory joins', () => {
+  const value = LoadModuleGraph.loadModuleGraph(
+    graph({
+      '/workspace/eslint.config.js': `const path = require('node:path'); const joined = path.join('/workspace/.eslint-plugin-local', '../'); module.exports = [joined, path.normalize(joined)]`,
+    }),
+  )
+  expect(value).toEqual(['/workspace/', '/workspace/'])
+})
+
 test('provides path posix and win32 entry points', () => {
   const value = LoadModuleGraph.loadModuleGraph(
     graph({
