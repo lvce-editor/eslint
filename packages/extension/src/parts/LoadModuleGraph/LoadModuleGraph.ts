@@ -24,11 +24,53 @@ const setImmediate = (
 const resolutionKey = (parent: string, specifier: string): string =>
   `${parent}\0${specifier}`
 
+const appendPathPart = (
+  parts: string[],
+  part: string,
+  absolute: boolean,
+): void => {
+  if (part !== '..') {
+    parts.push(part)
+    return
+  }
+  if (parts.length > 0 && parts.at(-1) !== '..') {
+    parts.pop()
+  } else if (!absolute) {
+    parts.push(part)
+  }
+}
+
 const normalizePathModulePath = (path: string): string => {
-  const normalized = Path.normalize(path)
+  const absolute = path.startsWith('/')
+  const parts: string[] = []
+  for (const part of path.split('/')) {
+    if (!part || part === '.') {
+      continue
+    }
+    appendPathPart(parts, part, absolute)
+  }
+  let normalized = `${absolute ? '/' : ''}${parts.join('/')}`
+  if (!normalized) {
+    normalized = absolute ? '/' : '.'
+  }
   return path.endsWith('/') && normalized !== '/'
     ? `${normalized}/`
     : normalized
+}
+
+const dirnamePathModulePath = (path: string): string => {
+  const normalized = normalizePathModulePath(path)
+  if (normalized === '/') {
+    return normalized
+  }
+  const withoutTrailingSeparator = normalized.endsWith('/')
+    ? normalized.slice(0, -1)
+    : normalized
+  const index = withoutTrailingSeparator.lastIndexOf('/')
+  if (index === -1) {
+    return '.'
+  }
+  return index === 0 ? '/' : withoutTrailingSeparator.slice(0, index)
 }
 
 const assert = (
@@ -43,7 +85,7 @@ const assert = (
 const createPathModule = (cwd: string) => ({
   basename: Path.basename,
   delimiter: ':',
-  dirname: Path.dirname,
+  dirname: dirnamePathModulePath,
   extname: Path.extname,
   isAbsolute: (path: string): boolean => path.startsWith('/'),
   join: (...paths: readonly string[]): string =>
@@ -54,7 +96,7 @@ const createPathModule = (cwd: string) => ({
     const extension = Path.extname(base)
     return {
       base,
-      dir: Path.dirname(path),
+      dir: dirnamePathModulePath(path),
       ext: extension,
       name: extension ? base.slice(0, -extension.length) : base,
       root: path.startsWith('/') ? '/' : '',
