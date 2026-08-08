@@ -167,6 +167,52 @@ test('preloads only the active typescript project in a large workspace', async (
   )
 })
 
+test('preloads only the active file when a typescript project exceeds the file limit', async () => {
+  const projectFiles = Object.fromEntries(
+    Array.from({ length: 8200 }, (_, index) => [
+      `/large-project/src/file-${index}.ts`,
+      `export const value${index} = ${index}`,
+    ]),
+  )
+  setFiles({
+    '/large-project/eslint.config.js': `module.exports = []`,
+    ...projectFiles,
+    '/large-project/src/dependency.ts': `export const dependency = true`,
+    '/large-project/src/file-8199.ts': `import type { dependency } from './dependency.ts'; export const value8199 = 8199`,
+    '/large-project/src/unrelated.ts': `export const unrelated = true`,
+    '/large-project/tsconfig.json': `{ "include": ["src"] }`,
+  })
+
+  const graph = await LoadEslintConfig.loadEslintConfig(
+    '/large-project/eslint.config.js',
+    '/large-project/src/file-8199.ts',
+  )
+
+  expect(graph.files).toEqual({
+    '/large-project/src/dependency.ts': `export const dependency = true`,
+    '/large-project/src/file-8199.ts': `import type { dependency } from './dependency.ts'; export const value8199 = 8199`,
+    '/large-project/tsconfig.json': `{ "include": ["src"] }`,
+  })
+})
+
+test('does not parse a non-code active document for module dependencies', async () => {
+  setFiles({
+    '/non-code/eslint.config.js': `module.exports = []`,
+    '/non-code/package.json': `{
+      "name": "fixture"
+    }`,
+  })
+
+  const graph = await LoadEslintConfig.loadEslintConfig(
+    '/non-code/eslint.config.js',
+    '/non-code/package.json',
+  )
+
+  expect(graph.files['/non-code/package.json']).toBe(`{
+      "name": "fixture"
+    }`)
+})
+
 test('replaces import.meta paths for commonjs evaluation', async () => {
   setFiles({
     '/import-meta-workspace/eslint.config.js': `export default [import.meta.dirname, import.meta.filename, import.meta.url]`,
