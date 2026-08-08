@@ -567,7 +567,10 @@ const getCommonJsExportedValue = (statement: any): any => {
 }
 
 /* eslint-disable sonarjs/cognitive-complexity */
-const getDependencies = (ast: unknown): DependencyAnalysis => {
+const getDependencies = (
+  ast: unknown,
+  includeTypeOnlyImports = false,
+): DependencyAnalysis => {
   const dependencies = new Map<string, boolean>()
   const fileSpecifiers = new Set<string>()
   const seen = new WeakSet<object>()
@@ -702,7 +705,7 @@ const getDependencies = (ast: unknown): DependencyAnalysis => {
         ))
     if (
       importTypes.includes(value.type) &&
-      !isTypeOnlyImport &&
+      (!isTypeOnlyImport || includeTypeOnlyImports) &&
       value.source?.type === 'StringLiteral'
     ) {
       addDependency(value.source.value, optional)
@@ -1082,6 +1085,43 @@ const loadModule = async (
     files[path] = source
   }
 
+  const preloadDocumentDependencies = async (path: string): Promise<void> => {
+    const source = files[path]
+    const isJavaScriptLike = [
+      '.cjs',
+      '.cts',
+      '.js',
+      '.jsx',
+      '.mjs',
+      '.mts',
+      '.ts',
+      '.tsx',
+    ].some((extension) => path.endsWith(extension))
+    if (!source || !isJavaScriptLike) {
+      return
+    }
+    const isTypeScript = ['.cts', '.mts', '.ts', '.tsx'].some((extension) =>
+      path.endsWith(extension),
+    )
+    const parserPlugins: any[] = isTypeScript
+      ? [['typescript', { isTSX: path.endsWith('.tsx') }]]
+      : []
+    const ast = packages.parser.parse(source, {
+      plugins: parserPlugins,
+      sourceType: 'unambiguous',
+    })
+    const { dependencies } = getDependencies(ast, true)
+    for (const { specifier } of dependencies) {
+      if (!specifier.startsWith('.') && !specifier.startsWith('/')) {
+        continue
+      }
+      const resolved = await resolveModule(path, specifier)
+      if (resolved && !resolved.startsWith('node:')) {
+        await preloadFile(resolved)
+      }
+    }
+  }
+
   const resolveTypeScriptConfigPath = async (
     directory: string,
     specifier: string,
@@ -1173,7 +1213,13 @@ const loadModule = async (
   const virtualFileDirectory = virtualFilePath
     ? await findTypeScriptProjectDirectory(workspaceDirectory, virtualFilePath)
     : workspaceDirectory
-  await preloadVirtualFiles(virtualFileDirectory, ignoredWorkspaceDirectories)
+  if (virtualFilePath) {
+    const normalizedVirtualFilePath = normalize(virtualFilePath)
+    await preloadFile(normalizedVirtualFilePath)
+    await preloadDocumentDependencies(normalizedVirtualFilePath)
+  } else {
+    await preloadVirtualFiles(virtualFileDirectory, ignoredWorkspaceDirectories)
+  }
   const typeScriptConfigPath = join(virtualFileDirectory, 'tsconfig.json')
   if (await isFile(typeScriptConfigPath)) {
     await preloadTypeScriptConfig(typeScriptConfigPath, virtualFileDirectory)
