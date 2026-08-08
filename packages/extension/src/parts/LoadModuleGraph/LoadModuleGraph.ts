@@ -24,6 +24,13 @@ const setImmediate = (
 const resolutionKey = (parent: string, specifier: string): string =>
   `${parent}\0${specifier}`
 
+const normalizePathModulePath = (path: string): string => {
+  const normalized = Path.normalize(path)
+  return path.endsWith('/') && normalized !== '/'
+    ? `${normalized}/`
+    : normalized
+}
+
 const assert = (
   value: unknown,
   message = 'Assertion failed',
@@ -39,8 +46,9 @@ const createPathModule = (cwd: string) => ({
   dirname: Path.dirname,
   extname: Path.extname,
   isAbsolute: (path: string): boolean => path.startsWith('/'),
-  join: Path.join,
-  normalize: Path.normalize,
+  join: (...paths: readonly string[]): string =>
+    normalizePathModulePath(paths.join('/')),
+  normalize: normalizePathModulePath,
   parse: (path: string) => {
     const base = Path.basename(path)
     const extension = Path.extname(base)
