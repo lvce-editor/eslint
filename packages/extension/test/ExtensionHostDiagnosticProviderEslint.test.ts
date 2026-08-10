@@ -14,6 +14,7 @@ beforeEach(() => {
     },
   })
   FileSystem.state.api = {
+    getFileHashes: async () => [],
     readDirWithFileTypes: async (uri: string) => {
       const path = toPath(uri)
       if (path === '/workspace') {

@@ -1,18 +1,22 @@
-import type { OutputChannel } from '@lvce-editor/api'
-import * as ExtensionApi from '@lvce-editor/api'
+import {
+  type OutputChannel,
+  getFileHash as getFileHashApi,
+  getFileHashes as getFileHashesApi,
+  readDirWithFileTypes as readDirWithFileTypesApi,
+  readFile as readFileApi,
+  stat as statApi,
+} from '@lvce-editor/api'
 import * as ComputeTextHash from '../ComputeTextHash/ComputeTextHash.ts'
 import { outputChannel } from '../EslintOutputChannel/EslintOutputChannel.ts'
 import * as FileContentCache from '../FileContentCache/FileContentCache.ts'
 import * as Logger from '../Logger/Logger.ts'
 
 interface FileSystemApi {
-  readonly getFileHash?: typeof ExtensionApi.getFileHash
-  readonly getFileHashes?: (
-    uris: readonly string[],
-  ) => Promise<readonly (string | null)[]>
-  readonly readDirWithFileTypes: typeof ExtensionApi.readDirWithFileTypes
-  readonly readFile: typeof ExtensionApi.readFile
-  readonly stat: typeof ExtensionApi.stat
+  readonly getFileHash?: typeof getFileHashApi
+  readonly getFileHashes: typeof getFileHashesApi
+  readonly readDirWithFileTypes: typeof readDirWithFileTypesApi
+  readonly readFile: typeof readFileApi
+  readonly stat: typeof statApi
 }
 
 interface TextCache {
@@ -29,15 +33,11 @@ export const state: {
   uriHashes: Map<string, string>
 } = {
   api: {
-    getFileHash: ExtensionApi.getFileHash,
-    getFileHashes: (
-      ExtensionApi as typeof ExtensionApi & {
-        readonly getFileHashes: FileSystemApi['getFileHashes']
-      }
-    ).getFileHashes,
-    readDirWithFileTypes: ExtensionApi.readDirWithFileTypes,
-    readFile: ExtensionApi.readFile,
-    stat: ExtensionApi.stat,
+    getFileHash: getFileHashApi,
+    getFileHashes: getFileHashesApi,
+    readDirWithFileTypes: readDirWithFileTypesApi,
+    readFile: readFileApi,
+    stat: statApi,
   },
   cache: FileContentCache,
   computeTextHash: ComputeTextHash.computeTextHash,
@@ -70,17 +70,18 @@ export const getFileHashes = async (
   paths: readonly string[],
 ): Promise<readonly (string | null)[]> => {
   const uris = paths.map(toFileUri)
-  const getFileHashesFn = state.api.getFileHashes
-  let hashes: readonly (string | null)[]
-  if (getFileHashesFn && uris.every((uri) => uri.startsWith('file://'))) {
-    try {
-      hashes = await getFileHashesFn(uris)
-    } catch (error) {
-      Logger.warn('Failed to hash ESLint files in one batch', error)
-      hashes = await Promise.all(uris.map(getFileHashFallback))
+  const fileUris = uris.filter((uri) => uri.startsWith('file://'))
+  const hashes: Array<string | null> = uris.map(() => null)
+  try {
+    const fileHashes = await state.api.getFileHashes(fileUris)
+    let fileIndex = 0
+    for (let index = 0; index < uris.length; index++) {
+      if (uris[index].startsWith('file://')) {
+        hashes[index] = fileHashes[fileIndex++] ?? null
+      }
     }
-  } else {
-    hashes = await Promise.all(uris.map(getFileHashFallback))
+  } catch (error) {
+    Logger.warn('Failed to hash ESLint files in one batch', error)
   }
   for (let index = 0; index < uris.length; index++) {
     const hash = hashes[index]
@@ -91,13 +92,6 @@ export const getFileHashes = async (
     }
   }
   return hashes
-}
-
-const getFileHashFallback = async (uri: string): Promise<string | null> => {
-  if (!uri.startsWith('file://')) {
-    return null
-  }
-  return (await getFileHash(uri)) ?? null
 }
 
 export const clearFileHashCache = (): void => {

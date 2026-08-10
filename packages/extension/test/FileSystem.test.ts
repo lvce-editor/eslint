@@ -106,19 +106,14 @@ test('getFileHashes batches uri hashing and primes subsequent content reads', as
   expect(readFile).not.toHaveBeenCalled()
 })
 
-test('getFileHashes falls back to individual hashing when batching is unavailable', async () => {
-  FileSystem.state.api = {
-    getFileHash,
-    readDirWithFileTypes,
-    readFile,
-    stat,
-  }
+test('getFileHashes treats a failed batch as cache misses without individual requests', async () => {
+  getFileHashes.mockRejectedValueOnce(new Error('Hashing unavailable'))
 
   await expect(
     FileSystem.getFileHashes(['/workspace/first.js', '/workspace/second.js']),
-  ).resolves.toEqual(['content-hash', 'content-hash'])
+  ).resolves.toEqual([null, null])
 
-  expect(getFileHash).toHaveBeenCalledTimes(2)
+  expect(getFileHash).not.toHaveBeenCalled()
 })
 
 test('readFile ignores a cache entry whose content does not match its hash', async () => {
