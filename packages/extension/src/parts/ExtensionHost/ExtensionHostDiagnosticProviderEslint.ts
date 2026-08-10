@@ -54,7 +54,10 @@ export const provideDiagnostics = async (textDocument: {
       filePath,
       configPath,
     )
-    const Linter = await LoadEslint.loadEslint(filePath)
+    const Linter = await LoadEslint.loadEslint(
+      filePath,
+      configPath ?? undefined,
+    )
     const lintResults = await Lint.lint(
       text,
       filePath,

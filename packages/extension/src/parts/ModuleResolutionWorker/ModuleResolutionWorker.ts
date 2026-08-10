@@ -14,6 +14,7 @@ export interface Rpc {
 }
 
 const commandMap = {
+  'FileSystem.getFileHashes': FileSystem.getFileHashes,
   'FileSystem.readDirWithFileTypes': FileSystem.readDirWithFileTypes,
   'FileSystem.readFile': FileSystem.readFile,
   'FileSystem.stat': FileSystem.stat,
@@ -49,6 +50,7 @@ const invoke = async <T>(
 export const invalidateForFileChanges = (
   changes: Readonly<FileChanges>,
 ): Promise<boolean> => {
+  FileSystem.clearFileHashCache()
   return invoke('ModuleResolution.invalidateForFileChanges', changes)
 }
 
@@ -59,6 +61,11 @@ export const loadEslintConfig = (
   return invoke('ModuleResolution.loadEslintConfig', path, filePath)
 }
 
-export const loadEslintModule = (path: string): Promise<ModuleGraph> => {
-  return invoke('ModuleResolution.loadEslintModule', path)
+export const loadEslintModule = (
+  path: string,
+  projectPath?: string,
+): Promise<ModuleGraph> => {
+  return projectPath
+    ? invoke('ModuleResolution.loadEslintModule', path, projectPath)
+    : invoke('ModuleResolution.loadEslintModule', path)
 }
