@@ -31,11 +31,13 @@ test('returns undefined when content is not cached', async () => {
 })
 
 test('stores text by content hash', async () => {
-  await FileContentCache.setText('sample-hash', 'content')
+  await FileContentCache.setText('sample-hash', 'content 🦄')
 
   expect(open).toHaveBeenCalledWith('eslint-file-content-v1')
   expect(put).toHaveBeenCalledTimes(1)
   const [key, response] = put.mock.calls[0]
   expect(key).toBe('https://eslint-file-cache.invalid/sample-hash')
-  await expect(response.text()).resolves.toBe('content')
+  expect(response.headers.get('Content-Length')).toBe('12')
+  expect(response.headers.get('Content-Type')).toBe('application/javascript')
+  await expect(response.text()).resolves.toBe('content 🦄')
 })
