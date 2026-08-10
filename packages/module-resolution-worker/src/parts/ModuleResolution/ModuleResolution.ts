@@ -1,5 +1,6 @@
 import { packages, transform } from '@babel/standalone'
 import * as FileSystem from '../FileSystem/FileSystem.ts'
+import * as ModuleGraphCache from '../ModuleGraphCache/ModuleGraphCache.ts'
 
 export interface FileChanges {
   readonly changed?: readonly string[]
@@ -136,6 +137,7 @@ export const invalidateForFileChanges = (
       continue
     }
     cache.delete(cacheKey)
+    void ModuleGraphCache.remove(cacheKey)
     shouldRefresh = true
   }
   if (shouldRefresh) {
@@ -881,22 +883,72 @@ const transpile = (
   }
 }
 
+const restoreModuleGraph = async (
+  cacheKey: string,
+  scanCommonJs: boolean,
+  expectedEntry?: string,
+): Promise<ModuleGraph | undefined> => {
+  const restored = await ModuleGraphCache.restore(cacheKey)
+  if (
+    !restored ||
+    (expectedEntry && normalize(restored.entry) !== expectedEntry)
+  ) {
+    return undefined
+  }
+  try {
+    const modules = Object.fromEntries(
+      Object.entries(restored.modules).map(([path, source]) => [
+        path,
+        transpile(path, source, scanCommonJs).source,
+      ]),
+    )
+    const graph = {
+      entry: restored.entry,
+      files: restored.files,
+      id: `${cacheKey}:${graphIdState.next++}`,
+      modules,
+      resolutions: restored.resolutions,
+    }
+    cache.set(cacheKey, {
+      entrySource: restored.modules[restored.entry],
+      graph,
+    })
+    return graph
+  } catch {
+    return undefined
+  }
+}
+
 /* eslint-disable sonarjs/cognitive-complexity */
 const loadModule = async (
   modulePath: string,
   scanCommonJs = false,
   virtualFilePath?: string,
+  cacheKeyOverride?: string,
+  shouldRestore = true,
 ): Promise<ModuleGraph> => {
   const entry = normalize(modulePath)
-  const entrySource = await FileSystem.readFile(entry)
-  const cacheKey = `${scanCommonJs ? 'commonjs' : 'module'}:${entry}:${virtualFilePath ?? ''}`
+  const cacheKey =
+    cacheKeyOverride ??
+    `${scanCommonJs ? 'commonjs' : 'module'}:${entry}:${virtualFilePath ?? ''}`
   const cached = cache.get(cacheKey)
-  if (cached?.entrySource === entrySource) {
-    return cached.graph
+  if (cached) {
+    const entrySource = await FileSystem.readFile(cached.graph.entry)
+    if (cached.entrySource === entrySource) {
+      return cached.graph
+    }
   }
+  if (shouldRestore) {
+    const restored = await restoreModuleGraph(cacheKey, scanCommonJs, entry)
+    if (restored) {
+      return restored
+    }
+  }
+  const entrySource = await FileSystem.readFile(entry)
   clearResolutionCaches()
   const files: Record<string, string> = {}
   const modules: Record<string, string> = {}
+  const moduleSources: Record<string, string> = {}
   const resolutions: Record<string, string> = {}
   const preloadedDependencies: Array<{
     path: string
@@ -932,6 +984,7 @@ const loadModule = async (
       usesReaddirSync,
     } = transpile(path, source, scanCommonJs)
     delete files[path]
+    moduleSources[path] = source
     modules[path] = transformed
     for (const specifier of fileSpecifiers) {
       const filePath = specifier.startsWith('/')
@@ -1282,6 +1335,12 @@ const loadModule = async (
     resolutions,
   }
   cache.set(cacheKey, { entrySource, graph })
+  await ModuleGraphCache.save(cacheKey, {
+    entry,
+    files,
+    modules: moduleSources,
+    resolutions,
+  })
   return graph
 }
 /* eslint-enable sonarjs/cognitive-complexity */
@@ -1293,12 +1352,25 @@ export const loadEslintConfig = (
 
 export const loadEslintModule = async (
   filePath: string,
+  projectPath?: string,
 ): Promise<ModuleGraph> => {
+  const cacheKey = `commonjs-project:${normalize(projectPath ?? filePath)}`
+  const cached = cache.get(cacheKey)
+  if (cached) {
+    const entrySource = await FileSystem.readFile(cached.graph.entry)
+    if (cached.entrySource === entrySource) {
+      return cached.graph
+    }
+  }
+  const restored = await restoreModuleGraph(cacheKey, true)
+  if (restored) {
+    return restored
+  }
   const entry = await resolveModule(filePath, 'eslint')
   if (!entry) {
     throw new Error(
       `Cannot find ESLint in project node_modules for ${filePath}`,
     )
   }
-  return loadModule(entry, true)
+  return loadModule(entry, true, undefined, cacheKey, false)
 }

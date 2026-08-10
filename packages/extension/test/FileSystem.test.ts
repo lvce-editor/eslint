@@ -5,6 +5,10 @@ const readDirWithFileTypes = jest.fn(async (_uri: string) => [
   { name: 'eslint.config.js', type: 7 },
 ])
 const getFileHash = jest.fn(async (_uri: string) => 'content-hash')
+const getFileHashes = jest.fn(
+  async (uris: readonly string[]): Promise<readonly (string | null)[]> =>
+    uris.map(() => 'content-hash'),
+)
 const readFile = jest.fn(async (_uri: string) => 'content')
 const stat = jest.fn(async (_uri: string) => 7)
 const appendLine = jest.fn(async (_text: string) => {})
@@ -20,6 +24,7 @@ beforeEach(() => {
   jest.clearAllMocks()
   FileSystem.state.api = {
     getFileHash,
+    getFileHashes,
     readDirWithFileTypes,
     readFile,
     stat,
@@ -33,6 +38,7 @@ beforeEach(() => {
   FileSystem.state.outputChannel = {
     appendLine,
   }
+  FileSystem.clearFileHashCache()
 })
 
 test('readFile converts an absolute path to a file uri', async () => {
@@ -79,6 +85,35 @@ test('readFile returns cached content without reading the file again', async () 
 
   expect(readFile).not.toHaveBeenCalled()
   expect(setText).not.toHaveBeenCalled()
+})
+
+test('getFileHashes batches uri hashing and primes subsequent content reads', async () => {
+  getFileHashes.mockResolvedValueOnce(['content-hash', null])
+  getText.mockResolvedValueOnce('content')
+
+  await expect(
+    FileSystem.getFileHashes(['/workspace/file.js', '/workspace/missing.js']),
+  ).resolves.toEqual(['content-hash', null])
+  await expect(FileSystem.readFile('/workspace/file.js')).resolves.toBe(
+    'content',
+  )
+
+  expect(getFileHashes).toHaveBeenCalledWith([
+    'file:///workspace/file.js',
+    'file:///workspace/missing.js',
+  ])
+  expect(getFileHash).not.toHaveBeenCalled()
+  expect(readFile).not.toHaveBeenCalled()
+})
+
+test('getFileHashes treats a failed batch as cache misses without individual requests', async () => {
+  getFileHashes.mockRejectedValueOnce(new Error('Hashing unavailable'))
+
+  await expect(
+    FileSystem.getFileHashes(['/workspace/first.js', '/workspace/second.js']),
+  ).resolves.toEqual([null, null])
+
+  expect(getFileHash).not.toHaveBeenCalled()
 })
 
 test('readFile ignores a cache entry whose content does not match its hash', async () => {

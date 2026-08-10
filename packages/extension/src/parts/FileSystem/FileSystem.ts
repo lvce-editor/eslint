@@ -1,6 +1,7 @@
 import {
   type OutputChannel,
   getFileHash as getFileHashApi,
+  getFileHashes as getFileHashesApi,
   readDirWithFileTypes as readDirWithFileTypesApi,
   readFile as readFileApi,
   stat as statApi,
@@ -12,6 +13,7 @@ import * as Logger from '../Logger/Logger.ts'
 
 interface FileSystemApi {
   readonly getFileHash?: typeof getFileHashApi
+  readonly getFileHashes: typeof getFileHashesApi
   readonly readDirWithFileTypes: typeof readDirWithFileTypesApi
   readonly readFile: typeof readFileApi
   readonly stat: typeof statApi
@@ -28,9 +30,11 @@ export const state: {
   computeTextHash: (text: string) => Promise<string>
   now: () => number
   outputChannel: Pick<OutputChannel, 'appendLine'>
+  uriHashes: Map<string, string>
 } = {
   api: {
     getFileHash: getFileHashApi,
+    getFileHashes: getFileHashesApi,
     readDirWithFileTypes: readDirWithFileTypesApi,
     readFile: readFileApi,
     stat: statApi,
@@ -39,6 +43,7 @@ export const state: {
   computeTextHash: ComputeTextHash.computeTextHash,
   now: () => performance.now(),
   outputChannel,
+  uriHashes: new Map(),
 }
 
 const toFileUri = (path: string): string => {
@@ -59,6 +64,38 @@ const getFileHash = async (uri: string): Promise<string | undefined> => {
     Logger.warn(`Failed to hash ${uri}`, error)
     return undefined
   }
+}
+
+export const getFileHashes = async (
+  paths: readonly string[],
+): Promise<readonly (string | null)[]> => {
+  const uris = paths.map(toFileUri)
+  const fileUris = uris.filter((uri) => uri.startsWith('file://'))
+  const hashes: Array<string | null> = uris.map(() => null)
+  try {
+    const fileHashes = await state.api.getFileHashes(fileUris)
+    let fileIndex = 0
+    for (let index = 0; index < uris.length; index++) {
+      if (uris[index].startsWith('file://')) {
+        hashes[index] = fileHashes[fileIndex++] ?? null
+      }
+    }
+  } catch (error) {
+    Logger.warn('Failed to hash ESLint files in one batch', error)
+  }
+  for (let index = 0; index < uris.length; index++) {
+    const hash = hashes[index]
+    if (typeof hash === 'string') {
+      state.uriHashes.set(uris[index], hash)
+    } else {
+      state.uriHashes.delete(uris[index])
+    }
+  }
+  return hashes
+}
+
+export const clearFileHashCache = (): void => {
+  state.uriHashes.clear()
 }
 
 const getCachedContent = async (hash: string): Promise<string | undefined> => {
@@ -96,7 +133,7 @@ const readFileCached = async (uri: string): Promise<string> => {
   if (!uri.startsWith('file://')) {
     return state.api.readFile(uri)
   }
-  const hash = await getFileHash(uri)
+  const hash = state.uriHashes.get(uri) ?? (await getFileHash(uri))
   if (hash === undefined) {
     return state.api.readFile(uri)
   }

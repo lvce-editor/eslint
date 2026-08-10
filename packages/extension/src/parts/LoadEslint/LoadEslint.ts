@@ -14,8 +14,9 @@ export const clearCache = (): void => {
 
 export const loadEslint = async (
   filePath: string,
+  projectPath?: string,
 ): Promise<LinterConstructor> => {
-  const graph = await LoadEslintConfig.loadEslintModule(filePath)
+  const graph = await LoadEslintConfig.loadEslintModule(filePath, projectPath)
   let eslint = loadedModules.get(graph.id)
   if (!eslint) {
     eslint = LoadModuleGraph.loadModuleGraph(graph) as EslintModule

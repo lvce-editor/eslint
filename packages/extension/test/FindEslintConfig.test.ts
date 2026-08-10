@@ -22,6 +22,7 @@ const readDirWithFileTypes = async (
 beforeEach(() => {
   state.files = []
   FileSystem.state.api = {
+    getFileHashes: async () => [],
     readDirWithFileTypes,
     readFile: async () => '',
     stat: async () => 0,

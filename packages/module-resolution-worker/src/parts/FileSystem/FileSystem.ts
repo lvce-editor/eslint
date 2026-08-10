@@ -7,6 +7,9 @@ export interface DirectoryEntry {
 }
 
 interface FileSystemApi {
+  readonly getFileHashes?: (
+    uris: readonly string[],
+  ) => Promise<readonly (string | null)[]>
   readonly readDirWithFileTypes: (
     uri: string,
   ) => Promise<readonly DirectoryEntry[]>
@@ -18,11 +21,22 @@ interface FileSystemApi {
 
 export const state: { api: FileSystemApi } = {
   api: {
+    getFileHashes: (uris) => Rpc.invoke('FileSystem.getFileHashes', uris),
     readDirWithFileTypes: (uri) =>
       Rpc.invoke('FileSystem.readDirWithFileTypes', uri),
     readFile: (uri) => Rpc.invoke('FileSystem.readFile', uri),
     stat: (uri) => Rpc.invoke('FileSystem.stat', uri),
   },
+}
+
+export const getFileHashes = (
+  paths: readonly string[],
+): Promise<readonly (string | null)[]> => {
+  const getFileHashesFn = state.api.getFileHashes
+  if (!getFileHashesFn) {
+    return Promise.resolve(paths.map(() => null))
+  }
+  return getFileHashesFn(paths.map(toFileUri))
 }
 
 const toFileUri = (path: string): string => {

@@ -19,7 +19,10 @@ export const provideCodeActions = async (
     const config = configPath
       ? await LoadEslintConfig.loadEslintConfig(configPath, filePath)
       : undefined
-    const Linter = await LoadEslint.loadEslint(filePath)
+    const Linter = await LoadEslint.loadEslint(
+      filePath,
+      configPath ?? undefined,
+    )
     const lintResults = await Lint.lint(
       textDocument.text,
       filePath,

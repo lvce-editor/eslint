@@ -55,6 +55,32 @@ test('requests the project ESLint graph from the module resolution worker', asyn
   ])
 })
 
+test('uses the eslint config path as the persistent project cache key', async () => {
+  const invocations: unknown[] = []
+  const graph = createGraph(
+    'class ProjectLinter {}; module.exports = { Linter: ProjectLinter }',
+  )
+  ModuleResolutionWorker.state.createRpc = async () => ({
+    invoke: async (method, ...params) => {
+      invocations.push([method, ...params])
+      return graph
+    },
+  })
+
+  await LoadEslint.loadEslint(
+    '/workspace/src/file.js',
+    '/workspace/eslint.config.js',
+  )
+
+  expect(invocations).toEqual([
+    [
+      'ModuleResolution.loadEslintModule',
+      '/workspace/src/file.js',
+      '/workspace/eslint.config.js',
+    ],
+  ])
+})
+
 test('propagates module resolution worker errors', async () => {
   ModuleResolutionWorker.state.createRpc = async () => ({
     invoke: async () => {
