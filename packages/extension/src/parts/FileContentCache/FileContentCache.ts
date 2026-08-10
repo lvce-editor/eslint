@@ -1,5 +1,6 @@
 const CacheName = 'eslint-file-content-v1'
 const CacheKeyPrefix = 'https://eslint-file-cache.invalid/'
+const ContentType = 'application/javascript'
 
 const getKey = (hash: string): string => {
   return `${CacheKeyPrefix}${hash}`
@@ -13,5 +14,12 @@ export const getText = async (hash: string): Promise<string | undefined> => {
 
 export const setText = async (hash: string, content: string): Promise<void> => {
   const cache = await caches.open(CacheName)
-  await cache.put(getKey(hash), new Response(content))
+  const contentLength = new TextEncoder().encode(content).byteLength
+  const response = new Response(content, {
+    headers: {
+      'Content-Length': String(contentLength),
+      'Content-Type': ContentType,
+    },
+  })
+  await cache.put(getKey(hash), response)
 }
