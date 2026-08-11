@@ -1,5 +1,7 @@
 import { packages, transform } from '@babel/standalone'
+import * as ComputeTextHash from '../ComputeTextHash/ComputeTextHash.ts'
 import * as FileSystem from '../FileSystem/FileSystem.ts'
+import * as ModuleAnalysisCache from '../ModuleAnalysisCache/ModuleAnalysisCache.ts'
 import * as ModuleGraphCache from '../ModuleGraphCache/ModuleGraphCache.ts'
 
 export interface FileChanges {
@@ -505,6 +507,53 @@ type DependencyAnalysis = {
   readonly usesReaddirSync: boolean
 }
 
+type PortableModuleAnalysis = DependencyAnalysis & {
+  readonly source: string
+  readonly substituteImportMeta: boolean
+}
+
+const isDependency = (value: unknown): value is Dependency => {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+  const candidate = value as Partial<Dependency>
+  return (
+    typeof candidate.optional === 'boolean' &&
+    typeof candidate.specifier === 'string'
+  )
+}
+
+const isDependencyAnalysis = (value: unknown): value is DependencyAnalysis => {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+  const candidate = value as Partial<DependencyAnalysis>
+  return (
+    Array.isArray(candidate.dependencies) &&
+    candidate.dependencies.every(isDependency) &&
+    Array.isArray(candidate.fileSpecifiers) &&
+    candidate.fileSpecifiers.every(
+      (specifier) => typeof specifier === 'string',
+    ) &&
+    typeof candidate.usesGlobSync === 'boolean' &&
+    typeof candidate.usesLazyLoadingRuleMap === 'boolean' &&
+    typeof candidate.usesReaddirSync === 'boolean'
+  )
+}
+
+const isPortableModuleAnalysis = (
+  value: unknown,
+): value is PortableModuleAnalysis => {
+  if (!isDependencyAnalysis(value)) {
+    return false
+  }
+  const candidate = value as Partial<PortableModuleAnalysis>
+  return (
+    typeof candidate.source === 'string' &&
+    typeof candidate.substituteImportMeta === 'boolean'
+  )
+}
+
 const functionExpressionTypes = [
   'ArrowFunctionExpression',
   'FunctionExpression',
@@ -801,16 +850,46 @@ const transformDynamicModuleLoading = ({ types }: any) => ({
   },
 })
 
-const transpile = (
+const getFileExtension = (path: string): string => {
+  const fileName = path.slice(path.lastIndexOf('/') + 1)
+  const extensionIndex = fileName.lastIndexOf('.')
+  return extensionIndex === -1 ? '' : fileName.slice(extensionIndex)
+}
+
+const getAnalysisCacheKey = async (
+  kind: string,
+  path: string,
+  source: string,
+): Promise<string | undefined> => {
+  try {
+    const hash = await ComputeTextHash.computeTextHash(source)
+    return `${kind}:${getFileExtension(path)}:${hash}`
+  } catch {
+    return undefined
+  }
+}
+
+const substituteImportMeta = (path: string, source: string): string => {
+  return source
+    .split('import.meta.dirname')
+    .join(JSON.stringify(dirname(path)))
+    .split('import.meta.filename')
+    .join(JSON.stringify(path))
+    .split('import.meta.url')
+    .join(JSON.stringify(`file://${path}`))
+}
+
+const transpileUncached = (
   path: string,
   source: string,
   scanCommonJs: boolean,
-): DependencyAnalysis & { source: string } => {
+): PortableModuleAnalysis => {
   if (path.endsWith('.json')) {
     return {
       dependencies: [],
       fileSpecifiers: [],
       source,
+      substituteImportMeta: false,
       usesGlobSync: false,
       usesLazyLoadingRuleMap: false,
       usesReaddirSync: false,
@@ -833,6 +912,7 @@ const transpile = (
       ),
       fileSpecifiers: [],
       source,
+      substituteImportMeta: false,
       usesGlobSync: false,
       usesLazyLoadingRuleMap: lazyRuleMapIndex !== -1,
       usesReaddirSync: /\breaddirSync\s*\(/.test(source),
@@ -849,13 +929,14 @@ const transpile = (
   })
   const analysis = getDependencies(ast)
   if (ast.program.sourceType !== 'module') {
-    return { ...analysis, source }
+    return { ...analysis, source, substituteImportMeta: false }
   }
+  const extension = getFileExtension(path)
   const result = transform(source, {
     babelrc: false,
     comments: false,
     configFile: false,
-    filename: path,
+    filename: `module${extension || '.js'}`,
     plugins: [
       ...(isTypeScript
         ? ([
@@ -873,14 +954,61 @@ const transpile = (
   }
   return {
     ...analysis,
-    source: result.code
-      .split('import.meta.dirname')
-      .join(JSON.stringify(dirname(path)))
-      .split('import.meta.filename')
-      .join(JSON.stringify(path))
-      .split('import.meta.url')
-      .join(JSON.stringify(`file://${path}`)),
+    source: result.code,
+    substituteImportMeta: true,
   }
+}
+
+const transpile = async (
+  path: string,
+  source: string,
+  scanCommonJs: boolean,
+): Promise<DependencyAnalysis & { source: string }> => {
+  const kind = scanCommonJs ? 'commonjs' : 'module'
+  const cacheKey = await getAnalysisCacheKey(kind, path, source)
+  const portable = cacheKey
+    ? await ModuleAnalysisCache.getOrCompute(
+        cacheKey,
+        isPortableModuleAnalysis,
+        () => transpileUncached(path, source, scanCommonJs),
+      )
+    : transpileUncached(path, source, scanCommonJs)
+  const { substituteImportMeta: shouldSubstituteImportMeta, ...analysis } =
+    portable
+  return {
+    ...analysis,
+    source: shouldSubstituteImportMeta
+      ? substituteImportMeta(path, portable.source)
+      : portable.source,
+  }
+}
+
+const analyzeDocumentDependencies = async (
+  path: string,
+  source: string,
+): Promise<DependencyAnalysis> => {
+  const cacheKey = await getAnalysisCacheKey('document', path, source)
+  const compute = (): DependencyAnalysis => {
+    const isTypeScript = ['.cts', '.mts', '.ts', '.tsx'].some((extension) =>
+      path.endsWith(extension),
+    )
+    const parserPlugins: any[] = isTypeScript
+      ? [['typescript', { isTSX: path.endsWith('.tsx') }]]
+      : []
+    const ast = packages.parser.parse(source, {
+      plugins: parserPlugins,
+      sourceType: 'unambiguous',
+    })
+    return getDependencies(ast, true)
+  }
+  if (!cacheKey) {
+    return compute()
+  }
+  return ModuleAnalysisCache.getOrCompute(
+    cacheKey,
+    isDependencyAnalysis,
+    compute,
+  )
 }
 
 const restoreModuleGraph = async (
@@ -897,10 +1025,12 @@ const restoreModuleGraph = async (
   }
   try {
     const modules = Object.fromEntries(
-      Object.entries(restored.modules).map(([path, source]) => [
-        path,
-        transpile(path, source, scanCommonJs).source,
-      ]),
+      await Promise.all(
+        Object.entries(restored.modules).map(async ([path, source]) => {
+          const analysis = await transpile(path, source, scanCommonJs)
+          return [path, analysis.source]
+        }),
+      ),
     )
     const graph = {
       entry: restored.entry,
@@ -982,7 +1112,7 @@ const loadModule = async (
       usesGlobSync,
       usesLazyLoadingRuleMap,
       usesReaddirSync,
-    } = transpile(path, source, scanCommonJs)
+    } = await transpile(path, source, scanCommonJs)
     delete files[path]
     moduleSources[path] = source
     modules[path] = transformed
@@ -1153,17 +1283,7 @@ const loadModule = async (
     if (!source || !isJavaScriptLike) {
       return
     }
-    const isTypeScript = ['.cts', '.mts', '.ts', '.tsx'].some((extension) =>
-      path.endsWith(extension),
-    )
-    const parserPlugins: any[] = isTypeScript
-      ? [['typescript', { isTSX: path.endsWith('.tsx') }]]
-      : []
-    const ast = packages.parser.parse(source, {
-      plugins: parserPlugins,
-      sourceType: 'unambiguous',
-    })
-    const { dependencies } = getDependencies(ast, true)
+    const { dependencies } = await analyzeDocumentDependencies(path, source)
     for (const { specifier } of dependencies) {
       if (!specifier.startsWith('.') && !specifier.startsWith('/')) {
         continue

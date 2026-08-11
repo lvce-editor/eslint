@@ -1,8 +1,24 @@
-import { beforeEach, expect, test } from '@jest/globals'
+import { beforeEach, expect, jest, test } from '@jest/globals'
 import * as FileSystem from '../src/parts/FileSystem/FileSystem.ts'
 import * as LoadEslintConfig from '../src/parts/ModuleResolution/ModuleResolution.ts'
 
 const state: { files: Record<string, string> } = { files: {} }
+const cacheEntries = new Map<string, Response>()
+const getRequestKey = (key: string | Request): string =>
+  typeof key === 'string' ? key : key.url
+const match = jest.fn(async (key: string | Request) =>
+  cacheEntries.get(getRequestKey(key))?.clone(),
+)
+const put = jest.fn(async (key: string | Request, response: Response) => {
+  cacheEntries.set(getRequestKey(key), response.clone())
+})
+const remove = jest.fn(async (key: string | Request) =>
+  cacheEntries.delete(getRequestKey(key)),
+)
+const open = jest.fn(
+  async (_cacheName: string) =>
+    ({ delete: remove, match, put }) as unknown as Cache,
+)
 
 const toPath = (uri: string): string =>
   decodeURIComponent(new URL(uri).pathname)
@@ -57,6 +73,12 @@ const setFiles = (value: Record<string, string>): void => {
 
 beforeEach(() => {
   state.files = {}
+  cacheEntries.clear()
+  jest.clearAllMocks()
+  Object.defineProperty(globalThis, 'caches', {
+    configurable: true,
+    value: { open },
+  })
   FileSystem.state.api = {
     readDirWithFileTypes,
     readFile,
@@ -73,6 +95,33 @@ test('transforms an esm default export to commonjs', async () => {
   )
   expect(graph.entry).toBe('/workspace/eslint.config.js')
   expect(graph.modules[graph.entry]).toContain('exports.default')
+})
+
+test('reuses cached module analysis across projects with path-specific import meta', async () => {
+  const source = `export default import.meta.dirname`
+  setFiles({
+    '/first-project/eslint.config.js': source,
+    '/second-project/eslint.config.js': source,
+  })
+
+  const first = await LoadEslintConfig.loadEslintConfig(
+    '/first-project/eslint.config.js',
+  )
+  const second = await LoadEslintConfig.loadEslintConfig(
+    '/second-project/eslint.config.js',
+  )
+
+  expect(first.modules[first.entry]).toContain('"/first-project"')
+  expect(second.modules[second.entry]).toContain('"/second-project"')
+  const analysisPuts = put.mock.calls.filter(([key]) =>
+    getRequestKey(key).startsWith(
+      'https://eslint-module-analysis-cache.invalid/',
+    ),
+  )
+  expect(analysisPuts).toHaveLength(1)
+  expect(getRequestKey(analysisPuts[0][0])).toMatch(
+    /\/module%3A\.js%3A[\da-f]{64}$/,
+  )
 })
 
 test('transforms a typescript config dependency to commonjs', async () => {
