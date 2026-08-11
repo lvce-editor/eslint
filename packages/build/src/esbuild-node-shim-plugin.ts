@@ -1,13 +1,8 @@
 import type { Plugin } from 'esbuild'
-import { readFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
+import { getNodeShimsBanner } from './GetNodeShimsBanner.ts'
 
 export const createNodeShimPlugin = (): Plugin => {
-  const bannerPath = fileURLToPath(
-    import.meta.resolve('@lvce-editor/node-shims/banner'),
-  )
-
-  const bannerCode = readFileSync(bannerPath, 'utf-8')
+  const bannerCode = getNodeShimsBanner()
 
   return {
     name: 'node-shim',
