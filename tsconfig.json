@@ -2,6 +2,7 @@
   "files": [],
   "include": [],
   "references": [
+    { "path": "./packages/benchmark" },
     { "path": "./packages/e2e" },
     { "path": "./packages/eslint-evaluation-worker" },
     { "path": "./packages/extension" },

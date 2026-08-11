@@ -27,3 +27,23 @@ cd eslint &&
 npm ci &&
 npm test
 ```
+
+## CPU benchmark
+
+The benchmark opens a file in LVCE Editor with this checkout's ESLint extension,
+waits for linting to complete, and writes a browser-wide Chromium CPU trace. A
+remote repository is cloned and installed before profiling; a local repository
+path is used in place.
+
+```sh
+npm run benchmark -- \
+  --repo https://github.com/lvce-editor/about-view.git \
+  --file packages/about-view/src/parts/AboutFocusId/AboutFocusId.ts
+```
+
+Results are written to `.tmp/benchmark-results` by default. Load
+`cpu-profile.json` in Chrome DevTools' Performance panel or Perfetto to inspect
+work performed by the editor, extension worker, and module-resolution worker.
+Use `--output <directory>`, `--timeout <milliseconds>`, or `--headed` to adjust
+the run. Install Chromium first with `npx playwright install chromium` if it is
+not already available.
