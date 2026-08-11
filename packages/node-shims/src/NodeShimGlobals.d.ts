@@ -1,6 +1,6 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable no-var */
 
-declare var modules: Record<string, any>
-declare var require: (id: string) => any
+declare var modules: any
+declare var require: any
 declare var Buffer: any
 declare var process: any

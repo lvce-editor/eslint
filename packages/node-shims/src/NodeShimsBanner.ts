@@ -1,6 +1,6 @@
 /* eslint-disable unicorn/no-global-object-property-assignment */
-import { installNodeBuffer } from './parts/NodeBuffer/NodeBuffer.ts'
 import { createNodeAssert } from './parts/NodeAssert/NodeAssert.ts'
+import { installNodeBuffer } from './parts/NodeBuffer/NodeBuffer.ts'
 import { createNodeCrypto } from './parts/NodeCrypto/NodeCrypto.ts'
 import { createNodeEvents } from './parts/NodeEvents/NodeEvents.ts'
 import { createNodeFs } from './parts/NodeFs/NodeFs.ts'
@@ -20,7 +20,7 @@ if (globalThis.modules === undefined) {
   globalThis.modules = {}
 }
 
-const modules = globalThis.modules
+const { modules } = globalThis
 
 modules['node:assert'] = createNodeAssert()
 modules['node:crypto'] = createNodeCrypto()
