@@ -3,15 +3,14 @@ import {
   type FileChanges,
   registerFileChangeHandler,
 } from '@lvce-editor/api'
-import * as Lint from '../Lint/Lint.ts'
-import * as LoadEslint from '../LoadEslint/LoadEslint.ts'
-import * as LoadEslintConfig from '../LoadEslintConfig/LoadEslintConfig.ts'
+import * as EslintEvaluationWorker from '../EslintEvaluationWorker/EslintEvaluationWorker.ts'
+import * as ModuleResolutionWorker from '../ModuleResolutionWorker/ModuleResolutionWorker.ts'
 
 type InvalidateForFileChanges = (
   changes: Readonly<FileChanges>,
 ) => boolean | Promise<boolean>
 type UpdateAllDiagnostics = () => Promise<unknown>
-type ClearCaches = () => void
+type ClearCaches = () => void | Promise<void>
 
 export const handleFileChangesWithDependencies = async (
   changes: Readonly<FileChanges>,
@@ -22,7 +21,7 @@ export const handleFileChangesWithDependencies = async (
   if (!(await invalidateForFileChanges(changes))) {
     return
   }
-  clearCaches()
+  await clearCaches()
   await updateAllDiagnostics()
 }
 
@@ -30,19 +29,14 @@ const updateAllDiagnostics = async (): Promise<unknown> => {
   return executeCommand('GetActiveEditor.updateAllDiagnostics')
 }
 
-const clearCaches = (): void => {
-  Lint.clearCache()
-  LoadEslint.clearCache()
-}
-
 const handleFileChanges = async (
   changes: Readonly<FileChanges>,
 ): Promise<void> => {
   await handleFileChangesWithDependencies(
     changes,
-    LoadEslintConfig.invalidateForFileChanges,
+    ModuleResolutionWorker.invalidateForFileChanges,
     updateAllDiagnostics,
-    clearCaches,
+    EslintEvaluationWorker.clearCache,
   )
 }
 

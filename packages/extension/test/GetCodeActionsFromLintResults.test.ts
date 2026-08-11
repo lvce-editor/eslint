@@ -1,5 +1,5 @@
 import { expect, test } from '@jest/globals'
-import type { LintResult } from '../src/parts/Lint/Lint.ts'
+import type { LintResult } from '../src/parts/EslintEvaluationWorker/EslintEvaluationWorker.ts'
 import * as GetCodeActionsFromLintResults from '../src/parts/GetCodeActionsFromLintResults/GetCodeActionsFromLintResults.ts'
 
 const createResult = (overrides: Partial<LintResult> = {}): LintResult => ({

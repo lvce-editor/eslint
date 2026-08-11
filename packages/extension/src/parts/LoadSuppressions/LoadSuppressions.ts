@@ -1,9 +1,18 @@
-import type {
-  LoadedSuppressions,
-  Suppressions,
-} from '../ApplySuppressions/ApplySuppressions.ts'
 import * as FileSystem from '../FileSystem/FileSystem.ts'
 import * as Path from '../Path/Path.ts'
+
+interface Suppressions {
+  readonly [filePath: string]: {
+    readonly [ruleId: string]: {
+      readonly count: number
+    }
+  }
+}
+
+export interface LoadedSuppressions {
+  readonly baseDirectory: string
+  readonly suppressions: Suppressions
+}
 
 const suppressionsFileName = 'eslint-suppressions.json'
 

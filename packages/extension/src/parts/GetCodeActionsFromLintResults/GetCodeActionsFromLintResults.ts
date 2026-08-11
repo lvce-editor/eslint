@@ -1,4 +1,4 @@
-import type { LintResult } from '../Lint/Lint.ts'
+import type { LintResult } from '../EslintEvaluationWorker/EslintEvaluationWorker.ts'
 
 interface Edit {
   readonly endOffset: number

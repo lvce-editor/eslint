@@ -10,6 +10,10 @@ await cp(
   join(extension, 'dist', 'eslintMain.js'),
 )
 await cp(
+  join(root, 'dist', 'dist', 'eslintEvaluationWorkerMain.js'),
+  join(extension, 'dist', 'eslintEvaluationWorkerMain.js'),
+)
+await cp(
   join(root, 'dist', 'dist', 'moduleResolutionWorkerMain.js'),
   join(extension, 'dist', 'moduleResolutionWorkerMain.js'),
 )

@@ -1,18 +1,13 @@
 {
-  "name": "builtin.eslint",
+  "name": "eslint-evaluation-worker",
   "version": "0.0.0-dev",
   "license": "MIT",
   "type": "module",
-  "main": "dist/eslintMain.js",
   "scripts": {
-    "test": "node --unhandled-rejections=warn --experimental-vm-modules ../../node_modules/jest/bin/jest.js --detectOpenHandles --forceExit",
-    "test:watch": "node --unhandled-rejections=warn --experimental-vm-modules ../../node_modules/jest/bin/jest.js --watch"
+    "test": "node --unhandled-rejections=warn --experimental-vm-modules ../../node_modules/jest/bin/jest.js --detectOpenHandles --forceExit"
   },
   "jest": {
     "injectGlobals": false,
-    "setupFiles": [
-      "fake-indexeddb/auto"
-    ],
     "extensionsToTreatAsEsm": [
       ".ts"
     ],
@@ -29,12 +24,11 @@
     }
   },
   "dependencies": {
-    "@lvce-editor/node-shims": "*"
+    "@lvce-editor/rpc": "^6.16.0"
   },
   "devDependencies": {
     "@jest/globals": "^30.4.1",
-    "@lvce-editor/api": "^9.16.0",
-    "fake-indexeddb": "^6.2.5",
+    "eslint": "^10.8.1",
     "jest": "^30.4.2",
     "ts-jest": "^29.4.12"
   }
