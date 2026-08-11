@@ -8,6 +8,7 @@
     "packages/e2e/fixtures/*"
   ],
   "scripts": {
+    "benchmark": "npm run build && node packages/build/src/prepare-e2e.js && npm run benchmark --workspace=packages/benchmark --",
     "build": "node packages/build/src/build.js",
     "dev": "node packages/build/src/dev.ts",
     "e2e": "npm run e2e --workspace=packages/e2e",
