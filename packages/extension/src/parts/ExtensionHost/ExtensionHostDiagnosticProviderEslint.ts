@@ -1,8 +1,6 @@
 import type { Diagnostic } from '@lvce-editor/api'
+import * as EslintEvaluationWorker from '../EslintEvaluationWorker/EslintEvaluationWorker.ts'
 import * as FindEslintConfig from '../FindEslintConfig/FindEslintConfig.ts'
-import * as Lint from '../Lint/Lint.ts'
-import * as LoadEslint from '../LoadEslint/LoadEslint.ts'
-import * as LoadEslintConfig from '../LoadEslintConfig/LoadEslintConfig.ts'
 import * as LoadSuppressions from '../LoadSuppressions/LoadSuppressions.ts'
 
 export const id = 'eslint'
@@ -47,22 +45,14 @@ export const provideDiagnostics = async (textDocument: {
     const { text } = textDocument
     const filePath = textDocument.uri ?? 'file.js'
     configPath = await FindEslintConfig.findEslintConfig(filePath)
-    const config = configPath
-      ? await LoadEslintConfig.loadEslintConfig(configPath, filePath)
-      : undefined
     const suppressions = await LoadSuppressions.loadSuppressions(
       filePath,
       configPath,
     )
-    const Linter = await LoadEslint.loadEslint(
-      filePath,
-      configPath ?? undefined,
-    )
-    const lintResults = await Lint.lint(
+    const lintResults = await EslintEvaluationWorker.lint(
       text,
       filePath,
-      config,
-      Linter,
+      configPath ?? undefined,
       suppressions,
     )
     return lintResults.map((result) => ({

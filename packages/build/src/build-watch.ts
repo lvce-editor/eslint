@@ -33,8 +33,6 @@ const getBuildOptions = (outfile: string): BuildOptions => {
       'buffer',
       'process',
       'worker_threads',
-      'jiti',
-      'jiti/package.json',
     ],
     packages: 'bundle',
     mainFields: ['module', 'main'],
@@ -266,6 +264,29 @@ const getModuleResolutionWorkerBuildOptions = (
   resolveExtensions: ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'],
 })
 
+const getEslintEvaluationWorkerBuildOptions = (
+  outfile: string,
+): BuildOptions => ({
+  bundle: true,
+  conditions: ['import', 'module', 'default'],
+  entryPoints: [
+    join(
+      root,
+      'packages',
+      'eslint-evaluation-worker',
+      'src',
+      'eslintEvaluationWorkerMain.ts',
+    ),
+  ],
+  external: ['electron', 'node:buffer', 'node:worker_threads', 'ws'],
+  format: 'esm',
+  mainFields: ['module', 'main'],
+  outfile,
+  packages: 'bundle',
+  platform: 'browser',
+  resolveExtensions: ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'],
+})
+
 const assertEslintNotBundled = (metafile: Metafile): void => {
   const bundledEslintPath = Object.keys(metafile.inputs).find((input) =>
     /(^|\/)node_modules\/eslint\//.test(input.replaceAll('\\', '/')),
@@ -289,6 +310,12 @@ export const buildModuleResolutionWorker = async (
   await build(getModuleResolutionWorkerBuildOptions(outfile))
 }
 
+export const buildEslintEvaluationWorker = async (
+  outfile: string,
+): Promise<void> => {
+  await build(getEslintEvaluationWorkerBuildOptions(outfile))
+}
+
 export const watchExtension = async (): Promise<void> => {
   const extensionOutput = join(
     root,
@@ -304,12 +331,23 @@ export const watchExtension = async (): Promise<void> => {
     'dist',
     'moduleResolutionWorkerMain.js',
   )
+  const eslintEvaluationWorkerOutput = join(
+    root,
+    'packages',
+    'extension',
+    'dist',
+    'eslintEvaluationWorkerMain.js',
+  )
   const extensionContext = await context(getBuildOptions(extensionOutput))
   const moduleResolutionWorkerContext = await context(
     getModuleResolutionWorkerBuildOptions(moduleResolutionWorkerOutput),
   )
+  const eslintEvaluationWorkerContext = await context(
+    getEslintEvaluationWorkerBuildOptions(eslintEvaluationWorkerOutput),
+  )
   await Promise.all([
     extensionContext.watch(),
+    eslintEvaluationWorkerContext.watch(),
     moduleResolutionWorkerContext.watch(),
   ])
   // eslint-disable-next-line no-console

@@ -7,11 +7,18 @@
   "browser": "dist/eslintMain.js",
   "workerName": "ESLint Worker",
   "isolated": true,
-  "contentSecurityPolicy": [
-    "default-src 'none'",
-    "script-src 'self' 'unsafe-eval'"
-  ],
+  "contentSecurityPolicy": ["default-src 'none'", "script-src 'self'"],
   "rpc": [
+    {
+      "id": "builtin.eslint.evaluation-worker",
+      "type": "web-worker",
+      "name": "ESLint Evaluation Worker",
+      "url": "dist/eslintEvaluationWorkerMain.js",
+      "contentSecurityPolicy": [
+        "default-src 'none'",
+        "script-src 'self' 'unsafe-eval'"
+      ]
+    },
     {
       "id": "builtin.eslint.module-resolution-worker",
       "type": "web-worker",

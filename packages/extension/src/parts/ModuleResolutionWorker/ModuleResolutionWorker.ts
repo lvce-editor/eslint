@@ -6,7 +6,7 @@ import {
 import type { ModuleGraph } from '../ModuleGraph/ModuleGraph.ts'
 import * as FileSystem from '../FileSystem/FileSystem.ts'
 
-export interface Rpc {
+interface Rpc {
   readonly invoke: (
     method: string,
     ...params: readonly unknown[]
@@ -22,7 +22,7 @@ const commandMap = {
 
 type CreateRpc = (options: CreateRpcOptions) => Promise<Rpc>
 
-export const state: {
+const state: {
   createRpc: CreateRpc
   rpcPromise: Promise<Rpc> | undefined
 } = {

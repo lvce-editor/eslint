@@ -1,5 +1,5 @@
 import type { LinterConstructor } from '../Lint/Lint.ts'
-import * as LoadEslintConfig from '../LoadEslintConfig/LoadEslintConfig.ts'
+import type { ModuleGraph } from '../ModuleGraph/ModuleGraph.ts'
 import * as LoadModuleGraph from '../LoadModuleGraph/LoadModuleGraph.ts'
 
 interface EslintModule {
@@ -12,11 +12,7 @@ export const clearCache = (): void => {
   loadedModules.clear()
 }
 
-export const loadEslint = async (
-  filePath: string,
-  projectPath?: string,
-): Promise<LinterConstructor> => {
-  const graph = await LoadEslintConfig.loadEslintModule(filePath, projectPath)
+export const loadEslint = (graph: ModuleGraph): LinterConstructor => {
   let eslint = loadedModules.get(graph.id)
   if (!eslint) {
     eslint = LoadModuleGraph.loadModuleGraph(graph) as EslintModule

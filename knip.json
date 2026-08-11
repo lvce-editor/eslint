@@ -22,6 +22,10 @@
       "project": ["**/*.{js,json,ts}"],
       "ignoreDependencies": ["eslint"]
     },
+    "packages/eslint-evaluation-worker": {
+      "entry": ["src/eslintEvaluationWorkerMain.ts", "test/**/*.test.ts"],
+      "project": ["src/**/*.ts", "test/**/*.ts"]
+    },
     "packages/extension": {
       "entry": ["src/eslintMain.ts", "test/**/*.test.ts"],
       "project": ["src/**/*.ts", "test/**/*.ts"],

@@ -3,7 +3,7 @@ import * as Path from '../Path/Path.ts'
 
 type LintMessage = ReturnType<Linter['verify']>[number]
 
-export interface Suppressions {
+interface Suppressions {
   readonly [filePath: string]: {
     readonly [ruleId: string]: {
       readonly count: number

@@ -25,38 +25,5 @@ export const dirname = (path: string): string => {
   return index < root.length ? root : normalized.slice(0, index)
 }
 
-export const basename = (path: string, suffix = ''): string => {
-  const value = normalize(path).split('/').at(-1) || ''
-  return suffix && value.endsWith(suffix)
-    ? value.slice(0, -suffix.length)
-    : value
-}
-
-export const extname = (path: string): string => {
-  const value = basename(path)
-  const index = value.lastIndexOf('.')
-  return index <= 0 ? '' : value.slice(index)
-}
-
 export const join = (...parts: readonly string[]): string =>
   normalize(parts.join('/'))
-
-export const toFileSystemPath = (path: string): string => {
-  if (!/^[a-z][a-z\d+.-]*:\/\//i.test(path)) {
-    return path
-  }
-  return decodeURIComponent(new URL(path).pathname)
-}
-
-export const relative = (from: string, to: string): string => {
-  const fromParts = normalize(from).split('/').filter(Boolean)
-  const toParts = normalize(to).split('/').filter(Boolean)
-  let index = 0
-  while (fromParts[index] === toParts[index] && index < fromParts.length) {
-    index++
-  }
-  return [
-    ...fromParts.slice(index).map(() => '..'),
-    ...toParts.slice(index),
-  ].join('/')
-}

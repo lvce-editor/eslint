@@ -23,3 +23,28 @@ test('declares the module resolution worker', () => {
     url: 'dist/moduleResolutionWorkerMain.js',
   })
 })
+
+test('declares the eslint evaluation worker', () => {
+  expect(extension.rpc).toContainEqual({
+    contentSecurityPolicy: [
+      "default-src 'none'",
+      "script-src 'self' 'unsafe-eval'",
+    ],
+    id: 'builtin.eslint.evaluation-worker',
+    name: 'ESLint Evaluation Worker',
+    type: 'web-worker',
+    url: 'dist/eslintEvaluationWorkerMain.js',
+  })
+})
+
+test('allows dynamic evaluation only in the evaluation worker', () => {
+  expect(extension.contentSecurityPolicy).toEqual([
+    "default-src 'none'",
+    "script-src 'self'",
+  ])
+  expect(
+    extension.rpc.find(
+      (worker) => worker.id === 'builtin.eslint.module-resolution-worker',
+    )?.contentSecurityPolicy,
+  ).toEqual(["default-src 'none'", "script-src 'self'"])
+})

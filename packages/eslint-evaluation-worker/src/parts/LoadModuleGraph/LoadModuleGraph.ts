@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-implied-eval, sonarjs/code-eval -- project config executes inside the isolated extension */
+/* eslint-disable @typescript-eslint/no-implied-eval, sonarjs/code-eval -- project modules execute inside the isolated evaluation worker */
 import type { ModuleGraph } from '../ModuleGraph/ModuleGraph.ts'
 import * as Path from '../Path/Path.ts'
 

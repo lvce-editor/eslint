@@ -1,8 +1,6 @@
+import * as EslintEvaluationWorker from '../EslintEvaluationWorker/EslintEvaluationWorker.ts'
 import * as FindEslintConfig from '../FindEslintConfig/FindEslintConfig.ts'
 import * as GetCodeActionsFromLintResults from '../GetCodeActionsFromLintResults/GetCodeActionsFromLintResults.ts'
-import * as Lint from '../Lint/Lint.ts'
-import * as LoadEslint from '../LoadEslint/LoadEslint.ts'
-import * as LoadEslintConfig from '../LoadEslintConfig/LoadEslintConfig.ts'
 
 export interface TextDocument {
   readonly text: string
@@ -16,18 +14,10 @@ export const provideCodeActions = async (
   try {
     const filePath = textDocument.uri ?? 'file.js'
     const configPath = await FindEslintConfig.findEslintConfig(filePath)
-    const config = configPath
-      ? await LoadEslintConfig.loadEslintConfig(configPath, filePath)
-      : undefined
-    const Linter = await LoadEslint.loadEslint(
-      filePath,
-      configPath ?? undefined,
-    )
-    const lintResults = await Lint.lint(
+    const lintResults = await EslintEvaluationWorker.lint(
       textDocument.text,
       filePath,
-      config,
-      Linter,
+      configPath ?? undefined,
     )
     return GetCodeActionsFromLintResults.getCodeActionsFromLintResults(
       lintResults,
