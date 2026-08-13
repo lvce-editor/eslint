@@ -651,6 +651,7 @@ export const loadModuleGraph = (graph: ModuleGraph): any => {
       'process',
       'clearImmediate',
       'setImmediate',
+      'SharedArrayBuffer',
       `'use strict';
       return function (module, exports, require, __filename, __dirname) {
         'use strict';
@@ -663,6 +664,7 @@ export const loadModuleGraph = (graph: ModuleGraph): any => {
       builtins['node:process'],
       clearImmediate,
       setImmediate,
+      globalThis.SharedArrayBuffer ?? globalThis.ArrayBuffer,
     )
     try {
       evaluate(module, module.exports, require, id, Path.dirname(id))
