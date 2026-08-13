@@ -218,6 +218,27 @@ test('provides the node global alias to config dependencies', () => {
   expect(value).toEqual([true, true, true])
 })
 
+test('provides a SharedArrayBuffer fallback to config dependencies', () => {
+  const descriptor = Object.getOwnPropertyDescriptor(
+    globalThis,
+    'SharedArrayBuffer',
+  )!
+  Object.defineProperty(globalThis, 'SharedArrayBuffer', {
+    ...descriptor,
+    value: undefined,
+  })
+  try {
+    const value = LoadModuleGraph.loadModuleGraph(
+      graph({
+        '/workspace/eslint.config.js': `const buffer = new SharedArrayBuffer(4); module.exports = [buffer.byteLength, buffer instanceof SharedArrayBuffer]`,
+      }),
+    )
+    expect(value).toEqual([4, true])
+  } finally {
+    Object.defineProperty(globalThis, 'SharedArrayBuffer', descriptor)
+  }
+})
+
 test('provides node immediate timer shims to config dependencies', () => {
   const value = LoadModuleGraph.loadModuleGraph(
     graph({
