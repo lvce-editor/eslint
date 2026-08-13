@@ -1,0 +1,10 @@
+{
+  "name": "fixture-eslint-plugin-cspell-disabled",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "@cspell/eslint-plugin": "10.0.1",
+    "eslint": "10.8.0"
+  }
+}
