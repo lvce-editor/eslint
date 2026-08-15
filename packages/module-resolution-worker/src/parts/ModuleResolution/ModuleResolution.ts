@@ -580,7 +580,10 @@ const resolveModule = async (
     const candidate = specifier.startsWith('/')
       ? specifier
       : join(dirname(parent), specifier)
-    const candidateRoot = specifier.startsWith('/') ? undefined : effectiveRoot
+    const candidateRoot =
+      effectiveRoot && isWithinDirectory(effectiveRoot, normalize(candidate))
+        ? effectiveRoot
+        : undefined
     return resolveAsFileOrDirectory(candidate, '.', candidateRoot)
   }
   return resolvePackage(parent, specifier, effectiveRoot)
@@ -1410,15 +1413,16 @@ const loadModule = async (
     const candidate = specifier.startsWith('/')
       ? normalize(specifier)
       : join(directory, specifier)
-    if (await isFile(candidate, resolutionRoot)) {
+    const candidateRoot = getResolutionRoot(candidate)
+    if (await isFile(candidate, candidateRoot)) {
       return candidate
     }
-    if (await isDirectory(candidate, resolutionRoot)) {
+    if (await isDirectory(candidate, candidateRoot)) {
       const index = join(candidate, 'tsconfig.json')
-      return (await isFile(index, resolutionRoot)) ? index : undefined
+      return (await isFile(index, candidateRoot)) ? index : undefined
     }
     const jsonCandidate = `${candidate}.json`
-    return (await isFile(jsonCandidate, resolutionRoot))
+    return (await isFile(jsonCandidate, getResolutionRoot(jsonCandidate)))
       ? jsonCandidate
       : undefined
   }
@@ -1465,7 +1469,7 @@ const loadModule = async (
       const path = join(configDirectory, specifier)
       const wildcardIndex = path.search(/[?*[\]{}]/)
       if (wildcardIndex === -1) {
-        if (await isDirectory(path, resolutionRoot)) {
+        if (await isDirectory(path, getResolutionRoot(path))) {
           if (!isWithinDirectory(projectDirectory, path)) {
             await preloadVirtualFiles(path, ignoredWorkspaceDirectories)
           }
@@ -1481,7 +1485,7 @@ const loadModule = async (
       if (
         directory &&
         !isWithinDirectory(projectDirectory, directory) &&
-        (await isDirectory(directory, resolutionRoot))
+        (await isDirectory(directory, getResolutionRoot(directory)))
       ) {
         await preloadVirtualFiles(directory, ignoredWorkspaceDirectories)
       }

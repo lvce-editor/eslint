@@ -219,6 +219,24 @@ test('preloads only the active typescript project in a large workspace', async (
   )
 })
 
+test('preloads an explicitly extended typescript config outside the config directory', async () => {
+  setFiles({
+    '/shared/tsconfig.base.json': `{ "compilerOptions": { "strict": true } }`,
+    '/shared/workspace/eslint.config.js': `module.exports = []`,
+    '/shared/workspace/src/file.ts': `export const value = 1`,
+    '/shared/workspace/tsconfig.json': `{ "extends": "../tsconfig.base", "include": ["src"] }`,
+  })
+
+  const graph = await LoadEslintConfig.loadEslintConfig(
+    '/shared/workspace/eslint.config.js',
+    '/shared/workspace/src/file.ts',
+  )
+
+  expect(graph.files['/shared/tsconfig.base.json']).toBe(
+    `{ "compilerOptions": { "strict": true } }`,
+  )
+})
+
 test('preloads only the active file when a typescript project exceeds the file limit', async () => {
   const projectFiles = Object.fromEntries(
     Array.from({ length: 8200 }, (_, index) => [
