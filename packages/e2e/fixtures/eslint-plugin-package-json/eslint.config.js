@@ -8,7 +8,7 @@ export default [
       'package-json': packageJson,
     },
     rules: {
-      'package-json/require-description': 'error',
+      'package-json/no-empty-fields': 'error',
     },
   },
 ]
