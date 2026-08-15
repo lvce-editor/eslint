@@ -45,7 +45,7 @@ test('saves file uris and hashes separately from shared file content', async () 
     files: { '/workspace/data.json': '{"value":1}' },
     modules: { '/workspace/eslint.config.js': 'module.exports = []' },
     resolutions: {
-      '/workspace/eslint.config.js\0./data.json': '/workspace/data.json',
+      '/workspace/eslint.config.js\0🦄': '/workspace/data.json',
     },
   })
 
@@ -57,6 +57,11 @@ test('saves file uris and hashes separately from shared file content', async () 
   const response = cacheEntries.get(
     'https://eslint-config-files-cache.invalid/module%3Afile%3A%2F%2F%2Fworkspace%2Feslint.config.js',
   )
+  const content = await response?.clone().text()
+  expect(response?.headers.get('Content-Length')).toBe(
+    String(new TextEncoder().encode(content).byteLength),
+  )
+  expect(response?.headers.get('Content-Type')).toBe('application/json')
   await expect(response?.json()).resolves.toEqual({
     entry: 'file:///workspace/eslint.config.js',
     files: [
@@ -72,8 +77,7 @@ test('saves file uris and hashes separately from shared file content', async () 
       },
     ],
     resolutions: {
-      'file:///workspace/eslint.config.js\0./data.json':
-        'file:///workspace/data.json',
+      'file:///workspace/eslint.config.js\0🦄': 'file:///workspace/data.json',
     },
     version: 2,
   })
