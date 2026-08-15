@@ -44,7 +44,7 @@ test('saves file paths and hashes separately from shared file content', async ()
     entry: '/workspace/eslint.config.js',
     files: { '/workspace/data.json': '{"value":1}' },
     modules: { '/workspace/eslint.config.js': 'module.exports = []' },
-    resolutions: {},
+    resolutions: { emoji: '🦄' },
   })
 
   expect(getFileHashes).toHaveBeenCalledWith([
@@ -55,6 +55,11 @@ test('saves file paths and hashes separately from shared file content', async ()
   const response = cacheEntries.get(
     'https://eslint-config-files-cache.invalid/module%3A%2Fworkspace%2Feslint.config.js',
   )
+  const content = await response?.clone().text()
+  expect(response?.headers.get('Content-Length')).toBe(
+    String(new TextEncoder().encode(content).byteLength),
+  )
+  expect(response?.headers.get('Content-Type')).toBe('application/json')
   await expect(response?.json()).resolves.toEqual({
     entry: '/workspace/eslint.config.js',
     files: [
@@ -69,7 +74,7 @@ test('saves file paths and hashes separately from shared file content', async ()
         path: '/workspace/eslint.config.js',
       },
     ],
-    resolutions: {},
+    resolutions: { emoji: '🦄' },
     version: 1,
   })
 })

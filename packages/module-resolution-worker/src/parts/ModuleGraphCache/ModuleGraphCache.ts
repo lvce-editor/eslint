@@ -78,7 +78,15 @@ const setCachedGraph = async (
   graph: CachedModuleGraph,
 ): Promise<void> => {
   const cache = await caches.open(CacheName)
-  await cache.put(getCacheKey(cacheKey), Response.json(graph))
+  const content = JSON.stringify(graph)
+  const contentLength = new TextEncoder().encode(content).byteLength
+  const response = new Response(content, {
+    headers: {
+      'Content-Length': String(contentLength),
+      'Content-Type': 'application/json',
+    },
+  })
+  await cache.put(getCacheKey(cacheKey), response)
 }
 
 const getCachedText = async (hash: string): Promise<string | undefined> => {
