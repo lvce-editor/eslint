@@ -562,10 +562,12 @@ const resolveModule = async (
   specifier: string,
   root?: string,
 ): Promise<string | undefined> => {
+  const effectiveRoot =
+    root && isWithinDirectory(root, normalize(parent)) ? root : undefined
   const browserReplacement = await resolveBrowserReplacement(
     parent,
     specifier,
-    root,
+    effectiveRoot,
   )
   if (browserReplacement) {
     return browserReplacement
@@ -578,9 +580,10 @@ const resolveModule = async (
     const candidate = specifier.startsWith('/')
       ? specifier
       : join(dirname(parent), specifier)
-    return resolveAsFileOrDirectory(candidate, '.', root)
+    const candidateRoot = specifier.startsWith('/') ? undefined : effectiveRoot
+    return resolveAsFileOrDirectory(candidate, '.', candidateRoot)
   }
-  return resolvePackage(parent, specifier, root)
+  return resolvePackage(parent, specifier, effectiveRoot)
 }
 
 type Dependency = {
@@ -1176,6 +1179,10 @@ const loadModule = async (
   }> = []
   const pendingVisits = new Map<string, Promise<void>>()
   let totalBytes = 0
+  const getResolutionRoot = (path: string): string | undefined =>
+    resolutionRoot && isWithinDirectory(resolutionRoot, normalize(path))
+      ? resolutionRoot
+      : undefined
 
   const visitModule = async (
     path: string,
@@ -1213,7 +1220,7 @@ const loadModule = async (
       if (
         Object.hasOwn(modules, filePath) ||
         Object.hasOwn(files, filePath) ||
-        !(await isFile(filePath, resolutionRoot))
+        !(await isFile(filePath, getResolutionRoot(filePath)))
       ) {
         continue
       }
@@ -1226,7 +1233,11 @@ const loadModule = async (
     }
     await Promise.all(
       dependencies.map(async ({ optional, specifier }) => {
-        const resolved = await resolveModule(path, specifier, resolutionRoot)
+        const resolved = await resolveModule(
+          path,
+          specifier,
+          getResolutionRoot(path),
+        )
         if (!resolved) {
           if (optional) {
             return
@@ -1346,7 +1357,7 @@ const loadModule = async (
     if (
       Object.hasOwn(modules, path) ||
       Object.hasOwn(files, path) ||
-      !(await isFile(path, resolutionRoot))
+      !(await isFile(path, getResolutionRoot(path)))
     ) {
       return
     }
@@ -1378,7 +1389,11 @@ const loadModule = async (
       if (!specifier.startsWith('.') && !specifier.startsWith('/')) {
         continue
       }
-      const resolved = await resolveModule(path, specifier, resolutionRoot)
+      const resolved = await resolveModule(
+        path,
+        specifier,
+        getResolutionRoot(path),
+      )
       if (resolved && !resolved.startsWith('node:')) {
         await preloadFile(resolved)
       }
@@ -1528,7 +1543,7 @@ const loadModule = async (
     if (
       Object.hasOwn(modules, manifestPath) ||
       Object.hasOwn(files, manifestPath) ||
-      !(await isFile(manifestPath, resolutionRoot))
+      !(await isFile(manifestPath, getResolutionRoot(manifestPath)))
     ) {
       continue
     }

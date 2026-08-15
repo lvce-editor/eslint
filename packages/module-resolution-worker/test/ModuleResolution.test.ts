@@ -1063,6 +1063,23 @@ test('does not resolve config dependencies above the config directory', async ()
   ).toBe(true)
 })
 
+test('allows explicitly absolute config dependencies outside the config directory', async () => {
+  setFiles({
+    '/external/nested.js': 'module.exports = []',
+    '/external/plugin.js': `module.exports = require('./nested')`,
+    '/workspace/eslint.config.js': `module.exports = require('/external/plugin')`,
+  })
+
+  const graph = await LoadEslintConfig.loadEslintConfig(
+    '/workspace/eslint.config.js',
+  )
+
+  expect(graph.resolutions).toMatchObject({
+    '/external/plugin.js\0./nested': '/external/nested.js',
+    '/workspace/eslint.config.js\0/external/plugin': '/external/plugin.js',
+  })
+})
+
 test('loads ESLint when a non-file filesystem does not implement stat', async () => {
   const files: Record<string, string> = {
     'html:///workspace/node_modules/eslint/index.js':
