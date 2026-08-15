@@ -219,12 +219,18 @@ const getFileTypeFromParentEntries = async (
   return entry ? undefined : 'missing'
 }
 
-const getFileTypeFromAncestors = async (path: string): Promise<FileType> => {
+const getFileTypeFromAncestors = async (
+  path: string,
+  root?: string,
+): Promise<FileType> => {
+  if (root && path === root) {
+    return 'directory'
+  }
   if (/^\/[a-z]:$/i.test(path)) {
     return 'directory'
   }
   const parent = dirname(path)
-  if (parent !== path && (await getFileType(parent)) !== 'directory') {
+  if (parent !== path && (await getFileType(parent, root)) !== 'directory') {
     return 'missing'
   }
   const fileType = await getFileTypeFromParentEntries(path)
@@ -258,24 +264,33 @@ const getFileTypeFromStat = async (path: string): Promise<FileType> => {
   }
 }
 
-const getFileType = async (path: string): Promise<FileType> => {
+const getFileType = async (path: string, root?: string): Promise<FileType> => {
   const normalized = normalize(path)
-  const cached = fileTypeCache.get(normalized)
+  const normalizedRoot = root ? normalize(root) : undefined
+  if (
+    normalizedRoot &&
+    normalized !== normalizedRoot &&
+    !normalized.startsWith(`${normalizedRoot}/`)
+  ) {
+    return 'missing'
+  }
+  const cacheKey = `${normalizedRoot ?? ''}\0${normalized}`
+  const cached = fileTypeCache.get(cacheKey)
   if (cached) {
     return cached
   }
   const result = /^[a-z][a-z\d+.-]*:\/\//i.test(normalized)
     ? getFileTypeFromStat(normalized)
-    : getFileTypeFromAncestors(normalized)
-  fileTypeCache.set(normalized, result)
+    : getFileTypeFromAncestors(normalized, normalizedRoot)
+  fileTypeCache.set(cacheKey, result)
   return result
 }
 
-const isFile = async (path: string): Promise<boolean> =>
-  (await getFileType(path)) === 'file'
+const isFile = async (path: string, root?: string): Promise<boolean> =>
+  (await getFileType(path, root)) === 'file'
 
-const isDirectory = async (path: string): Promise<boolean> =>
-  (await getFileType(path)) === 'directory'
+const isDirectory = async (path: string, root?: string): Promise<boolean> =>
+  (await getFileType(path, root)) === 'directory'
 
 const isWithinDirectory = (directory: string, path: string): boolean =>
   path === directory || path.startsWith(`${directory}/`)
@@ -286,7 +301,7 @@ const findTypeScriptProjectDirectory = async (
 ): Promise<string> => {
   let directory = dirname(normalize(filePath))
   while (isWithinDirectory(workspaceDirectory, directory)) {
-    if (await isFile(join(directory, 'tsconfig.json'))) {
+    if (await isFile(join(directory, 'tsconfig.json'), workspaceDirectory)) {
       return directory
     }
     if (directory === workspaceDirectory) {
@@ -352,21 +367,24 @@ const getTypeScriptConfigPaths = (source: string): TypeScriptConfigPaths => {
 
 const readPackageJson = async (
   directory: string,
+  root?: string,
 ): Promise<PackageJson | undefined> => {
   const normalized = normalize(directory)
-  const cached = packageJsonCache.get(normalized)
+  const normalizedRoot = root ? normalize(root) : ''
+  const cacheKey = `${normalizedRoot}\0${normalized}`
+  const cached = packageJsonCache.get(cacheKey)
   if (cached) {
     return cached
   }
   const result = (async (): Promise<PackageJson | undefined> => {
     const path = join(normalized, 'package.json')
-    if (!(await isFile(path))) {
+    if (!(await isFile(path, root))) {
       return undefined
     }
     const content = await FileSystem.readFile(path)
     return JSON.parse(content)
   })()
-  packageJsonCache.set(normalized, result)
+  packageJsonCache.set(cacheKey, result)
   return result
 }
 
@@ -391,9 +409,12 @@ const selectExport = (value: any): string | undefined => {
 
 const resolveAsFile = async (
   candidate: string,
+  root?: string,
 ): Promise<string | undefined> => {
   const candidates = extensions.map((extension) => `${candidate}${extension}`)
-  const matches = await Promise.all(candidates.map(isFile))
+  const matches = await Promise.all(
+    candidates.map((candidate) => isFile(candidate, root)),
+  )
   const index = matches.indexOf(true)
   return index === -1 ? undefined : normalize(candidates[index])
 }
@@ -401,15 +422,16 @@ const resolveAsFile = async (
 const resolveAsFileOrDirectory = async (
   candidate: string,
   packageSubpath = '.',
+  root?: string,
 ): Promise<string | undefined> => {
-  const file = await resolveAsFile(candidate)
+  const file = await resolveAsFile(candidate, root)
   if (file) {
     return file
   }
-  if (!(await isDirectory(candidate))) {
+  if (!(await isDirectory(candidate, root))) {
     return undefined
   }
-  const packageJson = await readPackageJson(candidate)
+  const packageJson = await readPackageJson(candidate, root)
   if (packageJson) {
     const exportMap =
       typeof packageJson.exports === 'object' ? packageJson.exports : undefined
@@ -426,13 +448,15 @@ const resolveAsFileOrDirectory = async (
     if (typeof entry === 'string') {
       const resolvedEntry = await resolveAsFileOrDirectory(
         join(candidate, entry),
+        '.',
+        root,
       )
       if (resolvedEntry) {
         return resolvedEntry
       }
     }
   }
-  return resolveAsFile(join(candidate, 'index'))
+  return resolveAsFile(join(candidate, 'index'), root)
 }
 
 const parsePackageSpecifier = (
@@ -446,11 +470,21 @@ const parsePackageSpecifier = (
   return { packageName, subpath: rest ? `./${rest}` : '.' }
 }
 
-const getAncestorDirectories = (parent: string): readonly string[] => {
+const getAncestorDirectories = (
+  parent: string,
+  root?: string,
+): readonly string[] => {
   const directories: string[] = []
+  const normalizedRoot = root ? normalize(root) : undefined
   let directory = dirname(parent)
   while (true) {
+    if (normalizedRoot && !isWithinDirectory(normalizedRoot, directory)) {
+      return directories
+    }
     directories.push(directory)
+    if (directory === normalizedRoot) {
+      return directories
+    }
     const next = dirname(directory)
     if (next === directory) {
       return directories
@@ -462,41 +496,53 @@ const getAncestorDirectories = (parent: string): readonly string[] => {
 const resolvePackage = async (
   parent: string,
   specifier: string,
+  root?: string,
 ): Promise<string | undefined> => {
   const { packageName, subpath } = parsePackageSpecifier(specifier)
-  const packageDirectories = getAncestorDirectories(parent).map((directory) =>
-    join(directory, 'node_modules', packageName),
+  const packageDirectories = getAncestorDirectories(parent, root).map(
+    (directory) => join(directory, 'node_modules', packageName),
   )
-  const matches = await Promise.all(packageDirectories.map(isDirectory))
+  const matches = await Promise.all(
+    packageDirectories.map((directory) => isDirectory(directory, root)),
+  )
   const index = matches.indexOf(true)
   if (index === -1) {
     return undefined
   }
   const packageDirectory = packageDirectories[index]
   if (subpath !== '.') {
-    const packageJson = await readPackageJson(packageDirectory)
+    const packageJson = await readPackageJson(packageDirectory, root)
     const exportMap =
       typeof packageJson?.exports === 'object' ? packageJson.exports : undefined
     const exported = selectExport(exportMap?.[subpath])
     if (exported) {
       const resolvedExport = await resolveAsFileOrDirectory(
         join(packageDirectory, exported),
+        '.',
+        root,
       )
       if (resolvedExport) {
         return resolvedExport
       }
     }
-    return resolveAsFileOrDirectory(join(packageDirectory, subpath.slice(2)))
+    return resolveAsFileOrDirectory(
+      join(packageDirectory, subpath.slice(2)),
+      '.',
+      root,
+    )
   }
-  return resolveAsFileOrDirectory(packageDirectory)
+  return resolveAsFileOrDirectory(packageDirectory, '.', root)
 }
 
 const resolveBrowserReplacement = async (
   parent: string,
   specifier: string,
+  root?: string,
 ): Promise<string | undefined> => {
-  const directories = getAncestorDirectories(parent)
-  const packageManifests = await Promise.all(directories.map(readPackageJson))
+  const directories = getAncestorDirectories(parent, root)
+  const packageManifests = await Promise.all(
+    directories.map((directory) => readPackageJson(directory, root)),
+  )
   const index = packageManifests.findIndex(Boolean)
   if (index === -1) {
     return undefined
@@ -507,15 +553,20 @@ const resolveBrowserReplacement = async (
   }
   const replacement = browser[specifier]
   return typeof replacement === 'string'
-    ? resolveAsFileOrDirectory(join(directories[index], replacement))
+    ? resolveAsFileOrDirectory(join(directories[index], replacement), '.', root)
     : undefined
 }
 
 const resolveModule = async (
   parent: string,
   specifier: string,
+  root?: string,
 ): Promise<string | undefined> => {
-  const browserReplacement = await resolveBrowserReplacement(parent, specifier)
+  const browserReplacement = await resolveBrowserReplacement(
+    parent,
+    specifier,
+    root,
+  )
   if (browserReplacement) {
     return browserReplacement
   }
@@ -527,9 +578,9 @@ const resolveModule = async (
     const candidate = specifier.startsWith('/')
       ? specifier
       : join(dirname(parent), specifier)
-    return resolveAsFileOrDirectory(candidate)
+    return resolveAsFileOrDirectory(candidate, '.', root)
   }
-  return resolvePackage(parent, specifier)
+  return resolvePackage(parent, specifier, root)
 }
 
 type Dependency = {
@@ -1094,6 +1145,7 @@ const loadModule = async (
   virtualFilePath?: string,
   cacheKeyOverride?: string,
   shouldRestore = true,
+  resolutionRoot?: string,
 ): Promise<ModuleGraph> => {
   const entry = normalize(modulePath)
   const cacheKey =
@@ -1161,7 +1213,7 @@ const loadModule = async (
       if (
         Object.hasOwn(modules, filePath) ||
         Object.hasOwn(files, filePath) ||
-        !(await isFile(filePath))
+        !(await isFile(filePath, resolutionRoot))
       ) {
         continue
       }
@@ -1174,7 +1226,7 @@ const loadModule = async (
     }
     await Promise.all(
       dependencies.map(async ({ optional, specifier }) => {
-        const resolved = await resolveModule(path, specifier)
+        const resolved = await resolveModule(path, specifier, resolutionRoot)
         if (!resolved) {
           if (optional) {
             return
@@ -1294,7 +1346,7 @@ const loadModule = async (
     if (
       Object.hasOwn(modules, path) ||
       Object.hasOwn(files, path) ||
-      !(await isFile(path))
+      !(await isFile(path, resolutionRoot))
     ) {
       return
     }
@@ -1326,7 +1378,7 @@ const loadModule = async (
       if (!specifier.startsWith('.') && !specifier.startsWith('/')) {
         continue
       }
-      const resolved = await resolveModule(path, specifier)
+      const resolved = await resolveModule(path, specifier, resolutionRoot)
       if (resolved && !resolved.startsWith('node:')) {
         await preloadFile(resolved)
       }
@@ -1343,15 +1395,17 @@ const loadModule = async (
     const candidate = specifier.startsWith('/')
       ? normalize(specifier)
       : join(directory, specifier)
-    if (await isFile(candidate)) {
+    if (await isFile(candidate, resolutionRoot)) {
       return candidate
     }
-    if (await isDirectory(candidate)) {
+    if (await isDirectory(candidate, resolutionRoot)) {
       const index = join(candidate, 'tsconfig.json')
-      return (await isFile(index)) ? index : undefined
+      return (await isFile(index, resolutionRoot)) ? index : undefined
     }
     const jsonCandidate = `${candidate}.json`
-    return (await isFile(jsonCandidate)) ? jsonCandidate : undefined
+    return (await isFile(jsonCandidate, resolutionRoot))
+      ? jsonCandidate
+      : undefined
   }
 
   const preloadedTypeScriptConfigs = new Set<string>()
@@ -1396,7 +1450,7 @@ const loadModule = async (
       const path = join(configDirectory, specifier)
       const wildcardIndex = path.search(/[?*[\]{}]/)
       if (wildcardIndex === -1) {
-        if (await isDirectory(path)) {
+        if (await isDirectory(path, resolutionRoot)) {
           if (!isWithinDirectory(projectDirectory, path)) {
             await preloadVirtualFiles(path, ignoredWorkspaceDirectories)
           }
@@ -1412,7 +1466,7 @@ const loadModule = async (
       if (
         directory &&
         !isWithinDirectory(projectDirectory, directory) &&
-        (await isDirectory(directory))
+        (await isDirectory(directory, resolutionRoot))
       ) {
         await preloadVirtualFiles(directory, ignoredWorkspaceDirectories)
       }
@@ -1432,11 +1486,11 @@ const loadModule = async (
     await preloadVirtualFiles(virtualFileDirectory, ignoredWorkspaceDirectories)
   }
   const typeScriptConfigPath = join(virtualFileDirectory, 'tsconfig.json')
-  if (await isFile(typeScriptConfigPath)) {
+  if (await isFile(typeScriptConfigPath, resolutionRoot)) {
     await preloadTypeScriptConfig(typeScriptConfigPath, virtualFileDirectory)
   }
   for (const { path, specifier } of preloadedDependencies) {
-    const resolved = await resolveModule(path, specifier)
+    const resolved = await resolveModule(path, specifier, resolutionRoot)
     if (!resolved) {
       continue
     }
@@ -1474,7 +1528,7 @@ const loadModule = async (
     if (
       Object.hasOwn(modules, manifestPath) ||
       Object.hasOwn(files, manifestPath) ||
-      !(await isFile(manifestPath))
+      !(await isFile(manifestPath, resolutionRoot))
     ) {
       continue
     }
@@ -1506,12 +1560,16 @@ const loadModule = async (
 export const loadEslintConfig = (
   modulePath: string,
   filePath?: string,
-): Promise<ModuleGraph> => loadModule(modulePath, false, filePath)
+): Promise<ModuleGraph> =>
+  loadModule(modulePath, false, filePath, undefined, true, dirname(modulePath))
 
 export const loadEslintModule = async (
   filePath: string,
   projectPath?: string,
 ): Promise<ModuleGraph> => {
+  const resolutionRoot = projectPath
+    ? dirname(normalize(projectPath))
+    : undefined
   const cacheKey = `commonjs-project:${FileSystem.toUri(normalize(projectPath ?? filePath))}`
   const cached = cache.get(cacheKey)
   if (cached) {
@@ -1524,11 +1582,11 @@ export const loadEslintModule = async (
   if (restored) {
     return restored
   }
-  const entry = await resolveModule(filePath, 'eslint')
+  const entry = await resolveModule(filePath, 'eslint', resolutionRoot)
   if (!entry) {
     throw new Error(
       `Cannot find ESLint in project node_modules for ${filePath}`,
     )
   }
-  return loadModule(entry, true, undefined, cacheKey, false)
+  return loadModule(entry, true, undefined, cacheKey, false, resolutionRoot)
 }
