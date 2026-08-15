@@ -219,6 +219,24 @@ test('preloads only the active typescript project in a large workspace', async (
   )
 })
 
+test('preloads an explicitly extended typescript config outside the config directory', async () => {
+  setFiles({
+    '/shared/tsconfig.base.json': `{ "compilerOptions": { "strict": true } }`,
+    '/shared/workspace/eslint.config.js': `module.exports = []`,
+    '/shared/workspace/src/file.ts': `export const value = 1`,
+    '/shared/workspace/tsconfig.json': `{ "extends": "../tsconfig.base", "include": ["src"] }`,
+  })
+
+  const graph = await LoadEslintConfig.loadEslintConfig(
+    '/shared/workspace/eslint.config.js',
+    '/shared/workspace/src/file.ts',
+  )
+
+  expect(graph.files['/shared/tsconfig.base.json']).toBe(
+    `{ "compilerOptions": { "strict": true } }`,
+  )
+})
+
 test('preloads only the active file when a typescript project exceeds the file limit', async () => {
   const projectFiles = Object.fromEntries(
     Array.from({ length: 8200 }, (_, index) => [
@@ -759,7 +777,7 @@ test('resolves positive and missing candidates from cached directory entries', a
   )
 })
 
-test('stats an ambiguous symlink ancestor before using its directory entries', async () => {
+test('does not inspect ambiguous ancestors above the config directory', async () => {
   setFiles({
     '/var/workspace/eslint.config.js': `module.exports = require('./plugin')`,
     '/var/workspace/plugin.js': `module.exports = []`,
@@ -782,11 +800,11 @@ test('stats an ambiguous symlink ancestor before using its directory entries', a
   )
 
   expect(Object.hasOwn(graph.modules, '/var/workspace/plugin.js')).toBe(true)
-  expect(statFile).toHaveBeenCalledTimes(1)
-  expect(statFile).toHaveBeenCalledWith('file:///var')
+  expect(statFile).not.toHaveBeenCalled()
+  expect(readDirectory).not.toHaveBeenCalledWith('file:///')
 })
 
-test('stops directory traversal at a windows drive root', async () => {
+test('stops directory traversal at the config directory on windows', async () => {
   setFiles({
     '/C:/workspace/eslint.config.js': `module.exports = require('./plugin')`,
     '/C:/workspace/plugin.js': `module.exports = []`,
@@ -804,7 +822,8 @@ test('stops directory traversal at a windows drive root', async () => {
   )
 
   expect(Object.hasOwn(graph.modules, '/C:/workspace/plugin.js')).toBe(true)
-  expect(readDirectory).toHaveBeenCalledWith('file:///C:/')
+  expect(readDirectory).toHaveBeenCalledWith('file:///C:/workspace')
+  expect(readDirectory).not.toHaveBeenCalledWith('file:///C:/')
   expect(readDirectory).not.toHaveBeenCalledWith('file:///')
   expect(statFile).not.toHaveBeenCalled()
 })
@@ -1003,6 +1022,80 @@ test('loads the closest project ESLint package as a graph', async () => {
 
   expect(graph.entry).toBe('/workspace/node_modules/eslint/index.js')
   expect(graph.modules[graph.entry]).toContain('ProjectLinter')
+})
+
+test('does not read above the ESLint config directory when locating ESLint', async () => {
+  setFiles({
+    '/workspace/node_modules/eslint/index.js':
+      'class ProjectLinter {}; module.exports = { Linter: ProjectLinter }',
+    '/workspace/node_modules/eslint/package.json': '{"main":"index.js"}',
+  })
+  const readDirectory = jest.fn(readDirWithFileTypes)
+  FileSystem.state.api = {
+    readDirWithFileTypes: readDirectory,
+    readFile,
+    stat,
+  }
+
+  const graph = await LoadEslintConfig.loadEslintModule(
+    '/workspace/src/file.js',
+    '/workspace/eslint.config.js',
+  )
+
+  expect(graph.entry).toBe('/workspace/node_modules/eslint/index.js')
+  expect(readDirectory).toHaveBeenCalled()
+  expect(
+    readDirectory.mock.calls.every(
+      ([uri]) =>
+        uri === 'file:///workspace' || uri.startsWith('file:///workspace/'),
+    ),
+  ).toBe(true)
+})
+
+test('does not resolve config dependencies above the config directory', async () => {
+  setFiles({
+    '/node_modules/outside-plugin/index.js': 'module.exports = []',
+    '/node_modules/outside-plugin/package.json': '{"main":"index.js"}',
+    '/workspace/eslint.config.js': `try { require('outside-plugin') } catch {} module.exports = []`,
+  })
+  const readDirectory = jest.fn(readDirWithFileTypes)
+  FileSystem.state.api = {
+    readDirWithFileTypes: readDirectory,
+    readFile,
+    stat,
+  }
+
+  const graph = await LoadEslintConfig.loadEslintConfig(
+    '/workspace/eslint.config.js',
+  )
+
+  expect(graph.resolutions).not.toHaveProperty(
+    '/workspace/eslint.config.js\0outside-plugin',
+  )
+  expect(readDirectory).toHaveBeenCalled()
+  expect(
+    readDirectory.mock.calls.every(
+      ([uri]) =>
+        uri === 'file:///workspace' || uri.startsWith('file:///workspace/'),
+    ),
+  ).toBe(true)
+})
+
+test('allows explicitly absolute config dependencies outside the config directory', async () => {
+  setFiles({
+    '/external/nested.js': 'module.exports = []',
+    '/external/plugin.js': `module.exports = require('./nested')`,
+    '/workspace/eslint.config.js': `module.exports = require('/external/plugin')`,
+  })
+
+  const graph = await LoadEslintConfig.loadEslintConfig(
+    '/workspace/eslint.config.js',
+  )
+
+  expect(graph.resolutions).toMatchObject({
+    '/external/plugin.js\0./nested': '/external/nested.js',
+    '/workspace/eslint.config.js\0/external/plugin': '/external/plugin.js',
+  })
 })
 
 test('loads ESLint when a non-file filesystem does not implement stat', async () => {
