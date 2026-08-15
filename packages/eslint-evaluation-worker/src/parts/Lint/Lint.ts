@@ -167,12 +167,9 @@ const getContextMap = (
 
 const getContext = (
   graph: ModuleGraph | undefined,
-  linterFilePath: string,
+  baseDirectory: string,
   eslint: EslintModule,
 ): LintContext => {
-  const baseDirectory = graph
-    ? toNativeAbsolutePath(Path.dirname(Path.toFileSystemPath(graph.entry)))
-    : Path.dirname(linterFilePath)
   const contexts = getContextMap(graph, baseDirectory)
   const cached = contexts.get(eslint)
   if (cached) {
@@ -207,7 +204,11 @@ export const lint = async (
 ): Promise<LintResult[]> => {
   const linterFilePath = Path.toFileSystemPath(filePath)
   const nativeLinterFilePath = toNativeAbsolutePath(linterFilePath)
-  const context = getContext(graph, nativeLinterFilePath, eslint)
+  const baseDirectory = graph
+    ? Path.dirname(Path.toFileSystemPath(graph.entry))
+    : Path.dirname(linterFilePath)
+  const nativeBaseDirectory = toNativeAbsolutePath(baseDirectory)
+  const context = getContext(graph, nativeBaseDirectory, eslint)
   const messages = await lintWithContext(context, text, nativeLinterFilePath)
   const unsuppressedMessages = ApplySuppressions.applySuppressions(
     messages,
