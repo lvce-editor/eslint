@@ -170,7 +170,8 @@ const normalize = (path: string): string => {
 const dirname = (path: string): string => {
   const normalized = normalize(path)
   const match = /^([a-z][a-z\d+.-]*:\/\/)/i.exec(normalized)
-  const root = match ? `${match[1]}/` : '/'
+  const windowsDriveRoot = /^\/[a-z]:/i.exec(normalized)?.[0]
+  const root = match ? `${match[1]}/` : (windowsDriveRoot ?? '/')
   const index = normalized.lastIndexOf('/')
   return index < root.length ? root : normalized.slice(0, index)
 }
@@ -185,12 +186,17 @@ const readDirectoryEntries = (
   if (cached) {
     return cached
   }
-  const entries = FileSystem.readDirWithFileTypes(normalized)
+  const fileSystemPath = /^\/[a-z]:$/i.test(normalized)
+    ? `${normalized}/`
+    : normalized
+  const entries = FileSystem.readDirWithFileTypes(fileSystemPath)
   directoryEntriesCache.set(normalized, entries)
   return entries
 }
 
-const getFileTypeFromParent = async (path: string): Promise<FileType> => {
+const getFileTypeFromParentEntries = async (
+  path: string,
+): Promise<FileType | undefined> => {
   const parent = dirname(path)
   if (parent === path) {
     await readDirectoryEntries(path)
@@ -198,11 +204,58 @@ const getFileTypeFromParent = async (path: string): Promise<FileType> => {
   }
   const name = path.slice(path.lastIndexOf('/') + 1)
   const entries = await readDirectoryEntries(parent)
-  const entry = entries.find((candidate) => candidate.name === name)
+  const isWindowsPath = /^\/[a-z]:(?:\/|$)/i.test(path)
+  const entry = entries.find(
+    (candidate) =>
+      candidate.name === name ||
+      (isWindowsPath && candidate.name.toLowerCase() === name.toLowerCase()),
+  )
   if (entry?.isFile) {
     return 'file'
   }
-  return entry?.isDirectory ? 'directory' : 'missing'
+  if (entry?.isDirectory) {
+    return 'directory'
+  }
+  return entry ? undefined : 'missing'
+}
+
+const getFileTypeFromAncestors = async (path: string): Promise<FileType> => {
+  if (/^\/[a-z]:$/i.test(path)) {
+    return 'directory'
+  }
+  const parent = dirname(path)
+  if (parent !== path && (await getFileType(parent)) !== 'directory') {
+    return 'missing'
+  }
+  const fileType = await getFileTypeFromParentEntries(path)
+  if (fileType === undefined) {
+    return getFileTypeFromStat(path)
+  }
+  const name = path.slice(path.lastIndexOf('/') + 1)
+  if (
+    fileType === 'missing' &&
+    /^\/[a-z]:\//i.test(path) &&
+    /~\d/i.test(name)
+  ) {
+    return getFileTypeFromStat(path)
+  }
+  return fileType
+}
+
+const getFileTypeFromStat = async (path: string): Promise<FileType> => {
+  try {
+    const stat = await FileSystem.stat(path)
+    if (stat.isFile) {
+      return 'file'
+    }
+    return stat.isDirectory ? 'directory' : 'missing'
+  } catch {
+    try {
+      return (await getFileTypeFromParentEntries(path)) ?? 'missing'
+    } catch {
+      return 'missing'
+    }
+  }
 }
 
 const getFileType = async (path: string): Promise<FileType> => {
@@ -211,24 +264,9 @@ const getFileType = async (path: string): Promise<FileType> => {
   if (cached) {
     return cached
   }
-  const result = (async (): Promise<FileType> => {
-    try {
-      const stat = await FileSystem.stat(normalized)
-      if (stat.isFile) {
-        return 'file'
-      }
-      return stat.isDirectory ? 'directory' : 'missing'
-    } catch {
-      if (!/^[a-z][a-z\d+.-]*:\/\//i.test(normalized)) {
-        return 'missing'
-      }
-      try {
-        return await getFileTypeFromParent(normalized)
-      } catch {
-        return 'missing'
-      }
-    }
-  })()
+  const result = /^[a-z][a-z\d+.-]*:\/\//i.test(normalized)
+    ? getFileTypeFromStat(normalized)
+    : getFileTypeFromAncestors(normalized)
   fileTypeCache.set(normalized, result)
   return result
 }
