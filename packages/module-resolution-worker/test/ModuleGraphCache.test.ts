@@ -39,12 +39,14 @@ beforeEach(() => {
   }
 })
 
-test('saves file paths and hashes separately from shared file content', async () => {
-  await ModuleGraphCache.save('module:/workspace/eslint.config.js', {
+test('saves file uris and hashes separately from shared file content', async () => {
+  await ModuleGraphCache.save('module:file:///workspace/eslint.config.js', {
     entry: '/workspace/eslint.config.js',
     files: { '/workspace/data.json': '{"value":1}' },
     modules: { '/workspace/eslint.config.js': 'module.exports = []' },
-    resolutions: { emoji: '🦄' },
+    resolutions: {
+      '/workspace/eslint.config.js\0🦄': '/workspace/data.json',
+    },
   })
 
   expect(getFileHashes).toHaveBeenCalledWith([
@@ -53,7 +55,7 @@ test('saves file paths and hashes separately from shared file content', async ()
   ])
   expect(open).toHaveBeenCalledWith('eslint-config-files-cache')
   const response = cacheEntries.get(
-    'https://eslint-config-files-cache.invalid/module%3A%2Fworkspace%2Feslint.config.js',
+    'https://eslint-config-files-cache.invalid/module%3Afile%3A%2F%2F%2Fworkspace%2Feslint.config.js',
   )
   const content = await response?.clone().text()
   expect(response?.headers.get('Content-Length')).toBe(
@@ -61,45 +63,48 @@ test('saves file paths and hashes separately from shared file content', async ()
   )
   expect(response?.headers.get('Content-Type')).toBe('application/json')
   await expect(response?.json()).resolves.toEqual({
-    entry: '/workspace/eslint.config.js',
+    entry: 'file:///workspace/eslint.config.js',
     files: [
       {
         hash: hashes['file:///workspace/data.json'],
-        path: '/workspace/data.json',
+        uri: 'file:///workspace/data.json',
       },
     ],
     modules: [
       {
         hash: hashes['file:///workspace/eslint.config.js'],
-        path: '/workspace/eslint.config.js',
+        uri: 'file:///workspace/eslint.config.js',
       },
     ],
-    resolutions: { emoji: '🦄' },
-    version: 1,
+    resolutions: {
+      'file:///workspace/eslint.config.js\0🦄': 'file:///workspace/data.json',
+    },
+    version: 2,
   })
 })
 
 test('restores sources after validating every hash in one request', async () => {
   cacheEntries.set(
-    'https://eslint-config-files-cache.invalid/module%3A%2Fworkspace%2Feslint.config.js',
+    'https://eslint-config-files-cache.invalid/module%3Afile%3A%2F%2F%2Fworkspace%2Feslint.config.js',
     Response.json({
-      entry: '/workspace/eslint.config.js',
+      entry: 'file:///workspace/eslint.config.js',
       files: [
         {
           hash: hashes['file:///workspace/data.json'],
-          path: '/workspace/data.json',
+          uri: 'file:///workspace/data.json',
         },
       ],
       modules: [
         {
           hash: hashes['file:///workspace/eslint.config.js'],
-          path: '/workspace/eslint.config.js',
+          uri: 'file:///workspace/eslint.config.js',
         },
       ],
       resolutions: {
-        '/workspace/eslint.config.js\0./data.json': '/workspace/data.json',
+        'file:///workspace/eslint.config.js\0./data.json':
+          'file:///workspace/data.json',
       },
-      version: 1,
+      version: 2,
     }),
   )
   cacheEntries.set(
@@ -112,7 +117,7 @@ test('restores sources after validating every hash in one request', async () => 
   )
 
   await expect(
-    ModuleGraphCache.restore('module:/workspace/eslint.config.js'),
+    ModuleGraphCache.restore('module:file:///workspace/eslint.config.js'),
   ).resolves.toEqual({
     entry: '/workspace/eslint.config.js',
     files: { '/workspace/data.json': '{"value":1}' },
@@ -130,7 +135,28 @@ test('restores sources after validating every hash in one request', async () => 
 
 test('does not restore a graph when one file changed', async () => {
   cacheEntries.set(
-    'https://eslint-config-files-cache.invalid/module%3A%2Fworkspace%2Feslint.config.js',
+    'https://eslint-config-files-cache.invalid/module%3Afile%3A%2F%2F%2Fworkspace%2Feslint.config.js',
+    Response.json({
+      entry: 'file:///workspace/eslint.config.js',
+      files: [],
+      modules: [
+        { hash: 'old-hash', uri: 'file:///workspace/eslint.config.js' },
+      ],
+      resolutions: {},
+      version: 2,
+    }),
+  )
+  getFileHashes.mockResolvedValueOnce(['new-hash'])
+
+  await expect(
+    ModuleGraphCache.restore('module:file:///workspace/eslint.config.js'),
+  ).resolves.toBeUndefined()
+  expect(match).toHaveBeenCalledTimes(1)
+})
+
+test('does not restore the path-based cache schema', async () => {
+  cacheEntries.set(
+    'https://eslint-config-files-cache.invalid/module%3Afile%3A%2F%2F%2Fworkspace%2Feslint.config.js',
     Response.json({
       entry: '/workspace/eslint.config.js',
       files: [],
@@ -139,16 +165,15 @@ test('does not restore a graph when one file changed', async () => {
       version: 1,
     }),
   )
-  getFileHashes.mockResolvedValueOnce(['new-hash'])
 
   await expect(
-    ModuleGraphCache.restore('module:/workspace/eslint.config.js'),
+    ModuleGraphCache.restore('module:file:///workspace/eslint.config.js'),
   ).resolves.toBeUndefined()
-  expect(match).toHaveBeenCalledTimes(1)
+  expect(getFileHashes).not.toHaveBeenCalled()
 })
 
 test('does not save a graph when a file changes between reading and hashing', async () => {
-  await ModuleGraphCache.save('module:/workspace/eslint.config.js', {
+  await ModuleGraphCache.save('module:file:///workspace/eslint.config.js', {
     entry: '/workspace/eslint.config.js',
     files: {},
     modules: { '/workspace/eslint.config.js': 'module.exports = changed' },
@@ -161,13 +186,13 @@ test('does not save a graph when a file changes between reading and hashing', as
 test('does not restore content that does not match its content hash', async () => {
   const hash = hashes['file:///workspace/eslint.config.js']
   cacheEntries.set(
-    'https://eslint-config-files-cache.invalid/module%3A%2Fworkspace%2Feslint.config.js',
+    'https://eslint-config-files-cache.invalid/module%3Afile%3A%2F%2F%2Fworkspace%2Feslint.config.js',
     Response.json({
-      entry: '/workspace/eslint.config.js',
+      entry: 'file:///workspace/eslint.config.js',
       files: [],
-      modules: [{ hash, path: '/workspace/eslint.config.js' }],
+      modules: [{ hash, uri: 'file:///workspace/eslint.config.js' }],
       resolutions: {},
-      version: 1,
+      version: 2,
     }),
   )
   cacheEntries.set(
@@ -176,6 +201,6 @@ test('does not restore content that does not match its content hash', async () =
   )
 
   await expect(
-    ModuleGraphCache.restore('module:/workspace/eslint.config.js'),
+    ModuleGraphCache.restore('module:file:///workspace/eslint.config.js'),
   ).resolves.toBeUndefined()
 })
