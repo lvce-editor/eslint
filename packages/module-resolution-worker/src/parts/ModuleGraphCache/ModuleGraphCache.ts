@@ -5,7 +5,7 @@ const CacheName = 'eslint-config-files-cache'
 const CacheKeyPrefix = 'https://eslint-config-files-cache.invalid/'
 const FileContentCacheName = 'eslint-file-content-v1'
 const FileContentCacheKeyPrefix = 'https://eslint-file-cache.invalid/'
-const CacheVersion = 1
+const CacheVersion = 2
 const maxConcurrentCacheReads = 64
 
 export interface ModuleGraphSources {
@@ -15,15 +15,15 @@ export interface ModuleGraphSources {
   readonly resolutions: Readonly<Record<string, string>>
 }
 
-interface CachedPath {
+interface CachedUri {
   readonly hash: string
-  readonly path: string
+  readonly uri: string
 }
 
 interface CachedModuleGraph {
   readonly entry: string
-  readonly files: readonly CachedPath[]
-  readonly modules: readonly CachedPath[]
+  readonly files: readonly CachedUri[]
+  readonly modules: readonly CachedUri[]
   readonly resolutions: Readonly<Record<string, string>>
   readonly version: number
 }
@@ -34,14 +34,12 @@ const getCacheKey = (cacheKey: string): string =>
 const getFileContentKey = (hash: string): string =>
   `${FileContentCacheKeyPrefix}${hash}`
 
-const isCachedPath = (value: unknown): value is CachedPath => {
+const isCachedUri = (value: unknown): value is CachedUri => {
   if (!value || typeof value !== 'object') {
     return false
   }
-  const candidate = value as Partial<CachedPath>
-  return (
-    typeof candidate.hash === 'string' && typeof candidate.path === 'string'
-  )
+  const candidate = value as Partial<CachedUri>
+  return typeof candidate.hash === 'string' && typeof candidate.uri === 'string'
 }
 
 const isCachedModuleGraph = (value: unknown): value is CachedModuleGraph => {
@@ -53,9 +51,9 @@ const isCachedModuleGraph = (value: unknown): value is CachedModuleGraph => {
     candidate.version === CacheVersion &&
     typeof candidate.entry === 'string' &&
     Array.isArray(candidate.files) &&
-    candidate.files.every(isCachedPath) &&
+    candidate.files.every(isCachedUri) &&
     Array.isArray(candidate.modules) &&
-    candidate.modules.every(isCachedPath) &&
+    candidate.modules.every(isCachedUri) &&
     Boolean(candidate.resolutions) &&
     typeof candidate.resolutions === 'object'
   )
@@ -105,7 +103,7 @@ const mapConcurrent = async <T, U>(
 }
 
 const loadSources = async (
-  entries: readonly CachedPath[],
+  entries: readonly CachedUri[],
 ): Promise<Readonly<Record<string, string>> | undefined> => {
   const contents = await mapConcurrent(entries, async (entry) => {
     const content = await getCachedText(entry.hash)
@@ -121,8 +119,25 @@ const loadSources = async (
     return undefined
   }
   return Object.fromEntries(
-    entries.map((entry, index) => [entry.path, contents[index]]),
+    entries.map((entry, index) => [
+      FileSystem.toPath(entry.uri),
+      contents[index],
+    ]),
   ) as Readonly<Record<string, string>>
+}
+
+const mapResolutionPaths = (
+  resolutions: Readonly<Record<string, string>>,
+  mapPath: (path: string) => string,
+): Readonly<Record<string, string>> => {
+  return Object.fromEntries(
+    Object.entries(resolutions).map(([key, resolved]) => {
+      const separatorIndex = key.indexOf('\0')
+      const parent = key.slice(0, separatorIndex)
+      const specifier = key.slice(separatorIndex + 1)
+      return [`${mapPath(parent)}\0${specifier}`, mapPath(resolved)]
+    }),
+  )
 }
 
 export const restore = async (
@@ -135,7 +150,7 @@ export const restore = async (
     }
     const entries = [...cached.modules, ...cached.files]
     const hashes = await FileSystem.getFileHashes(
-      entries.map((entry) => entry.path),
+      entries.map((entry) => entry.uri),
     )
     if (
       hashes.length !== entries.length ||
@@ -151,10 +166,10 @@ export const restore = async (
       return undefined
     }
     return {
-      entry: cached.entry,
+      entry: FileSystem.toPath(cached.entry),
       files,
       modules,
-      resolutions: cached.resolutions,
+      resolutions: mapResolutionPaths(cached.resolutions, FileSystem.toPath),
     }
   } catch {
     return undefined
@@ -192,16 +207,16 @@ export const save = async (
     ) as readonly string[]
     const fileHashes = hashes.slice(modulePaths.length) as readonly string[]
     await setCachedGraph(cacheKey, {
-      entry: graph.entry,
+      entry: FileSystem.toUri(graph.entry),
       files: filePaths.map((path, index) => ({
         hash: fileHashes[index],
-        path,
+        uri: FileSystem.toUri(path),
       })),
       modules: modulePaths.map((path, index) => ({
         hash: moduleHashes[index],
-        path,
+        uri: FileSystem.toUri(path),
       })),
-      resolutions: graph.resolutions,
+      resolutions: mapResolutionPaths(graph.resolutions, FileSystem.toUri),
       version: CacheVersion,
     })
   } catch {

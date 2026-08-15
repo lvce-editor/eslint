@@ -36,28 +36,43 @@ export const getFileHashes = (
   if (!getFileHashesFn) {
     return Promise.resolve(paths.map(() => null))
   }
-  return getFileHashesFn(paths.map(toFileUri))
+  return getFileHashesFn(paths.map(toUri))
 }
 
-const toFileUri = (path: string): string => {
-  if (/^[a-z][a-z\d+.-]*:\/\//i.test(path)) {
+export const toUri = (path: string): string => {
+  if (/^[a-z][a-z\d+.-]*:/i.test(path) && !/^[a-z]:[\\/]/i.test(path)) {
     return path
   }
-  return new URL(path, 'file://').href
+  const normalizedPath = path.replaceAll('\\', '/')
+  if (normalizedPath.startsWith('//')) {
+    return new URL(normalizedPath, 'file://').href
+  }
+  const uri = new URL('file://')
+  uri.pathname = normalizedPath
+  return uri.href
+}
+
+export const toPath = (uri: string): string => {
+  if (/^file:/i.test(uri)) {
+    const parsed = new URL(uri)
+    const authority = parsed.hostname ? `//${parsed.hostname}` : ''
+    return `${authority}${decodeURIComponent(parsed.pathname)}`
+  }
+  return uri
 }
 
 export const readFile = (path: string): Promise<string> => {
-  return state.api.readFile(toFileUri(path))
+  return state.api.readFile(toUri(path))
 }
 
 export const readDirWithFileTypes = (
   path: string,
 ): Promise<readonly DirectoryEntry[]> => {
-  return state.api.readDirWithFileTypes(toFileUri(path))
+  return state.api.readDirWithFileTypes(toUri(path))
 }
 
 export const stat = (
   path: string,
 ): Promise<{ readonly isDirectory: boolean; readonly isFile: boolean }> => {
-  return state.api.stat(toFileUri(path))
+  return state.api.stat(toUri(path))
 }

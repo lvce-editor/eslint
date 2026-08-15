@@ -1060,7 +1060,7 @@ const loadModule = async (
   const entry = normalize(modulePath)
   const cacheKey =
     cacheKeyOverride ??
-    `${scanCommonJs ? 'commonjs' : 'module'}:${entry}:${virtualFilePath ?? ''}`
+    `${scanCommonJs ? 'commonjs' : 'module'}:${FileSystem.toUri(entry)}:${virtualFilePath ? FileSystem.toUri(normalize(virtualFilePath)) : ''}`
   const cached = cache.get(cacheKey)
   if (cached) {
     const entrySource = await FileSystem.readFile(cached.graph.entry)
@@ -1474,7 +1474,7 @@ export const loadEslintModule = async (
   filePath: string,
   projectPath?: string,
 ): Promise<ModuleGraph> => {
-  const cacheKey = `commonjs-project:${normalize(projectPath ?? filePath)}`
+  const cacheKey = `commonjs-project:${FileSystem.toUri(normalize(projectPath ?? filePath))}`
   const cached = cache.get(cacheKey)
   if (cached) {
     const entrySource = await FileSystem.readFile(cached.graph.entry)
