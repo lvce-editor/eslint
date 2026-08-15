@@ -7,12 +7,10 @@ beforeEach(() => {
 
 test('runs linting in the eslint evaluation worker', async () => {
   const invocations: unknown[] = []
-  let workerName = ''
-  let workerUrl = ''
+  let workerId = ''
   EslintEvaluationWorker.state.createRpc = async (options) => {
-    const workerOptions = options as { name: string; url: string }
-    workerName = workerOptions.name
-    workerUrl = workerOptions.url
+    const workerOptions = options as { id: string }
+    workerId = workerOptions.id
     return {
       invoke: async (method, ...params) => {
         invocations.push([method, ...params])
@@ -28,8 +26,7 @@ test('runs linting in the eslint evaluation worker', async () => {
       '/workspace/eslint.config.js',
     ),
   ).resolves.toEqual([])
-  expect(workerName).toBe('ESLint Evaluation Worker')
-  expect(workerUrl).toContain('eslintEvaluationWorkerMain.js')
+  expect(workerId).toBe('builtin.eslint.evaluation-worker')
   expect(invocations).toEqual([
     [
       'EslintEvaluation.lint',

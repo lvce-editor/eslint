@@ -17,6 +17,10 @@ export interface LoadedSuppressions {
 const suppressionsFileName = 'eslint-suppressions.json'
 
 const maxDepth = 10
+const loadedSuppressionsCache = new Map<
+  string,
+  Promise<LoadedSuppressions | undefined>
+>()
 
 const parseSuppressions = (content: string, path: string): Suppressions => {
   try {
@@ -28,11 +32,10 @@ const parseSuppressions = (content: string, path: string): Suppressions => {
   }
 }
 
-export const loadSuppressions = async (
-  filePath: string,
-  configPath: string | null,
+const loadSuppressionsUncached = async (
+  startDirectory: string,
 ): Promise<LoadedSuppressions | undefined> => {
-  let currentDirectory = Path.dirname(configPath ?? filePath)
+  let currentDirectory = startDirectory
   for (let depth = 0; depth < maxDepth; depth++) {
     let entries: Awaited<ReturnType<typeof FileSystem.readDirWithFileTypes>>
     try {
@@ -58,4 +61,21 @@ export const loadSuppressions = async (
     currentDirectory = parentDirectory
   }
   return undefined
+}
+
+export const clearCache = (): void => {
+  loadedSuppressionsCache.clear()
+}
+
+export const loadSuppressions = (
+  filePath: string,
+  configPath: string | null,
+): Promise<LoadedSuppressions | undefined> => {
+  const startDirectory = Path.dirname(configPath ?? filePath)
+  let loadedSuppressions = loadedSuppressionsCache.get(startDirectory)
+  if (!loadedSuppressions) {
+    loadedSuppressions = loadSuppressionsUncached(startDirectory)
+    loadedSuppressionsCache.set(startDirectory, loadedSuppressions)
+  }
+  return loadedSuppressions
 }

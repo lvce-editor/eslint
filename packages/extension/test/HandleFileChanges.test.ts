@@ -46,3 +46,29 @@ test('does not refresh diagnostics for an unrelated file change', async () => {
   expect(clearCaches).not.toHaveBeenCalled()
   expect(updateAllDiagnostics).not.toHaveBeenCalled()
 })
+
+test('refreshes diagnostics for a cached discovery change without clearing the evaluation engine', async () => {
+  const invalidateForFileChanges = jest.fn<(changes: any) => boolean>(
+    () => false,
+  )
+  const invalidateDiscoveryCaches = jest.fn<(changes: any) => boolean>(
+    () => true,
+  )
+  const updateAllDiagnostics = jest.fn(async () => undefined)
+  const clearCaches = jest.fn<() => void>()
+  const changes = {
+    changed: ['file:///workspace/eslint-suppressions.json'],
+  }
+
+  await HandleFileChanges.handleFileChangesWithDependencies(
+    changes,
+    invalidateForFileChanges,
+    updateAllDiagnostics,
+    clearCaches,
+    invalidateDiscoveryCaches,
+  )
+
+  expect(invalidateDiscoveryCaches).toHaveBeenCalledWith(changes)
+  expect(clearCaches).not.toHaveBeenCalled()
+  expect(updateAllDiagnostics).toHaveBeenCalledWith()
+})

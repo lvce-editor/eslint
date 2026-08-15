@@ -33,7 +33,7 @@
   },
   "devDependencies": {
     "@jest/globals": "^30.4.1",
-    "@lvce-editor/api": "^9.17.0",
+    "@lvce-editor/api": "^9.18.0",
     "fake-indexeddb": "^6.2.5",
     "jest": "^30.4.2",
     "ts-jest": "^29.4.12"

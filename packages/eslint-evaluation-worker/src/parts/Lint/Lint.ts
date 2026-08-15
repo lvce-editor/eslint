@@ -1,5 +1,6 @@
-import type { Linter } from 'eslint'
+import type { ESLint, Linter } from 'eslint'
 import type { LoadedSuppressions } from '../ApplySuppressions/ApplySuppressions.ts'
+import type { EslintModule } from '../LoadEslint/LoadEslint.ts'
 import type { ModuleGraph } from '../ModuleGraph/ModuleGraph.ts'
 import * as ApplySuppressions from '../ApplySuppressions/ApplySuppressions.ts'
 import * as LoadModuleGraph from '../LoadModuleGraph/LoadModuleGraph.ts'
@@ -19,19 +20,36 @@ export type LintResult = {
   }
 }
 
-export type LinterConstructor = typeof Linter
+type EslintConstructor = typeof ESLint
+type LinterConstructor = typeof Linter
+type LintMessage = Linter.LintMessage
 
-type LintMessage = ReturnType<InstanceType<LinterConstructor>['verify']>[number]
-
-type LintContext = {
-  readonly config: any[]
-  readonly linter: InstanceType<LinterConstructor>
+type ModernLintContext = {
+  readonly engine: InstanceType<EslintConstructor>
+  readonly type: 'modern'
 }
 
-const graphContexts = new Map<string, WeakMap<LinterConstructor, LintContext>>()
+type LegacyLintContext = {
+  readonly config: any[]
+  readonly engine: InstanceType<LinterConstructor>
+  readonly type: 'legacy'
+}
+
+type LintContext = LegacyLintContext | ModernLintContext
+
+const graphContexts = new Map<string, WeakMap<EslintModule, LintContext>>()
+const defaultContexts = new Map<string, WeakMap<EslintModule, LintContext>>()
+
+type GlobalWithProcess = typeof globalThis & {
+  readonly process?: {
+    readonly platform?: string
+    readonly cwd?: () => string
+  }
+}
 
 export const clearCache = (): void => {
   graphContexts.clear()
+  defaultContexts.clear()
 }
 
 const isNoMatchingConfigMessage = (message: LintMessage): boolean => {
@@ -56,56 +74,142 @@ const defaultConfig = {
   },
 }
 
+const getMajorVersion = (Eslint: EslintConstructor): number => {
+  const [majorVersion = ''] = Eslint.version?.split('.', 1) ?? []
+  const major = Number(majorVersion)
+  return Number.isFinite(major) ? major : 0
+}
+
+const toNativeAbsolutePath = (filePath: string): string => {
+  const { process } = globalThis as GlobalWithProcess
+  if (process?.platform !== 'win32' || !filePath.startsWith('/')) {
+    return filePath
+  }
+  if (/^\/[a-z]:\//i.test(filePath)) {
+    return filePath.slice(1).replaceAll('/', '\\')
+  }
+  const currentDirectory = process.cwd?.() ?? ''
+  const drive = /^[a-z]:/i.exec(currentDirectory)?.[0] ?? 'C:'
+  return `${drive}${filePath.replaceAll('/', '\\')}`
+}
+
+const createModernEngine = (
+  Eslint: EslintConstructor,
+  baseDirectory: string,
+  config: any[],
+): InstanceType<EslintConstructor> => {
+  const options = {
+    applySuppressions: false,
+    cwd: baseDirectory,
+    overrideConfig: config,
+    overrideConfigFile: true as const,
+  }
+  try {
+    return new Eslint(options)
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      /applySuppressions/.test(error.message) &&
+      /unknown|invalid/i.test(error.message)
+    ) {
+      const { applySuppressions: _applySuppressions, ...legacyOptions } =
+        options
+      return new Eslint(legacyOptions)
+    }
+    throw error
+  }
+}
+
 const createContext = (
   graph: ModuleGraph | undefined,
   baseDirectory: string,
-  Linter: LinterConstructor,
+  eslint: EslintModule,
 ): LintContext => {
   const loadedConfig = graph
     ? LoadModuleGraph.loadModuleGraph(graph)
     : defaultConfig
   const config = Array.isArray(loadedConfig) ? loadedConfig : [loadedConfig]
-  const linter = new Linter({
-    configType: 'flat',
-    cwd: baseDirectory,
-  })
-  return { config, linter }
+  if (
+    typeof eslint.ESLint === 'function' &&
+    getMajorVersion(eslint.ESLint) >= 9
+  ) {
+    return {
+      engine: createModernEngine(eslint.ESLint, baseDirectory, config),
+      type: 'modern',
+    }
+  }
+  if (typeof eslint.Linter !== 'function') {
+    throw new TypeError('Project ESLint module does not export Linter')
+  }
+  return {
+    config,
+    engine: new eslint.Linter({
+      configType: 'flat',
+      cwd: baseDirectory,
+    }),
+    type: 'legacy',
+  }
+}
+
+const getContextMap = (
+  graph: ModuleGraph | undefined,
+  baseDirectory: string,
+): WeakMap<EslintModule, LintContext> => {
+  const contexts = graph ? graphContexts : defaultContexts
+  const key = graph?.id ?? baseDirectory
+  let contextMap = contexts.get(key)
+  if (!contextMap) {
+    contextMap = new WeakMap()
+    contexts.set(key, contextMap)
+  }
+  return contextMap
 }
 
 const getContext = (
   graph: ModuleGraph | undefined,
-  linterFilePath: string,
-  Linter: LinterConstructor,
+  baseDirectory: string,
+  eslint: EslintModule,
 ): LintContext => {
-  if (!graph) {
-    const baseDirectory = Path.dirname(linterFilePath)
-    return createContext(graph, baseDirectory, Linter)
-  }
-  let contexts = graphContexts.get(graph.id)
-  if (!contexts) {
-    contexts = new WeakMap()
-    graphContexts.set(graph.id, contexts)
-  }
-  const cached = contexts.get(Linter)
+  const contexts = getContextMap(graph, baseDirectory)
+  const cached = contexts.get(eslint)
   if (cached) {
     return cached
   }
-  const baseDirectory = Path.dirname(Path.toFileSystemPath(graph.entry))
-  const context = createContext(graph, baseDirectory, Linter)
-  contexts.set(Linter, context)
+  const context = createContext(graph, baseDirectory, eslint)
+  contexts.set(eslint, context)
   return context
+}
+
+const lintWithContext = async (
+  context: LintContext,
+  text: string,
+  filePath: string,
+): Promise<readonly LintMessage[]> => {
+  if (context.type === 'modern') {
+    const results = await context.engine.lintText(text, {
+      filePath,
+      warnIgnored: false,
+    })
+    return results[0]?.messages ?? []
+  }
+  return context.engine.verify(text, context.config, { filename: filePath })
 }
 
 export const lint = async (
   text: string,
   filePath: string,
   graph: ModuleGraph | undefined,
-  Linter: LinterConstructor,
+  eslint: EslintModule,
   loadedSuppressions?: LoadedSuppressions,
 ): Promise<LintResult[]> => {
   const linterFilePath = Path.toFileSystemPath(filePath)
-  const { config, linter } = getContext(graph, linterFilePath, Linter)
-  const messages = linter.verify(text, config, { filename: linterFilePath })
+  const nativeLinterFilePath = toNativeAbsolutePath(linterFilePath)
+  const baseDirectory = graph
+    ? Path.dirname(Path.toFileSystemPath(graph.entry))
+    : Path.dirname(linterFilePath)
+  const nativeBaseDirectory = toNativeAbsolutePath(baseDirectory)
+  const context = getContext(graph, nativeBaseDirectory, eslint)
+  const messages = await lintWithContext(context, text, nativeLinterFilePath)
   const unsuppressedMessages = ApplySuppressions.applySuppressions(
     messages,
     linterFilePath,
