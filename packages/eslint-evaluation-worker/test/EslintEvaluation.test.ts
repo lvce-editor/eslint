@@ -81,3 +81,68 @@ test('uses the default config when no project config exists', async () => {
     undefined,
   )
 })
+
+test('reuses config and eslint module graphs while typing', async () => {
+  const configGraph = createGraph(
+    '/workspace/eslint.config.js',
+    `module.exports = [{ rules: {} }]`,
+    'config-graph',
+  )
+  const eslintGraph = createGraph(
+    '/workspace/node_modules/eslint/index.js',
+    `module.exports = { Linter: class { verify() { return [] } } }`,
+    'eslint-graph',
+  )
+  const loadEslintConfig = jest.fn(async () => configGraph)
+  const loadEslintModule = jest.fn(async () => eslintGraph)
+  const dependencies = { loadEslintConfig, loadEslintModule }
+
+  await EslintEvaluation.lintWithDependencies(
+    'const value = 1',
+    '/workspace/src/file.js',
+    '/workspace/eslint.config.js',
+    undefined,
+    dependencies,
+  )
+  await EslintEvaluation.lintWithDependencies(
+    'const value = 2',
+    '/workspace/src/file.js',
+    '/workspace/eslint.config.js',
+    undefined,
+    dependencies,
+  )
+
+  expect(loadEslintConfig).toHaveBeenCalledTimes(1)
+  expect(loadEslintModule).toHaveBeenCalledTimes(1)
+})
+
+test('retries a failed graph load', async () => {
+  const eslintGraph = createGraph(
+    '/workspace/node_modules/eslint/index.js',
+    `module.exports = { Linter: class { verify() { return [] } } }`,
+    'eslint-graph',
+  )
+  const loadEslintConfig = jest
+    .fn<() => Promise<ModuleGraph>>()
+    .mockRejectedValueOnce(new Error('temporary failure'))
+    .mockResolvedValueOnce(
+      createGraph(
+        '/workspace/eslint.config.js',
+        `module.exports = [{ rules: {} }]`,
+        'config-graph',
+      ),
+    )
+  const loadEslintModule = jest.fn(async () => eslintGraph)
+  const lint = () =>
+    EslintEvaluation.lintWithDependencies(
+      'const value = 1',
+      '/workspace/src/file.js',
+      '/workspace/eslint.config.js',
+      undefined,
+      { loadEslintConfig, loadEslintModule },
+    )
+
+  await expect(lint()).rejects.toThrow('temporary failure')
+  await expect(lint()).resolves.toEqual([])
+  expect(loadEslintConfig).toHaveBeenCalledTimes(2)
+})

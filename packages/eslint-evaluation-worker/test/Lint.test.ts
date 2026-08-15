@@ -1,7 +1,9 @@
 import { expect, test } from '@jest/globals'
-import { Linter } from 'eslint'
+import { ESLint, Linter } from 'eslint'
 import type { ModuleGraph } from '../src/parts/ModuleGraph/ModuleGraph.ts'
 import * as Lint from '../src/parts/Lint/Lint.ts'
+
+const eslint = { ESLint, Linter }
 
 const createGraph = (config: string, id = config): ModuleGraph => ({
   entry: '/workspace/eslint.config.js',
@@ -15,7 +17,7 @@ test('uses the secure default config when no project config exists', async () =>
     'debugger',
     '/workspace/file.js',
     undefined,
-    Linter,
+    eslint,
   )
   expect(results).toEqual([
     expect.objectContaining({ ruleId: 'no-debugger', severity: 'error' }),
@@ -27,7 +29,7 @@ test('converts a virtual document uri to an absolute linter path', async () => {
     'debugger',
     'memfs:///workspace/file.js',
     undefined,
-    Linter,
+    eslint,
   )
   expect(results).toEqual([
     expect.objectContaining({ ruleId: 'no-debugger', severity: 'error' }),
@@ -41,7 +43,7 @@ test('uses rules from a loaded flat config', async () => {
     createGraph(
       `module.exports = [{ languageOptions: { globals: { value: 'readonly' } }, rules: { eqeqeq: 'error' } }]`,
     ),
-    Linter,
+    eslint,
   )
   expect(results).toEqual([
     expect.objectContaining({ ruleId: 'eqeqeq', severity: 'error' }),
@@ -66,7 +68,7 @@ test('runs a dynamically loaded plugin rule', async () => {
     'const foo = 1',
     '/workspace/file.js',
     graph,
-    Linter,
+    eslint,
   )
   expect(results).toEqual([
     expect.objectContaining({
@@ -93,13 +95,13 @@ test('reuses loaded config modules until the graph changes', async () => {
     },
   }
 
-  const first = await Lint.lint('', '/workspace/file.js', graph, Linter)
-  const second = await Lint.lint('', '/workspace/file.js', graph, Linter)
+  const first = await Lint.lint('', '/workspace/file.js', graph, eslint)
+  const second = await Lint.lint('', '/workspace/file.js', graph, eslint)
   const reloaded = await Lint.lint(
     '',
     '/workspace/file.js',
     { ...graph, id: 'reloaded-graph' },
-    Linter,
+    eslint,
   )
 
   expect(first[0].message).toBe('1')
@@ -107,26 +109,49 @@ test('reuses loaded config modules until the graph changes', async () => {
   expect(reloaded[0].message).toBe('1')
 })
 
-test('reuses the linter for the same graph', async () => {
+test('reuses the ESLint engine for the same graph', async () => {
   let constructions = 0
+  class CountingEslint extends ESLint {
+    static readonly version = '10.0.0'
+
+    constructor(options: ConstructorParameters<typeof ESLint>[0]) {
+      super(options)
+      constructions++
+    }
+  }
+  const countingEslint = { ESLint: CountingEslint, Linter }
+  const graph = createGraph(`module.exports = [{ rules: {} }]`)
+
+  await Lint.lint('', '/workspace/file.js', graph, countingEslint)
+  await Lint.lint('', '/workspace/file.js', graph, countingEslint)
+  await Lint.lint(
+    '',
+    '/workspace/file.js',
+    createGraph(`module.exports = [{ rules: {} }]`, 'different-graph'),
+    countingEslint,
+  )
+
+  expect(constructions).toBe(2)
+})
+
+test('falls back to a cached Linter for ESLint 8', async () => {
+  let constructions = 0
+  class OldEslint extends ESLint {
+    static readonly version = '8.57.0'
+  }
   class CountingLinter extends Linter {
     constructor(options: ConstructorParameters<typeof Linter>[0]) {
       super(options)
       constructions++
     }
   }
+  const legacyEslint = { ESLint: OldEslint, Linter: CountingLinter }
   const graph = createGraph(`module.exports = [{ rules: {} }]`)
 
-  await Lint.lint('', '/workspace/file.js', graph, CountingLinter)
-  await Lint.lint('', '/workspace/file.js', graph, CountingLinter)
-  await Lint.lint(
-    '',
-    '/workspace/file.js',
-    createGraph(`module.exports = [{ rules: {} }]`, 'different-graph'),
-    CountingLinter,
-  )
+  await Lint.lint('', '/workspace/file.js', graph, legacyEslint)
+  await Lint.lint('', '/workspace/file.js', graph, legacyEslint)
 
-  expect(constructions).toBe(2)
+  expect(constructions).toBe(1)
 })
 
 test('passes an absolute file path to parser services', async () => {
@@ -143,7 +168,7 @@ test('passes an absolute file path to parser services', async () => {
     '',
     '/workspace/source/file.ts',
     graph,
-    Linter,
+    eslint,
   )
   expect(results[0].message).toBe('/workspace/source/file.ts')
 })
@@ -153,7 +178,7 @@ test('preserves warning severity and source locations', async () => {
     'const unused = 1',
     '/workspace/file.js',
     createGraph(`module.exports = [{ rules: { 'no-unused-vars': 'warn' } }]`),
-    Linter,
+    eslint,
   )
   expect(results[0]).toEqual(
     expect.objectContaining({
@@ -172,7 +197,7 @@ test('returns no diagnostics for a file ignored by flat config', async () => {
     createGraph(
       `module.exports = [{ ignores: ['ignored/**'] }, { files: ['**/*.js'], rules: { 'no-console': 'error' } }]`,
     ),
-    Linter,
+    eslint,
   )
   expect(results).toEqual([])
 })
@@ -184,7 +209,7 @@ test('preserves fixes returned by ESLint rules', async () => {
     createGraph(
       `module.exports = [{ rules: { quotes: ['error', 'single'] } }]`,
     ),
-    Linter,
+    eslint,
   )
 
   expect(results[0]).toEqual(
@@ -205,7 +230,7 @@ test('applies loaded bulk suppressions', async () => {
     createGraph(
       `module.exports = [{ rules: { 'no-debugger': 'error', 'no-undef': 'error' } }]`,
     ),
-    Linter,
+    eslint,
     {
       baseDirectory: '/workspace',
       suppressions: {

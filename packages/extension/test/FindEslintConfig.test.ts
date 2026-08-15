@@ -21,12 +21,49 @@ const readDirWithFileTypes = async (
 
 beforeEach(() => {
   state.files = []
+  FindEslintConfig.clearCache()
   FileSystem.state.api = {
     getFileHashes: async () => [],
     readDirWithFileTypes,
     readFile: async () => '',
     stat: async () => 0,
   }
+})
+
+test('coalesces concurrent config searches', async () => {
+  let directoryReads = 0
+  FileSystem.state.api = {
+    ...FileSystem.state.api,
+    readDirWithFileTypes: async (uri) => {
+      directoryReads++
+      return readDirWithFileTypes(uri)
+    },
+  }
+  state.files = ['/workspace/eslint.config.js']
+
+  await Promise.all([
+    FindEslintConfig.findEslintConfig('/workspace/src/file.js'),
+    FindEslintConfig.findEslintConfig('/workspace/src/file.js'),
+  ])
+
+  expect(directoryReads).toBe(2)
+})
+
+test('caches missing configs', async () => {
+  let directoryReads = 0
+  FileSystem.state.api = {
+    ...FileSystem.state.api,
+    readDirWithFileTypes: async (uri) => {
+      directoryReads++
+      return readDirWithFileTypes(uri)
+    },
+  }
+
+  await FindEslintConfig.findEslintConfig('/workspace/src/file.js')
+  const firstSearchReads = directoryReads
+  await FindEslintConfig.findEslintConfig('/workspace/src/file.js')
+
+  expect(directoryReads).toBe(firstSearchReads)
 })
 
 test('finds eslint.config.js in the current directory', async () => {

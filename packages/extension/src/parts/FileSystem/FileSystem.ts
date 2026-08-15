@@ -1,5 +1,4 @@
 import {
-  type OutputChannel,
   getFileHash as getFileHashApi,
   getFileHashes as getFileHashesApi,
   readDirWithFileTypes as readDirWithFileTypesApi,
@@ -7,7 +6,6 @@ import {
   stat as statApi,
 } from '@lvce-editor/api'
 import * as ComputeTextHash from '../ComputeTextHash/ComputeTextHash.ts'
-import { outputChannel } from '../EslintOutputChannel/EslintOutputChannel.ts'
 import * as FileContentCache from '../FileContentCache/FileContentCache.ts'
 import * as Logger from '../Logger/Logger.ts'
 
@@ -28,8 +26,6 @@ export const state: {
   api: FileSystemApi
   cache: TextCache
   computeTextHash: (text: string) => Promise<string>
-  now: () => number
-  outputChannel: Pick<OutputChannel, 'appendLine'>
   uriHashes: Map<string, string>
 } = {
   api: {
@@ -41,8 +37,6 @@ export const state: {
   },
   cache: FileContentCache,
   computeTextHash: ComputeTextHash.computeTextHash,
-  now: () => performance.now(),
-  outputChannel,
   uriHashes: new Map(),
 }
 
@@ -148,19 +142,7 @@ const readFileCached = async (uri: string): Promise<string> => {
 
 export const readFile = async (path: string): Promise<string> => {
   const uri = toFileUri(path)
-  const startTime = state.now()
-  try {
-    return await readFileCached(uri)
-  } finally {
-    const duration = state.now() - startTime
-    try {
-      await state.outputChannel.appendLine(
-        `Read ${uri} in ${duration.toFixed(2)}ms`,
-      )
-    } catch (error) {
-      Logger.warn('Failed to write ESLint file read timing', error)
-    }
-  }
+  return readFileCached(uri)
 }
 
 export const readDirWithFileTypes = async (

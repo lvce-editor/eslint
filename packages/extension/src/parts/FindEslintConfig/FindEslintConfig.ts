@@ -1,21 +1,12 @@
 import * as FileSystem from '../FileSystem/FileSystem.ts'
 
 const configFileName = 'eslint.config.js'
+const configPaths = new Map<string, Promise<string | null>>()
 
-export const findEslintConfig = async (
-  filePath: string,
+const findEslintConfigUncached = async (
+  startDirectory: string,
 ): Promise<string | null> => {
-  const pathParts = filePath.split('/')
-  const fileName = pathParts.pop()
-  if (!fileName) {
-    return null
-  }
-
-  let currentDir = pathParts.join('/')
-  if (!currentDir) {
-    currentDir = '/'
-  }
-
+  let currentDir = startDirectory
   // Search up the directory tree
   const maxDepth = 10
   let depth = 0
@@ -46,4 +37,24 @@ export const findEslintConfig = async (
   }
 
   return null
+}
+
+export const clearCache = (): void => {
+  configPaths.clear()
+}
+
+const getStartDirectory = (filePath: string): string => {
+  const pathParts = filePath.split('/')
+  pathParts.pop()
+  return pathParts.join('/') || '/'
+}
+
+export const findEslintConfig = (filePath: string): Promise<string | null> => {
+  const startDirectory = getStartDirectory(filePath)
+  let configPath = configPaths.get(startDirectory)
+  if (!configPath) {
+    configPath = findEslintConfigUncached(startDirectory)
+    configPaths.set(startDirectory, configPath)
+  }
+  return configPath
 }

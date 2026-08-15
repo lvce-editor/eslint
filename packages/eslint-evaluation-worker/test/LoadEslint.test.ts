@@ -21,9 +21,9 @@ test('loads Linter from an eslint module graph', () => {
     'class ProjectLinter {}; module.exports = { Linter: ProjectLinter }',
   )
 
-  const Linter = LoadEslint.loadEslint(graph)
+  const eslint = LoadEslint.loadEslint(graph)
 
-  expect(Linter.name).toBe('ProjectLinter')
+  expect(eslint.Linter?.name).toBe('ProjectLinter')
 })
 
 test('rejects a project eslint package without Linter', () => {

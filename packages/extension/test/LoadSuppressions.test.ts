@@ -35,12 +35,34 @@ const readDirWithFileTypes = async (
 
 beforeEach(() => {
   state.files = {}
+  LoadSuppressions.clearCache()
   FileSystem.state.api = {
     getFileHashes: async () => [],
     readDirWithFileTypes,
     readFile,
     stat: async () => 0,
   }
+})
+
+test('coalesces concurrent missing suppression searches', async () => {
+  let directoryReads = 0
+  FileSystem.state.api = {
+    ...FileSystem.state.api,
+    readDirWithFileTypes: async (uri) => {
+      directoryReads++
+      return readDirWithFileTypes(uri)
+    },
+  }
+  state.files = { '/workspace/src/file.js': 'debugger' }
+
+  await Promise.all([
+    LoadSuppressions.loadSuppressions('/workspace/src/file.js', null),
+    LoadSuppressions.loadSuppressions('/workspace/src/file.js', null),
+  ])
+  const firstSearchReads = directoryReads
+  await LoadSuppressions.loadSuppressions('/workspace/src/file.js', null)
+
+  expect(directoryReads).toBe(firstSearchReads)
 })
 
 test('loads eslint-suppressions.json beside the eslint config', async () => {

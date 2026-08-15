@@ -41,8 +41,7 @@ export const state: {
 const getRpc = (): Promise<Rpc> => {
   state.rpcPromise ||= state.createRpc({
     commandMap,
-    name: 'ESLint Evaluation Worker',
-    url: new URL('eslintEvaluationWorkerMain.js', import.meta.url).href,
+    id: 'builtin.eslint.evaluation-worker',
   })
   return state.rpcPromise
 }
