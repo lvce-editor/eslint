@@ -84,6 +84,9 @@ beforeEach(() => {
     readFile,
     stat,
   }
+  LoadEslintConfig.invalidateForFileChanges({
+    changed: ['file:///eslint.config.js'],
+  })
 })
 
 test('transforms an esm default export to commonjs', async () => {
@@ -725,6 +728,118 @@ test('allows a missing optional dependency inside try-catch', async () => {
     '/workspace/eslint.config.js',
   )
   expect(graph.resolutions).toEqual({})
+})
+
+test('resolves positive and missing candidates from cached directory entries', async () => {
+  setFiles({
+    '/directory-cache-workspace/eslint.config.js': `try { require('missing-plugin/subpath') } catch {} module.exports = require('./plugin')`,
+    '/directory-cache-workspace/plugin.js': `module.exports = []`,
+  })
+  const readDirectory = jest.fn(readDirWithFileTypes)
+  const statFile = jest.fn(stat)
+  FileSystem.state.api = {
+    readDirWithFileTypes: readDirectory,
+    readFile,
+    stat: statFile,
+  }
+
+  const graph = await LoadEslintConfig.loadEslintConfig(
+    '/directory-cache-workspace/eslint.config.js',
+  )
+
+  expect(
+    Object.hasOwn(graph.modules, '/directory-cache-workspace/plugin.js'),
+  ).toBe(true)
+  expect(graph.resolutions).not.toHaveProperty(
+    '/directory-cache-workspace/eslint.config.js\0missing-plugin/subpath',
+  )
+  expect(statFile).not.toHaveBeenCalled()
+  expect(readDirectory).toHaveBeenCalledWith(
+    'file:///directory-cache-workspace',
+  )
+})
+
+test('stats an ambiguous symlink ancestor before using its directory entries', async () => {
+  setFiles({
+    '/var/workspace/eslint.config.js': `module.exports = require('./plugin')`,
+    '/var/workspace/plugin.js': `module.exports = []`,
+  })
+  const readDirectory = jest.fn(async (uri: string) => {
+    if (uri === 'file:///') {
+      return [{ isDirectory: false, isFile: false, name: 'var' }]
+    }
+    return readDirWithFileTypes(uri)
+  })
+  const statFile = jest.fn(stat)
+  FileSystem.state.api = {
+    readDirWithFileTypes: readDirectory,
+    readFile,
+    stat: statFile,
+  }
+
+  const graph = await LoadEslintConfig.loadEslintConfig(
+    '/var/workspace/eslint.config.js',
+  )
+
+  expect(Object.hasOwn(graph.modules, '/var/workspace/plugin.js')).toBe(true)
+  expect(statFile).toHaveBeenCalledTimes(1)
+  expect(statFile).toHaveBeenCalledWith('file:///var')
+})
+
+test('stops directory traversal at a windows drive root', async () => {
+  setFiles({
+    '/C:/workspace/eslint.config.js': `module.exports = require('./plugin')`,
+    '/C:/workspace/plugin.js': `module.exports = []`,
+  })
+  const readDirectory = jest.fn(readDirWithFileTypes)
+  const statFile = jest.fn(stat)
+  FileSystem.state.api = {
+    readDirWithFileTypes: readDirectory,
+    readFile,
+    stat: statFile,
+  }
+
+  const graph = await LoadEslintConfig.loadEslintConfig(
+    '/C:/workspace/eslint.config.js',
+  )
+
+  expect(Object.hasOwn(graph.modules, '/C:/workspace/plugin.js')).toBe(true)
+  expect(readDirectory).toHaveBeenCalledWith('file:///C:/')
+  expect(readDirectory).not.toHaveBeenCalledWith('file:///')
+  expect(statFile).not.toHaveBeenCalled()
+})
+
+test('stats a windows short-name path that is absent from directory entries', async () => {
+  setFiles({
+    '/C:/Users/RUNNER~1/AppData/Local/Temp/project/node_modules/eslint/index.js':
+      'module.exports = { Linter: class {} }',
+    '/C:/Users/RUNNER~1/AppData/Local/Temp/project/node_modules/eslint/package.json':
+      '{"main":"index.js"}',
+  })
+  const readDirectory = jest.fn(async (uri: string) => {
+    if (uri === 'file:///C:/Users') {
+      return [{ isDirectory: true, isFile: false, name: 'runner' }]
+    }
+    return readDirWithFileTypes(uri)
+  })
+  const statFile = jest.fn(stat)
+  FileSystem.state.api = {
+    readDirWithFileTypes: readDirectory,
+    readFile,
+    stat: statFile,
+  }
+
+  const graph = await LoadEslintConfig.loadEslintModule(
+    '/C:/Users/RUNNER~1/AppData/Local/Temp/project/test.js',
+  )
+
+  expect(graph.entry).toBe(
+    '/C:/Users/RUNNER~1/AppData/Local/Temp/project/node_modules/eslint/index.js',
+  )
+  expect(statFile.mock.calls).toEqual([
+    ['file:///C:/Users/RUNNER~1'],
+    ['file:///C:/Users/RUNNER~1'],
+  ])
 })
 
 test('does not preload require examples from comments', async () => {
