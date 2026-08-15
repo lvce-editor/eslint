@@ -8,5 +8,7 @@ test('registers diagnostics for supported languages', () => {
     { id: 'eslint.javascript', languageId: 'javascript' },
     { id: 'eslint.typescript', languageId: 'typescript' },
     { id: 'eslint.yaml', languageId: 'yaml' },
+    { id: 'eslint.css', languageId: 'css' },
+    { id: 'eslint.json', languageId: 'json' },
   ])
 })
