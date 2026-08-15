@@ -170,7 +170,9 @@ test('passes an absolute file path to parser services', async () => {
     graph,
     eslint,
   )
-  expect(results[0].message).toBe('/workspace/source/file.ts')
+  expect(results[0].message.replaceAll('\\', '/')).toMatch(
+    /\/workspace\/source\/file\.ts$/,
+  )
 })
 
 test('preserves warning severity and source locations', async () => {

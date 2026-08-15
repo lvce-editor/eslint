@@ -40,6 +40,13 @@ type LintContext = LegacyLintContext | ModernLintContext
 const graphContexts = new Map<string, WeakMap<EslintModule, LintContext>>()
 const defaultContexts = new Map<string, WeakMap<EslintModule, LintContext>>()
 
+type GlobalWithProcess = typeof globalThis & {
+  readonly process?: {
+    readonly platform?: string
+    readonly cwd?: () => string
+  }
+}
+
 export const clearCache = (): void => {
   graphContexts.clear()
   defaultContexts.clear()
@@ -71,6 +78,19 @@ const getMajorVersion = (Eslint: EslintConstructor): number => {
   const [majorVersion = ''] = Eslint.version?.split('.', 1) ?? []
   const major = Number(majorVersion)
   return Number.isFinite(major) ? major : 0
+}
+
+const toNativeAbsolutePath = (filePath: string): string => {
+  const { process } = globalThis as GlobalWithProcess
+  if (process?.platform !== 'win32' || !filePath.startsWith('/')) {
+    return filePath
+  }
+  if (/^\/[a-z]:\//i.test(filePath)) {
+    return filePath.slice(1).replaceAll('/', '\\')
+  }
+  const currentDirectory = process.cwd?.() ?? ''
+  const drive = /^[a-z]:/i.exec(currentDirectory)?.[0] ?? 'C:'
+  return `${drive}${filePath.replaceAll('/', '\\')}`
 }
 
 const createModernEngine = (
@@ -151,7 +171,7 @@ const getContext = (
   eslint: EslintModule,
 ): LintContext => {
   const baseDirectory = graph
-    ? Path.dirname(Path.toFileSystemPath(graph.entry))
+    ? toNativeAbsolutePath(Path.dirname(Path.toFileSystemPath(graph.entry)))
     : Path.dirname(linterFilePath)
   const contexts = getContextMap(graph, baseDirectory)
   const cached = contexts.get(eslint)
@@ -186,8 +206,9 @@ export const lint = async (
   loadedSuppressions?: LoadedSuppressions,
 ): Promise<LintResult[]> => {
   const linterFilePath = Path.toFileSystemPath(filePath)
-  const context = getContext(graph, linterFilePath, eslint)
-  const messages = await lintWithContext(context, text, linterFilePath)
+  const nativeLinterFilePath = toNativeAbsolutePath(linterFilePath)
+  const context = getContext(graph, nativeLinterFilePath, eslint)
+  const messages = await lintWithContext(context, text, nativeLinterFilePath)
   const unsuppressedMessages = ApplySuppressions.applySuppressions(
     messages,
     linterFilePath,
