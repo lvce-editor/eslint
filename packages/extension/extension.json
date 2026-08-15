@@ -32,15 +32,21 @@
     "onDiagnostic:javascript",
     "onDiagnostic:typescript",
     "onDiagnostic:yaml",
+    "onDiagnostic:css",
+    "onDiagnostic:json",
     "onCodeAction:javascript",
     "onCodeAction:typescript",
     "onCodeAction:yaml",
+    "onCodeAction:css",
+    "onCodeAction:json",
     "onCommand:eslint.lint",
     "onLanguage:javascript",
     "onLanguage:javascriptreact",
     "onLanguage:typescript",
     "onLanguage:typescriptreact",
-    "onLanguage:yaml"
+    "onLanguage:yaml",
+    "onLanguage:css",
+    "onLanguage:json"
   ],
   "commands": [
     {
@@ -74,6 +80,14 @@
     {
       "id": "eslint.yaml",
       "languageId": "yaml"
+    },
+    {
+      "id": "eslint.css",
+      "languageId": "css"
+    },
+    {
+      "id": "eslint.json",
+      "languageId": "json"
     }
   ],
   "languages": [

@@ -8,5 +8,7 @@ test('registers code actions for supported languages', () => {
     { id: 'eslint.codeActions.javascript', languageId: 'javascript' },
     { id: 'eslint.codeActions.typescript', languageId: 'typescript' },
     { id: 'eslint.codeActions.yaml', languageId: 'yaml' },
+    { id: 'eslint.codeActions.css', languageId: 'css' },
+    { id: 'eslint.codeActions.json', languageId: 'json' },
   ])
 })

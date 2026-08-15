@@ -6,7 +6,7 @@ export default [
     language: 'css/css',
     plugins: { css },
     rules: {
-      'css/no-empty-blocks': 'error',
+      'css/no-important': 'error',
     },
   },
 ]
