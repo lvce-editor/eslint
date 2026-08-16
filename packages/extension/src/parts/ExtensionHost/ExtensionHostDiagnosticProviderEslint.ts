@@ -36,16 +36,21 @@ const getErrorPosition = (
   }
 }
 
-export const provideDiagnostics = async (textDocument: {
-  text: string
-  uri: string
-}): Promise<readonly Diagnostic[]> => {
+interface TextDocument {
+  readonly text: string
+  readonly uri: string
+}
+
+const provideDiagnosticsWithOptions = async (
+  textDocument: TextDocument,
+  requireConfig: boolean,
+): Promise<readonly Diagnostic[]> => {
   let configPath: string | null = null
   try {
     const { text } = textDocument
     const filePath = textDocument.uri ?? 'file.js'
     configPath = await FindEslintConfig.findEslintConfig(filePath)
-    if (!configPath) {
+    if (requireConfig && !configPath) {
       return []
     }
     const suppressions = await LoadSuppressions.loadSuppressions(
@@ -55,7 +60,7 @@ export const provideDiagnostics = async (textDocument: {
     const lintResults = await EslintEvaluationWorker.lint(
       text,
       filePath,
-      configPath,
+      configPath ?? undefined,
       suppressions,
     )
     return lintResults.map((result) => ({
@@ -69,7 +74,7 @@ export const provideDiagnostics = async (textDocument: {
       uri: filePath,
     }))
   } catch (error) {
-    if (!configPath) {
+    if (requireConfig && !configPath) {
       return []
     }
     const message = error instanceof Error ? error.message : String(error)
@@ -79,12 +84,26 @@ export const provideDiagnostics = async (textDocument: {
         columnIndex,
         endColumnIndex: columnIndex,
         endRowIndex: rowIndex,
-        message: `ESLint configuration error: ${message}`,
+        message: configPath
+          ? `ESLint configuration error: ${message}`
+          : `ESLint: ${message}`,
         rowIndex,
         source: 'eslint',
         type: 'error',
-        uri: configPath,
+        uri: configPath ?? textDocument.uri,
       },
     ]
   }
+}
+
+export const provideDiagnostics = (
+  textDocument: TextDocument,
+): Promise<readonly Diagnostic[]> => {
+  return provideDiagnosticsWithOptions(textDocument, true)
+}
+
+export const provideDiagnosticsForCommand = (
+  textDocument: TextDocument,
+): Promise<readonly Diagnostic[]> => {
+  return provideDiagnosticsWithOptions(textDocument, false)
 }

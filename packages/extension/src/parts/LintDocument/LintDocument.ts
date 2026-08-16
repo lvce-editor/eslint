@@ -33,6 +33,6 @@ export const lintDocument = async (
   return lintDocumentWithDependencies(
     textDocument,
     updateDiagnostics,
-    ExtensionHostDiagnosticProviderEslint.provideDiagnostics,
+    ExtensionHostDiagnosticProviderEslint.provideDiagnosticsForCommand,
   )
 }
