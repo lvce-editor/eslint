@@ -105,6 +105,9 @@ const flushInvalidatedCacheKeys = async (): Promise<void> => {
   }
   try {
     await invoke('ModuleResolution.invalidateCacheKeys', cacheKeys)
+    LintResultCache.clearInvalidatedGraphCacheKeys(
+      cacheKeys.filter((cacheKey) => !state.invalidatedCacheKeys.has(cacheKey)),
+    )
   } catch (error) {
     for (const cacheKey of cacheKeys) {
       state.invalidatedCacheKeys.add(cacheKey)
@@ -125,6 +128,7 @@ export const invalidateForFileChanges = (
   for (const cacheKey of cacheKeys) {
     state.invalidatedCacheKeys.add(cacheKey)
   }
+  LintResultCache.invalidateGraphCacheKeys(cacheKeys)
   ModuleGraphDependencies.clear()
   return true
 }
