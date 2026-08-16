@@ -37,15 +37,23 @@ const getErrorPosition = (
   }
 }
 
-export const provideDiagnostics = async (textDocument: {
-  text: string
-  uri: string
-}): Promise<readonly Diagnostic[]> => {
+export interface TextDocument {
+  readonly text: string
+  readonly uri: string
+}
+
+const provideDiagnosticsWithOptions = async (
+  textDocument: TextDocument,
+  requireConfig: boolean,
+): Promise<readonly Diagnostic[]> => {
   let configPath: string | null = null
   try {
     const { text } = textDocument
     const filePath = textDocument.uri ?? 'file.js'
     configPath = await FindEslintConfig.findEslintConfig(filePath)
+    if (requireConfig && !configPath) {
+      return []
+    }
     const suppressions = await LoadSuppressions.loadSuppressions(
       filePath,
       configPath,
@@ -82,6 +90,9 @@ export const provideDiagnostics = async (textDocument: {
       uri: filePath,
     }))
   } catch (error) {
+    if (requireConfig && !configPath) {
+      return []
+    }
     const message = error instanceof Error ? error.message : String(error)
     const { columnIndex, rowIndex } = getErrorPosition(error)
     return [
@@ -99,4 +110,16 @@ export const provideDiagnostics = async (textDocument: {
       },
     ]
   }
+}
+
+export const provideDiagnostics = (
+  textDocument: TextDocument,
+): Promise<readonly Diagnostic[]> => {
+  return provideDiagnosticsWithOptions(textDocument, true)
+}
+
+export const provideDiagnosticsForCommand = (
+  textDocument: TextDocument,
+): Promise<readonly Diagnostic[]> => {
+  return provideDiagnosticsWithOptions(textDocument, false)
 }
