@@ -40,7 +40,7 @@ export const state: {
   uriHashes: new Map(),
 }
 
-const toFileUri = (path: string): string => {
+export const toUri = (path: string): string => {
   if (/^[a-z][a-z\d+.-]*:\/\//i.test(path)) {
     return path
   }
@@ -63,7 +63,7 @@ const getFileHash = async (uri: string): Promise<string | undefined> => {
 export const getFileHashes = async (
   paths: readonly string[],
 ): Promise<readonly (string | null)[]> => {
-  const uris = paths.map(toFileUri)
+  const uris = paths.map(toUri)
   const fileUris = uris.filter((uri) => uri.startsWith('file://'))
   const hashes: Array<string | null> = uris.map(() => null)
   try {
@@ -141,7 +141,7 @@ const readFileCached = async (uri: string): Promise<string> => {
 }
 
 export const readFile = async (path: string): Promise<string> => {
-  const uri = toFileUri(path)
+  const uri = toUri(path)
   return readFileCached(uri)
 }
 
@@ -154,7 +154,7 @@ export const readDirWithFileTypes = async (
     isDirectory: boolean
   }>
 > => {
-  const entries = await state.api.readDirWithFileTypes(toFileUri(path))
+  const entries = await state.api.readDirWithFileTypes(toUri(path))
   return entries.map((entry) => ({
     isDirectory: entry.type === 3 || entry.type === 11,
     isFile: entry.type === 7 || entry.type === 10,
@@ -168,7 +168,7 @@ export const stat = async (
   isFile: boolean
   isDirectory: boolean
 }> => {
-  const type = await state.api.stat(toFileUri(path))
+  const type = await state.api.stat(toUri(path))
   return {
     isDirectory: type === 3 || type === 11,
     isFile: type === 7 || type === 10,

@@ -1,6 +1,7 @@
 import type { Diagnostic } from '@lvce-editor/api'
 import * as EslintEvaluationWorker from '../EslintEvaluationWorker/EslintEvaluationWorker.ts'
 import * as FindEslintConfig from '../FindEslintConfig/FindEslintConfig.ts'
+import * as LintResultCache from '../LintResultCache/LintResultCache.ts'
 import * as LoadSuppressions from '../LoadSuppressions/LoadSuppressions.ts'
 
 export const id = 'eslint'
@@ -49,12 +50,27 @@ export const provideDiagnostics = async (textDocument: {
       filePath,
       configPath,
     )
-    const lintResults = await EslintEvaluationWorker.lint(
+    let lintResults = await LintResultCache.restore(
       text,
       filePath,
-      configPath ?? undefined,
+      configPath,
       suppressions,
     )
+    if (lintResults === undefined) {
+      lintResults = await EslintEvaluationWorker.lint(
+        text,
+        filePath,
+        configPath ?? undefined,
+        suppressions,
+      )
+      await LintResultCache.save(
+        text,
+        filePath,
+        configPath,
+        suppressions,
+        lintResults,
+      )
+    }
     return lintResults.map((result) => ({
       columnIndex: result.column - 1,
       endColumnIndex: (result.endColumn ?? result.column) - 1,

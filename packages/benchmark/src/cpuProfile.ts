@@ -35,7 +35,7 @@ export const startCpuProfile = async (cdp: CDPSession): Promise<void> => {
 export const stopCpuProfile = async (
   cdp: CDPSession,
   outputPath: string,
-): Promise<void> => {
+): Promise<number | undefined> => {
   const tracingComplete = new Promise<string>((resolvePromise) => {
     cdp.once('Tracing.tracingComplete', (event: { readonly stream?: string }) =>
       resolvePromise(event.stream || ''),
@@ -46,5 +46,37 @@ export const stopCpuProfile = async (
   if (!stream) {
     throw new Error('Chromium CPU profile did not return a stream')
   }
-  await writeFile(outputPath, await readProtocolStream(cdp, stream))
+  const trace = await readProtocolStream(cdp, stream)
+  await writeFile(outputPath, trace)
+  return getUserTimingDuration(trace, 'eslint-benchmark-lint')
+}
+
+const getUserTimingTimestamp = (
+  trace: string,
+  name: string,
+  phase: 'b' | 'e',
+): number | undefined => {
+  const marker = `"name":"${name}","ph":"${phase}"`
+  const markerIndex = trace.indexOf(marker)
+  if (markerIndex === -1) {
+    return undefined
+  }
+  const lineStart = trace.lastIndexOf('\n', markerIndex) + 1
+  const lineEnd = trace.indexOf('\n', markerIndex)
+  const line = trace
+    .slice(lineStart, lineEnd === -1 ? trace.length : lineEnd)
+    .replace(/,$/, '')
+  const event = JSON.parse(line) as { readonly ts?: unknown }
+  return typeof event.ts === 'number' ? event.ts : undefined
+}
+
+export const getUserTimingDuration = (
+  trace: string,
+  name: string,
+): number | undefined => {
+  const start = getUserTimingTimestamp(trace, name, 'b')
+  const end = getUserTimingTimestamp(trace, name, 'e')
+  return start === undefined || end === undefined
+    ? undefined
+    : (end - start) / 1000
 }

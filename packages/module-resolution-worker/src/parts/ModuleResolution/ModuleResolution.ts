@@ -1108,7 +1108,6 @@ const analyzeDocumentDependencies = async (
 
 const restoreModuleGraph = async (
   cacheKey: string,
-  scanCommonJs: boolean,
   expectedEntry?: string,
 ): Promise<ModuleGraph | undefined> => {
   const restored = await ModuleGraphCache.restore(cacheKey)
@@ -1119,23 +1118,15 @@ const restoreModuleGraph = async (
     return undefined
   }
   try {
-    const modules = Object.fromEntries(
-      await Promise.all(
-        Object.entries(restored.modules).map(async ([path, source]) => {
-          const analysis = await transpile(path, source, scanCommonJs)
-          return [path, analysis.source]
-        }),
-      ),
-    )
     const graph = {
       entry: restored.entry,
       files: restored.files,
       id: `${cacheKey}:${graphIdState.next++}`,
-      modules,
+      modules: restored.modules,
       resolutions: restored.resolutions,
     }
     cache.set(cacheKey, {
-      entrySource: restored.modules[restored.entry],
+      entrySource: restored.entrySource,
       graph,
     })
     return graph
@@ -1165,7 +1156,7 @@ const loadModule = async (
     }
   }
   if (shouldRestore) {
-    const restored = await restoreModuleGraph(cacheKey, scanCommonJs, entry)
+    const restored = await restoreModuleGraph(cacheKey, entry)
     if (restored) {
       return restored
     }
@@ -1569,7 +1560,8 @@ const loadModule = async (
   await ModuleGraphCache.save(cacheKey, {
     entry,
     files,
-    modules: moduleSources,
+    moduleSources,
+    modules,
     resolutions,
   })
   return graph
@@ -1597,7 +1589,7 @@ export const loadEslintModule = async (
       return cached.graph
     }
   }
-  const restored = await restoreModuleGraph(cacheKey, true)
+  const restored = await restoreModuleGraph(cacheKey)
   if (restored) {
     return restored
   }

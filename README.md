@@ -18,6 +18,10 @@ Some Node-specific plugins may still be incompatible when they depend on native
 addons, unsupported Node builtins, dynamic module paths, or synchronous reads of
 files outside their static dependency graph. Config dependencies are cached for
 interactive performance; editing `eslint.config.js` invalidates that cache.
+Successful lint results are cached by editor text, suppressions, and validated
+config and ESLint graph revisions. Reloading an unchanged file can therefore
+restore diagnostics without rebuilding the evaluation engine; changes to any
+lint input fall back to normal evaluation.
 
 ## Contributing
 
@@ -47,3 +51,6 @@ work performed by the editor, extension worker, and module-resolution worker.
 Use `--output <directory>`, `--timeout <milliseconds>`, or `--headed` to adjust
 the run. Install Chromium first with `npx playwright install chromium` if it is
 not already available.
+
+Pass `--reload` to populate persistent caches first and profile only the
+subsequent renderer reload and lint.

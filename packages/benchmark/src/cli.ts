@@ -31,6 +31,7 @@ interface MutableOptions {
   file: string
   headed: boolean
   output: string
+  reload: boolean
   repo: string
   timeout: number
 }
@@ -54,6 +55,9 @@ const parseArgument = (
         takeValue(argv, index, argument),
       )
       return index + 2
+    case '--reload':
+      options.reload = true
+      return index + 1
     case '--repo':
       options.repo = takeValue(argv, index, argument)
       return index + 2
@@ -73,6 +77,7 @@ export const parseArgs = (argv: readonly string[]): BenchmarkOptions => {
     file: '',
     headed: false,
     output: resolve(invocationDirectory, '.tmp', 'benchmark-results'),
+    reload: false,
     repo: '',
     timeout: 120_000,
   }
@@ -98,6 +103,7 @@ Options:
   --repo <repository>   Git URL to clone or local repository path
   --file <path>         File to open, relative to the repository root
   --output <directory>  Results directory (default: .tmp/benchmark-results)
+  --reload              Warm caches, then profile a renderer reload
   --timeout <ms>        Editor and lint timeout (default: 120000)
   --headed              Show the Chromium window
 `
