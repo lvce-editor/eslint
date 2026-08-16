@@ -29,11 +29,13 @@ export const state: {
   activeSessions: number
   createRpc: CreateRpc
   disposePromise: Promise<void> | undefined
+  invalidatedCacheKeys: Set<string>
   rpcPromise: Promise<Rpc> | undefined
 } = {
   activeSessions: 0,
   createRpc,
   disposePromise: undefined,
+  invalidatedCacheKeys: new Set(),
   rpcPromise: undefined,
 }
 
@@ -93,18 +95,36 @@ export const runInSession = async <T>(task: () => Promise<T>): Promise<T> => {
   }
 }
 
-export const invalidateForFileChanges = async (
+const flushInvalidatedCacheKeys = async (): Promise<void> => {
+  const cacheKeys = [...state.invalidatedCacheKeys]
+  if (cacheKeys.length === 0) {
+    return
+  }
+  for (const cacheKey of cacheKeys) {
+    state.invalidatedCacheKeys.delete(cacheKey)
+  }
+  try {
+    await invoke('ModuleResolution.invalidateCacheKeys', cacheKeys)
+  } catch (error) {
+    for (const cacheKey of cacheKeys) {
+      state.invalidatedCacheKeys.add(cacheKey)
+    }
+    throw error
+  }
+}
+
+export const invalidateForFileChanges = (
   changes: Readonly<FileChanges>,
-): Promise<boolean> => {
+): boolean => {
   FileSystem.clearFileHashCache()
   LintResultCache.clearRevisionCache()
   const cacheKeys = ModuleGraphDependencies.getAffectedCacheKeys(changes)
   if (cacheKeys.length === 0) {
     return false
   }
-  await runInSession(() =>
-    invoke('ModuleResolution.invalidateCacheKeys', cacheKeys),
-  )
+  for (const cacheKey of cacheKeys) {
+    state.invalidatedCacheKeys.add(cacheKey)
+  }
   ModuleGraphDependencies.clear()
   return true
 }
@@ -113,6 +133,7 @@ export const loadEslintConfig = async (
   path: string,
   filePath?: string,
 ): Promise<ModuleGraph> => {
+  await flushInvalidatedCacheKeys()
   const graph = await invoke<ModuleGraph>(
     'ModuleResolution.loadEslintConfig',
     path,
@@ -126,6 +147,7 @@ export const loadEslintModule = async (
   path: string,
   projectPath?: string,
 ): Promise<ModuleGraph> => {
+  await flushInvalidatedCacheKeys()
   const graph = projectPath
     ? await invoke<ModuleGraph>(
         'ModuleResolution.loadEslintModule',

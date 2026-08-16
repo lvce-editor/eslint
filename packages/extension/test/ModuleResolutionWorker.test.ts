@@ -27,6 +27,7 @@ const eslintGraph: ModuleGraph = {
 beforeEach(() => {
   ModuleResolutionWorker.state.activeSessions = 0
   ModuleResolutionWorker.state.disposePromise = undefined
+  ModuleResolutionWorker.state.invalidatedCacheKeys.clear()
   ModuleResolutionWorker.state.rpcPromise = undefined
   ModuleGraphDependencies.clear()
 })
@@ -86,7 +87,7 @@ test('keeps the worker alive until concurrent sessions complete', async () => {
   expect(dispose).toHaveBeenCalledTimes(1)
 })
 
-test('invalidates a tracked dependency without retaining the worker', async () => {
+test('defers persistent invalidation until the next resolution', async () => {
   const invocations: unknown[] = []
   const disposals: Array<ReturnType<typeof jest.fn<() => void>>> = []
   ModuleResolutionWorker.state.createRpc = async () => {
@@ -107,15 +108,32 @@ test('invalidates a tracked dependency without retaining the worker', async () =
     ),
   )
 
-  await expect(
+  expect(
     ModuleResolutionWorker.invalidateForFileChanges({
       changed: ['file:///workspace/config/shared.js'],
     }),
-  ).resolves.toBe(true)
+  ).toBe(true)
 
-  expect(invocations).toContainEqual([
-    'ModuleResolution.invalidateCacheKeys',
-    ['module:/workspace/eslint.config.js:file:///workspace/src/file.js'],
+  expect(disposals).toHaveLength(1)
+  await ModuleResolutionWorker.runInSession(() =>
+    ModuleResolutionWorker.loadEslintConfig(
+      'file:///workspace/eslint.config.js',
+      'file:///workspace/src/file.js',
+    ),
+  )
+  expect(invocations.slice(-3)).toEqual([
+    [
+      'ModuleResolution.invalidateCacheKeys',
+      [
+        'module:file:///workspace/eslint.config.js:file:///workspace/src/file.js',
+      ],
+    ],
+    [
+      'ModuleResolution.loadEslintConfig',
+      'file:///workspace/eslint.config.js',
+      'file:///workspace/src/file.js',
+    ],
+    ['Worker.dispose'],
   ])
   expect(disposals).toHaveLength(2)
   expect(disposals.every((dispose) => dispose.mock.calls.length === 1)).toBe(
@@ -125,7 +143,9 @@ test('invalidates a tracked dependency without retaining the worker', async () =
     ModuleGraphDependencies.getAffectedCacheKeys({
       changed: ['file:///workspace/config/shared.js'],
     }),
-  ).toEqual([])
+  ).toEqual([
+    'module:file:///workspace/eslint.config.js:file:///workspace/src/file.js',
+  ])
   expect(ModuleResolutionWorker.state.rpcPromise).toBeUndefined()
 })
 
@@ -142,11 +162,11 @@ test('does not restart the worker for an unrelated file change', async () => {
     ),
   )
 
-  await expect(
+  expect(
     ModuleResolutionWorker.invalidateForFileChanges({
       changed: ['file:///outside/readme.md'],
     }),
-  ).resolves.toBe(false)
+  ).toBe(false)
 
   expect(createRpc).toHaveBeenCalledTimes(1)
 })
@@ -164,9 +184,9 @@ test('invalidates when a workspace module is created', async () => {
     ),
   )
 
-  await expect(
+  expect(
     ModuleResolutionWorker.invalidateForFileChanges({
       changed: ['file:///workspace/new-rule.ts'],
     }),
-  ).resolves.toBe(true)
+  ).toBe(true)
 })

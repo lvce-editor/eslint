@@ -1,5 +1,6 @@
 import type { FileChanges } from '@lvce-editor/api'
 import type { ModuleGraph } from '../ModuleGraph/ModuleGraph.ts'
+import * as FileSystem from '../FileSystem/FileSystem.ts'
 import * as Path from '../Path/Path.ts'
 
 interface GraphDependencies {
@@ -94,7 +95,9 @@ export const recordConfigGraph = (
   filePath: string | undefined,
   graph: ModuleGraph,
 ): void => {
-  record(`module:${normalize(path)}:${filePath ?? ''}`, graph)
+  const entryUri = FileSystem.toUri(normalize(path))
+  const fileUri = filePath ? FileSystem.toUri(normalize(filePath)) : ''
+  record(`module:${entryUri}:${fileUri}`, graph)
 }
 
 export const recordEslintGraph = (
@@ -102,5 +105,6 @@ export const recordEslintGraph = (
   projectPath: string | undefined,
   graph: ModuleGraph,
 ): void => {
-  record(`commonjs-project:${normalize(projectPath ?? path)}`, graph)
+  const entryUri = FileSystem.toUri(normalize(projectPath ?? path))
+  record(`commonjs-project:${entryUri}`, graph)
 }

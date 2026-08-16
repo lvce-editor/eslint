@@ -7,6 +7,7 @@ beforeEach(() => {
   EslintEvaluationWorker.state.rpcPromise = undefined
   ModuleResolutionWorker.state.activeSessions = 0
   ModuleResolutionWorker.state.disposePromise = undefined
+  ModuleResolutionWorker.state.invalidatedCacheKeys.clear()
   ModuleResolutionWorker.state.rpcPromise = undefined
   ModuleGraphDependencies.clear()
 })
