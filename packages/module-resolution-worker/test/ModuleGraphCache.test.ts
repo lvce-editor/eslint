@@ -43,10 +43,10 @@ test('saves a compiled graph with portable uris', async () => {
   await ModuleGraphCache.save('module:file:///workspace/eslint.config.js', {
     entry: '/workspace/eslint.config.js',
     files: { '/workspace/data.json': '{"value":1}' },
+    modules: { '/workspace/eslint.config.js': 'module.exports = []' },
     moduleSources: {
       '/workspace/eslint.config.js': 'module.exports = []',
     },
-    modules: { '/workspace/eslint.config.js': 'module.exports = []' },
     resolutions: {
       '/workspace/eslint.config.js\0🦄': '/workspace/data.json',
     },
@@ -112,10 +112,10 @@ test('restores a compiled graph after validating every hash in one request', asy
   await ModuleGraphCache.save('module:file:///workspace/eslint.config.js', {
     entry: '/workspace/eslint.config.js',
     files: { '/workspace/data.json': '{"value":1}' },
+    modules: { '/workspace/eslint.config.js': 'module.exports = []' },
     moduleSources: {
       '/workspace/eslint.config.js': 'module.exports = []',
     },
-    modules: { '/workspace/eslint.config.js': 'module.exports = []' },
     resolutions: {
       '/workspace/eslint.config.js\0./data.json': '/workspace/data.json',
     },
@@ -146,11 +146,11 @@ test('restores compiled modules and files from batched cache records', async () 
   await ModuleGraphCache.save('module:file:///workspace/eslint.config.js', {
     entry: '/workspace/eslint.config.js',
     files: { '/workspace/data.json': '{"value":1}' },
-    moduleSources: {
-      '/workspace/eslint.config.js': 'module.exports = []',
-    },
     modules: {
       '/workspace/eslint.config.js': 'exports.default = []',
+    },
+    moduleSources: {
+      '/workspace/eslint.config.js': 'module.exports = []',
     },
     resolutions: {},
   })
@@ -174,10 +174,10 @@ test('does not restore a graph when one file changed', async () => {
   await ModuleGraphCache.save('module:file:///workspace/eslint.config.js', {
     entry: '/workspace/eslint.config.js',
     files: {},
+    modules: { '/workspace/eslint.config.js': 'module.exports = []' },
     moduleSources: {
       '/workspace/eslint.config.js': 'module.exports = []',
     },
-    modules: { '/workspace/eslint.config.js': 'module.exports = []' },
     resolutions: {},
   })
   match.mockClear()
@@ -211,10 +211,10 @@ test('does not save a graph when a file changes between reading and hashing', as
   await ModuleGraphCache.save('module:file:///workspace/eslint.config.js', {
     entry: '/workspace/eslint.config.js',
     files: {},
+    modules: { '/workspace/eslint.config.js': 'module.exports = changed' },
     moduleSources: {
       '/workspace/eslint.config.js': 'module.exports = changed',
     },
-    modules: { '/workspace/eslint.config.js': 'module.exports = changed' },
     resolutions: {},
   })
 
@@ -225,10 +225,10 @@ test('does not restore content that does not match its content hash', async () =
   await ModuleGraphCache.save('module:file:///workspace/eslint.config.js', {
     entry: '/workspace/eslint.config.js',
     files: {},
+    modules: { '/workspace/eslint.config.js': 'module.exports = []' },
     moduleSources: {
       '/workspace/eslint.config.js': 'module.exports = []',
     },
-    modules: { '/workspace/eslint.config.js': 'module.exports = []' },
     resolutions: {},
   })
   cacheEntries.set(

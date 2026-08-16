@@ -12,8 +12,8 @@ const maxConcurrentCacheReads = 64
 export interface ModuleGraphToCache {
   readonly entry: string
   readonly files: Readonly<Record<string, string>>
-  readonly moduleSources: Readonly<Record<string, string>>
   readonly modules: Readonly<Record<string, string>>
+  readonly moduleSources: Readonly<Record<string, string>>
   readonly resolutions: Readonly<Record<string, string>>
 }
 
@@ -184,7 +184,7 @@ const mapSources = (
 ): Readonly<Record<string, string>> => {
   return Object.fromEntries(
     entries.map((entry) => [FileSystem.toPath(entry.uri), entry.source]),
-  ) as Readonly<Record<string, string>>
+  )
 }
 
 const hasValidCachedContent = async (

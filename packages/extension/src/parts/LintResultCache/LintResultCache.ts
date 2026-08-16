@@ -276,14 +276,13 @@ export const save = async (
       version: ResultCacheVersion,
     }
     const content = JSON.stringify(value)
+    const contentLength = new TextEncoder().encode(content).byteLength
     const cache = await caches.open(ResultCacheName)
     await cache.put(
       getResultCacheKey(filePath),
       new Response(content, {
         headers: {
-          'Content-Length': String(
-            new TextEncoder().encode(content).byteLength,
-          ),
+          'Content-Length': String(contentLength),
           'Content-Type': 'application/json',
         },
       }),

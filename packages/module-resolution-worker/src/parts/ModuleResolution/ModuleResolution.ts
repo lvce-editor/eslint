@@ -1560,8 +1560,8 @@ const loadModule = async (
   await ModuleGraphCache.save(cacheKey, {
     entry,
     files,
-    moduleSources,
     modules,
+    moduleSources,
     resolutions,
   })
   return graph
