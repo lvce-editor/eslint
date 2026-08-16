@@ -2,11 +2,13 @@ import { beforeEach, expect, test } from '@jest/globals'
 import * as EslintEvaluationWorker from '../src/parts/EslintEvaluationWorker/EslintEvaluationWorker.ts'
 import * as DiagnosticProvider from '../src/parts/ExtensionHost/ExtensionHostDiagnosticProviderEslint.ts'
 import * as FileSystem from '../src/parts/FileSystem/FileSystem.ts'
+import * as FindEslintConfig from '../src/parts/FindEslintConfig/FindEslintConfig.ts'
 
 const toPath = (uri: string): string =>
   decodeURIComponent(new URL(uri).pathname)
 
 beforeEach(() => {
+  FindEslintConfig.clearCache()
   EslintEvaluationWorker.state.rpcPromise = undefined
   EslintEvaluationWorker.state.createRpc = async () => ({
     invoke: async () => {
@@ -31,6 +33,20 @@ beforeEach(() => {
     },
     stat: async () => 0,
   }
+})
+
+test('returns no diagnostics when the workspace has no eslint config', async () => {
+  FileSystem.state.api.readDirWithFileTypes = async () => []
+  EslintEvaluationWorker.state.createRpc = async () => {
+    throw new Error('ESLint evaluation worker should not be started')
+  }
+
+  const diagnostics = await DiagnosticProvider.provideDiagnostics({
+    text: '{ "name": "example" }',
+    uri: '/workspace/package.json',
+  })
+
+  expect(diagnostics).toEqual([])
 })
 
 test('attributes invalid config errors to the config location', async () => {

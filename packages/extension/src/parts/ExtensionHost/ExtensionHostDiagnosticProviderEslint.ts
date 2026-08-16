@@ -45,6 +45,9 @@ export const provideDiagnostics = async (textDocument: {
     const { text } = textDocument
     const filePath = textDocument.uri ?? 'file.js'
     configPath = await FindEslintConfig.findEslintConfig(filePath)
+    if (!configPath) {
+      return []
+    }
     const suppressions = await LoadSuppressions.loadSuppressions(
       filePath,
       configPath,
@@ -52,7 +55,7 @@ export const provideDiagnostics = async (textDocument: {
     const lintResults = await EslintEvaluationWorker.lint(
       text,
       filePath,
-      configPath ?? undefined,
+      configPath,
       suppressions,
     )
     return lintResults.map((result) => ({
@@ -66,6 +69,9 @@ export const provideDiagnostics = async (textDocument: {
       uri: filePath,
     }))
   } catch (error) {
+    if (!configPath) {
+      return []
+    }
     const message = error instanceof Error ? error.message : String(error)
     const { columnIndex, rowIndex } = getErrorPosition(error)
     return [
@@ -73,13 +79,11 @@ export const provideDiagnostics = async (textDocument: {
         columnIndex,
         endColumnIndex: columnIndex,
         endRowIndex: rowIndex,
-        message: configPath
-          ? `ESLint configuration error: ${message}`
-          : `ESLint: ${message}`,
+        message: `ESLint configuration error: ${message}`,
         rowIndex,
         source: 'eslint',
         type: 'error',
-        uri: configPath ?? textDocument.uri,
+        uri: configPath,
       },
     ]
   }
