@@ -41,10 +41,16 @@ export const state: {
 }
 
 export const toUri = (path: string): string => {
-  if (/^[a-z][a-z\d+.-]*:\/\//i.test(path)) {
+  if (/^[a-z][a-z\d+.-]*:/i.test(path) && !/^[a-z]:[\\/]/i.test(path)) {
     return path
   }
-  return new URL(path, 'file://').href
+  const normalizedPath = path.replaceAll('\\', '/')
+  if (normalizedPath.startsWith('//')) {
+    return new URL(normalizedPath, 'file://').href
+  }
+  const uri = new URL('file://')
+  uri.pathname = normalizedPath
+  return uri.href
 }
 
 const getFileHash = async (uri: string): Promise<string | undefined> => {

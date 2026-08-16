@@ -148,6 +148,16 @@ export const invalidateForFileChanges = (
   return shouldRefresh
 }
 
+export const invalidateCacheKeys = async (
+  cacheKeys: readonly string[],
+): Promise<void> => {
+  for (const cacheKey of cacheKeys) {
+    cache.delete(cacheKey)
+  }
+  clearResolutionCaches()
+  await Promise.all(cacheKeys.map(ModuleGraphCache.remove))
+}
+
 const normalize = (path: string): string => {
   const normalizedSlashes = toPath(path).replaceAll('\\', '/')
   const match = /^([a-z][a-z\d+.-]*:\/\/)(.*)$/i.exec(normalizedSlashes)

@@ -36,6 +36,24 @@ beforeEach(() => {
   FileSystem.clearFileHashCache()
 })
 
+test('converts paths to canonical file uris', () => {
+  expect(FileSystem.toUri('/workspace/a b#c?.js')).toBe(
+    'file:///workspace/a%20b%23c%3F.js',
+  )
+  expect(FileSystem.toUri(String.raw`C:\workspace\a b.js`)).toBe(
+    'file:///C:/workspace/a%20b.js',
+  )
+  expect(FileSystem.toUri(String.raw`\\server\share\a b.js`)).toBe(
+    'file://server/share/a%20b.js',
+  )
+})
+
+test('preserves non-file uris when canonicalizing', () => {
+  expect(FileSystem.toUri('memfs:///workspace/a.js')).toBe(
+    'memfs:///workspace/a.js',
+  )
+})
+
 test('readFile converts an absolute path to a file uri', async () => {
   await expect(FileSystem.readFile('/workspace/a b.js')).resolves.toBe(
     'content',

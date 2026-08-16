@@ -152,6 +152,37 @@ test('does not restore diagnostics after a config dependency changes', async () 
   ).resolves.toBeUndefined()
 })
 
+test('does not restore diagnostics while graph invalidation is deferred', async () => {
+  const configCacheKey =
+    'module:file:///workspace/eslint.config.js:file:///workspace/src/file.ts'
+  await setProjectGraphs()
+  await LintResultCache.save(
+    'var value = 1',
+    '/workspace/src/file.ts',
+    '/workspace/eslint.config.js',
+    undefined,
+    [],
+  )
+
+  LintResultCache.invalidateGraphCacheKeys([configCacheKey])
+  await expect(
+    LintResultCache.restore(
+      'var value = 1',
+      '/workspace/src/file.ts',
+      '/workspace/eslint.config.js',
+    ),
+  ).resolves.toBeUndefined()
+
+  LintResultCache.clearInvalidatedGraphCacheKeys([configCacheKey])
+  await expect(
+    LintResultCache.restore(
+      'var value = 1',
+      '/workspace/src/file.ts',
+      '/workspace/eslint.config.js',
+    ),
+  ).resolves.toEqual([])
+})
+
 test('retries a missing graph revision after the graph is populated', async () => {
   await expect(
     LintResultCache.restore(

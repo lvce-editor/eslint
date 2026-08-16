@@ -34,6 +34,7 @@ interface CachedLintResult {
 }
 
 const graphRevisions = new Map<string, Promise<string | undefined>>()
+const invalidatedGraphCacheKeys = new Set<string>()
 
 const getGraphCacheKey = (cacheKey: string): string =>
   `${GraphCacheKeyPrefix}${encodeURIComponent(cacheKey)}`
@@ -167,6 +168,9 @@ const loadGraphRevision = async (
 const getGraphRevision = async (
   cacheKey: string,
 ): Promise<string | undefined> => {
+  if (invalidatedGraphCacheKeys.has(cacheKey)) {
+    return undefined
+  }
   let revision = graphRevisions.get(cacheKey)
   if (!revision) {
     revision = loadGraphRevision(cacheKey)
@@ -221,6 +225,23 @@ const getFingerprint = async (
 
 export const clearRevisionCache = (): void => {
   graphRevisions.clear()
+}
+
+export const invalidateGraphCacheKeys = (
+  cacheKeys: readonly string[],
+): void => {
+  for (const cacheKey of cacheKeys) {
+    graphRevisions.delete(cacheKey)
+    invalidatedGraphCacheKeys.add(cacheKey)
+  }
+}
+
+export const clearInvalidatedGraphCacheKeys = (
+  cacheKeys: readonly string[],
+): void => {
+  for (const cacheKey of cacheKeys) {
+    invalidatedGraphCacheKeys.delete(cacheKey)
+  }
 }
 
 export const restore = async (

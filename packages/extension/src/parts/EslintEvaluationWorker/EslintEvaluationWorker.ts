@@ -58,17 +58,19 @@ export const clearCache = (): Promise<void> => {
   return invoke('EslintEvaluation.clearCache')
 }
 
-export const lint = (
+export const lint = async (
   text: string,
   filePath: string,
   configPath?: string,
   loadedSuppressions?: LoadedSuppressions,
 ): Promise<LintResult[]> => {
-  return invoke(
-    'EslintEvaluation.lint',
-    text,
-    filePath,
-    configPath,
-    loadedSuppressions,
+  return ModuleResolutionWorker.runInSession(() =>
+    invoke(
+      'EslintEvaluation.lint',
+      text,
+      filePath,
+      configPath,
+      loadedSuppressions,
+    ),
   )
 }
