@@ -36,7 +36,10 @@ beforeEach(() => {
 })
 
 test('returns no diagnostics when the workspace has no eslint config', async () => {
-  FileSystem.state.api.readDirWithFileTypes = async () => []
+  FileSystem.state.api = {
+    ...FileSystem.state.api,
+    readDirWithFileTypes: async () => [],
+  }
   EslintEvaluationWorker.state.createRpc = async () => {
     throw new Error('ESLint evaluation worker should not be started')
   }
