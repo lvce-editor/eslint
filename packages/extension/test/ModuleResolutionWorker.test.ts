@@ -1,6 +1,6 @@
 import { beforeEach, expect, jest, test } from '@jest/globals'
-import * as ModuleGraphDependencies from '../src/parts/ModuleGraphDependencies/ModuleGraphDependencies.ts'
 import type { ModuleGraph } from '../src/parts/ModuleGraph/ModuleGraph.ts'
+import * as ModuleGraphDependencies from '../src/parts/ModuleGraphDependencies/ModuleGraphDependencies.ts'
 import * as ModuleResolutionWorker from '../src/parts/ModuleResolutionWorker/ModuleResolutionWorker.ts'
 
 const configGraph: ModuleGraph = {
@@ -8,8 +8,8 @@ const configGraph: ModuleGraph = {
   files: {},
   id: 'config-graph',
   modules: {
-    '/workspace/eslint.config.js': '',
     '/workspace/config/shared.js': '',
+    '/workspace/eslint.config.js': '',
   },
   resolutions: {},
 }
@@ -65,10 +65,8 @@ test('keeps the worker alive until concurrent sessions complete', async () => {
     dispose,
     invoke: async () => configGraph,
   })
-  let finishFirst: () => void = () => {}
-  const firstCanFinish = new Promise<void>((resolve) => {
-    finishFirst = resolve
-  })
+  const { promise: firstCanFinish, resolve: finishFirst } =
+    Promise.withResolvers<void>()
   const first = ModuleResolutionWorker.runInSession(async () => {
     await ModuleResolutionWorker.loadEslintConfig(
       'file:///workspace/eslint.config.js',

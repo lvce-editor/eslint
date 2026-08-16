@@ -57,19 +57,18 @@ const invoke = async <T>(
 }
 
 const dispose = async (): Promise<void> => {
-  const rpcPromise = state.rpcPromise
+  const { disposePromise: previousDispose, rpcPromise } = state
   if (!rpcPromise) {
     return
   }
   state.rpcPromise = undefined
-  const previousDispose = state.disposePromise
   const disposePromise = (async (): Promise<void> => {
     await previousDispose
-    const rpc = await rpcPromise
+    const { dispose: disposeRpc, invoke: invokeRpc } = await rpcPromise
     try {
-      await rpc.invoke('Worker.dispose')
+      await invokeRpc('Worker.dispose')
     } finally {
-      await rpc.dispose()
+      await disposeRpc()
     }
   })()
   state.disposePromise = disposePromise

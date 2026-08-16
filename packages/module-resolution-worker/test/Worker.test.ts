@@ -3,7 +3,10 @@ import * as Worker from '../src/parts/Worker/Worker.ts'
 
 afterEach(() => {
   jest.useRealTimers()
-  Reflect.deleteProperty(globalThis, 'close')
+  Object.defineProperty(globalThis, 'close', {
+    configurable: true,
+    value: undefined,
+  })
 })
 
 test('closes the worker after replying to the dispose command', () => {
