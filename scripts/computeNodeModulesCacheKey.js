@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
 const root = join(__dirname, '..')
+const cacheFormatVersion = '2'
 
 const locations = [
   'package.json',
@@ -40,7 +41,7 @@ export const computeHash = (contents) => {
 const computeCacheKey = async (locations) => {
   const absolutePaths = locations.map(getAbsolutePath)
   const contents = await Promise.all(absolutePaths.map(getContent))
-  const hash = computeHash(contents)
+  const hash = computeHash([cacheFormatVersion, ...contents])
   return hash
 }
 
