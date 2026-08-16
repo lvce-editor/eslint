@@ -16,7 +16,14 @@ export const test = async ({ Command, FileSystem, Main, Workspace }) => {
   await Workspace.setPath(workspace)
   await Main.openUri(uri)
   const text = await FileSystem.readFile(uri)
+  performance.mark('eslint-benchmark-lint-start')
   await Command.executeExtensionCommand('eslint.lint', { text, uri })
+  performance.mark('eslint-benchmark-lint-end')
+  performance.measure(
+    'eslint-benchmark-lint',
+    'eslint-benchmark-lint-start',
+    'eslint-benchmark-lint-end',
+  )
 }
 `
   await writeFile(join(sourceDirectory, 'eslint.benchmark.ts'), source)

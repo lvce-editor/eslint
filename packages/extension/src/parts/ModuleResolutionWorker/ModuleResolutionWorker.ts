@@ -5,6 +5,7 @@ import {
 } from '@lvce-editor/api'
 import type { ModuleGraph } from '../ModuleGraph/ModuleGraph.ts'
 import * as FileSystem from '../FileSystem/FileSystem.ts'
+import * as LintResultCache from '../LintResultCache/LintResultCache.ts'
 
 interface Rpc {
   readonly invoke: (
@@ -50,6 +51,7 @@ export const invalidateForFileChanges = (
   changes: Readonly<FileChanges>,
 ): Promise<boolean> => {
   FileSystem.clearFileHashCache()
+  LintResultCache.clearRevisionCache()
   return invoke('ModuleResolution.invalidateForFileChanges', changes)
 }
 

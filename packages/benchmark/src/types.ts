@@ -2,6 +2,7 @@ export interface BenchmarkOptions {
   readonly file: string
   readonly headed: boolean
   readonly output: string
+  readonly reload: boolean
   readonly repo: string
   readonly timeout: number
 }
