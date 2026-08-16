@@ -36,7 +36,7 @@ const getErrorPosition = (
   }
 }
 
-interface TextDocument {
+export interface TextDocument {
   readonly text: string
   readonly uri: string
 }
