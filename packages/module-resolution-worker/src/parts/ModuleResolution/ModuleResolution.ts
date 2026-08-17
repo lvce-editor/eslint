@@ -722,6 +722,37 @@ const getCommonJsExportedValue = (statement: any): any => {
     : undefined
 }
 
+const preserveCommonJsDefaultImport = (): any => ({
+  visitor: {
+    FunctionDeclaration(path: any): void {
+      const { node } = path
+      if (!/^_interopRequireDefault\d*$/.test(node.id?.name ?? '')) {
+        return
+      }
+      const [parameter] = node.params
+      const [statement] = node.body.body
+      const conditional =
+        statement?.type === 'ReturnStatement' ? statement.argument : undefined
+      if (
+        parameter?.type !== 'Identifier' ||
+        conditional?.type !== 'ConditionalExpression'
+      ) {
+        return
+      }
+      const hasDefault = packages.types.binaryExpression(
+        'in',
+        packages.types.stringLiteral('default'),
+        packages.types.identifier(parameter.name),
+      )
+      conditional.test = packages.types.logicalExpression(
+        '&&',
+        conditional.test,
+        hasDefault,
+      )
+    },
+  },
+})
+
 /* eslint-disable sonarjs/cognitive-complexity */
 const getDependencies = (
   ast: unknown,
@@ -1050,6 +1081,7 @@ const transpileUncached = (
         : []),
       transformDynamicModuleLoading,
       'transform-modules-commonjs',
+      preserveCommonJsDefaultImport,
     ],
     sourceMaps: false,
     sourceType: 'unambiguous',

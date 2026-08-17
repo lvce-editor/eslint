@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-implied-eval, sonarjs/code-eval -- transformed project modules execute in the interop regression test */
 import { beforeEach, expect, jest, test } from '@jest/globals'
 import * as FileSystem from '../src/parts/FileSystem/FileSystem.ts'
 import * as LoadEslintConfig from '../src/parts/ModuleResolution/ModuleResolution.ts'
@@ -98,6 +99,29 @@ test('transforms an esm default export to commonjs', async () => {
   )
   expect(graph.entry).toBe('/workspace/eslint.config.js')
   expect(graph.modules[graph.entry]).toContain('exports.default')
+})
+
+test('imports a commonjs module marked as an es module without a default export', async () => {
+  setFiles({
+    '/workspace/eslint.config.js': `import plugin from './plugin.cjs'; export default plugin.rules`,
+    '/workspace/plugin.cjs': `Object.defineProperty(exports, '__esModule', { value: true }); exports.rules = { local: true }`,
+  })
+  const graph = await LoadEslintConfig.loadEslintConfig(
+    '/workspace/eslint.config.js',
+  )
+  const plugin = { rules: { local: true } }
+  Object.defineProperty(plugin, '__esModule', { value: true })
+  const module = { exports: {} as any }
+  const evaluate = new Function(
+    'module',
+    'exports',
+    'require',
+    graph.modules[graph.entry],
+  )
+
+  evaluate(module, module.exports, () => plugin)
+
+  expect(module.exports.default).toEqual({ local: true })
 })
 
 test('reuses cached module analysis across projects with path-specific import meta', async () => {
