@@ -5,6 +5,17 @@ on:
   push:
     tags:
       - 'v[0-9]+.[0-9]+.[0-9]+'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to release
+        required: true
+        type: string
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
 jobs:
   build-release:
     name: build-release
@@ -14,9 +25,18 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
       - name: Get the release version from the tag
         shell: bash
-        run: echo "RG_VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+        env:
+          RELEASE_VERSION: ${{ inputs.tag || github.ref_name }}
+        run: |
+          if [[ ! "$RELEASE_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid release tag: $RELEASE_VERSION" >&2
+            exit 1
+          fi
+          echo "RG_VERSION=$RELEASE_VERSION" >> "$GITHUB_ENV"
       - uses: actions/setup-node@v4
         with:
           node-version-file: '.nvmrc'
@@ -54,6 +74,11 @@ jobs:
           echo "ASSET=$staging.tar.br" >> $GITHUB_ENV
 
       - name: Create GitHub release
-        run: gh release create "$RG_VERSION" "$ASSET" --repo "$GITHUB_REPOSITORY" --verify-tag --title "$RG_VERSION" --generate-notes
+        run: |
+          if gh release view "$RG_VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $RG_VERSION already exists"
+            exit 0
+          fi
+          gh release create "$RG_VERSION" "$ASSET" --repo "$GITHUB_REPOSITORY" --verify-tag --title "$RG_VERSION" --generate-notes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
