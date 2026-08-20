@@ -24,7 +24,7 @@
     "singleQuote": true
   },
   "devDependencies": {
-    "@lvce-editor/eslint-config": "^18.4.0",
+    "@lvce-editor/eslint-config": "^18.6.0",
     "eslint": "^10.8.1",
     "knip": "^6.32.2",
     "prettier": "^3.9.6",
