@@ -3,6 +3,7 @@ import * as FindEslintConfig from '../FindEslintConfig/FindEslintConfig.ts'
 import * as GetCodeActionsFromLintResults from '../GetCodeActionsFromLintResults/GetCodeActionsFromLintResults.ts'
 
 export interface TextDocument {
+  readonly languageId: string
   readonly text: string
   readonly uri: string
 }
@@ -22,6 +23,8 @@ export const provideCodeActions = async (
     return GetCodeActionsFromLintResults.getCodeActionsFromLintResults(
       lintResults,
       offset,
+      textDocument.text,
+      textDocument.languageId,
     )
   } catch {
     return []
