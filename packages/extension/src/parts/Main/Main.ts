@@ -4,6 +4,7 @@ import {
   registerCommand,
   registerDiagnosticProvider,
 } from '@lvce-editor/api'
+import * as ClearCache from '../ClearCache/ClearCache.ts'
 import * as GetCodeActionProviders from '../GetCodeActionProviders/GetCodeActionProviders.ts'
 import * as GetDiagnosticProviders from '../GetDiagnosticProviders/GetDiagnosticProviders.ts'
 import * as HandleFileChanges from '../HandleFileChanges/HandleFileChanges.ts'
@@ -21,6 +22,10 @@ export const activate = async (): Promise<void> => {
   state.isActivated = true
   await activateExtensionApi()
   HandleFileChanges.register()
+  registerCommand({
+    execute: ClearCache.clearCache,
+    id: 'eslint.clearCache',
+  })
   registerCommand({
     execute: LintDocument.lintDocument,
     id: 'eslint.lint',
