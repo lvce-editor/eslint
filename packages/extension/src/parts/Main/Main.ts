@@ -8,6 +8,7 @@ import * as GetCodeActionProviders from '../GetCodeActionProviders/GetCodeAction
 import * as GetDiagnosticProviders from '../GetDiagnosticProviders/GetDiagnosticProviders.ts'
 import * as HandleFileChanges from '../HandleFileChanges/HandleFileChanges.ts'
 import * as LintDocument from '../LintDocument/LintDocument.ts'
+import * as ShowPerformanceTrace from '../ShowPerformanceTrace/ShowPerformanceTrace.ts'
 
 const state = {
   isActivated: false,
@@ -23,6 +24,10 @@ export const activate = async (): Promise<void> => {
   registerCommand({
     execute: LintDocument.lintDocument,
     id: 'eslint.lint',
+  })
+  registerCommand({
+    execute: ShowPerformanceTrace.showPerformanceTrace,
+    id: 'eslint.showPerformanceTrace',
   })
   for (const provider of GetCodeActionProviders.getCodeActionProviders()) {
     registerCodeActionsProvider(provider)

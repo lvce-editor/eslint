@@ -48,3 +48,13 @@ test('allows dynamic evaluation only in the evaluation worker', () => {
     )?.contentSecurityPolicy,
   ).toEqual(["default-src 'none'", "script-src 'self'"])
 })
+
+test('contributes the performance trace command', () => {
+  expect(extension.activation).toContain(
+    'onCommand:eslint.showPerformanceTrace',
+  )
+  expect(extension.commands).toContainEqual({
+    id: 'eslint.showPerformanceTrace',
+    label: 'ESLint: Show Performance Trace',
+  })
+})

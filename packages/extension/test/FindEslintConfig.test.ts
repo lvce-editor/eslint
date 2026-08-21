@@ -82,6 +82,21 @@ test('finds eslint.config.js in a parent directory', async () => {
   ).resolves.toBe('/workspace/eslint.config.js')
 })
 
+test('captures an uncached config discovery trace', async () => {
+  state.files = ['/workspace/eslint.config.js']
+  await FindEslintConfig.findEslintConfig('/workspace/src/file.js')
+
+  const trace = await FindEslintConfig.findEslintConfig(
+    '/workspace/src/file.js',
+    true,
+  )
+
+  expect(trace.configPath).toBe('/workspace/eslint.config.js')
+  expect(trace.directories).toEqual(['/workspace/src', '/workspace'])
+  expect(trace.directoryReadCount).toBe(2)
+  expect(trace.durationMs).toBeGreaterThanOrEqual(0)
+})
+
 test('ignores unsupported eslint config locations', async () => {
   state.files = [
     '/workspace/eslint.config.mjs',

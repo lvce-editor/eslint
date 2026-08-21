@@ -58,6 +58,35 @@ test('clears evaluated module caches in the evaluation worker', async () => {
   expect(invocations).toEqual([['EslintEvaluation.clearCache']])
 })
 
+test('requests fresh performance stats from the evaluation worker', async () => {
+  const invocations: unknown[] = []
+  EslintEvaluationWorker.state.createRpc = async () => ({
+    invoke: async (method, ...params) => {
+      invocations.push([method, ...params])
+      return {}
+    },
+  })
+
+  await EslintEvaluationWorker.lint(
+    'const value = 1',
+    '/workspace/src/file.js',
+    '/workspace/eslint.config.js',
+    undefined,
+    true,
+  )
+
+  expect(invocations).toEqual([
+    [
+      'EslintEvaluation.lint',
+      'const value = 1',
+      '/workspace/src/file.js',
+      '/workspace/eslint.config.js',
+      undefined,
+      true,
+    ],
+  ])
+})
+
 test('disposes the module resolution worker after linting', async () => {
   const dispose = jest.fn<() => void>()
   const graph = {
