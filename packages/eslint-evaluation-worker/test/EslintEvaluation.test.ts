@@ -146,3 +146,90 @@ test('retries a failed graph load', async () => {
   await expect(lint()).resolves.toEqual([])
   expect(loadEslintConfig).toHaveBeenCalledTimes(2)
 })
+
+const resolutionStats = {
+  durationMs: 2,
+  fileReadCount: 1,
+  files: [
+    {
+      contentLength: 10,
+      durationMs: 1,
+      path: '/workspace/file.js',
+    },
+  ],
+  totalContentLength: 10,
+  uniqueFileCount: 1,
+}
+
+test('captures config evaluation and lint timings', async () => {
+  const configGraph = createGraph(
+    '/workspace/eslint.config.js',
+    `module.exports = [{ rules: {} }]`,
+    'config-trace-graph',
+  )
+  const eslintGraph = createGraph(
+    '/workspace/node_modules/eslint/index.js',
+    `module.exports = { Linter: class { verify() { return [] } } }`,
+    'eslint-trace-graph',
+  )
+
+  const trace = await EslintEvaluation.traceWithDependencies(
+    'const value = 1',
+    '/workspace/src/file.js',
+    '/workspace/eslint.config.js',
+    undefined,
+    {
+      loadEslintConfig: async () => ({
+        graph: configGraph,
+        stats: resolutionStats,
+      }),
+      loadEslintModule: async () => ({
+        graph: eslintGraph,
+        stats: resolutionStats,
+      }),
+    },
+  )
+
+  expect(trace.error).toBeUndefined()
+  expect(trace.configResolution).toEqual(resolutionStats)
+  expect(trace.eslintResolution).toEqual(resolutionStats)
+  expect(trace.eslintEvaluation?.durationMs).toBeGreaterThanOrEqual(0)
+  expect(trace.configEvaluation?.durationMs).toBeGreaterThanOrEqual(0)
+  expect(trace.lint?.durationMs).toBeGreaterThanOrEqual(0)
+  expect(trace.lint?.diagnosticCount).toBe(0)
+})
+
+test('captures config evaluation errors', async () => {
+  const configGraph = createGraph(
+    '/workspace/eslint.config.js',
+    `module.exports = [`,
+    'invalid-config-trace-graph',
+  )
+  const eslintGraph = createGraph(
+    '/workspace/node_modules/eslint/index.js',
+    `module.exports = { Linter: class { verify() { return [] } } }`,
+    'eslint-error-trace-graph',
+  )
+
+  const trace = await EslintEvaluation.traceWithDependencies(
+    'const value = 1',
+    '/workspace/src/file.js',
+    '/workspace/eslint.config.js',
+    undefined,
+    {
+      loadEslintConfig: async () => ({
+        graph: configGraph,
+        stats: resolutionStats,
+      }),
+      loadEslintModule: async () => ({
+        graph: eslintGraph,
+        stats: resolutionStats,
+      }),
+    },
+  )
+
+  expect(trace.error?.stage).toBe('configEvaluation')
+  expect(trace.error?.details.name).toBe('SyntaxError')
+  expect(trace.configEvaluation?.durationMs).toBeGreaterThanOrEqual(0)
+  expect(trace.lint).toBeUndefined()
+})

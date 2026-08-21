@@ -8,6 +8,34 @@ import * as FileSystem from '../FileSystem/FileSystem.ts'
 import * as LintResultCache from '../LintResultCache/LintResultCache.ts'
 import * as ModuleGraphDependencies from '../ModuleGraphDependencies/ModuleGraphDependencies.ts'
 
+export interface ErrorDetails {
+  readonly code?: string | number
+  readonly message: string
+  readonly name: string
+  readonly stack?: string
+}
+
+interface FileRead {
+  readonly contentLength?: number
+  readonly durationMs: number
+  readonly error?: string
+  readonly path: string
+}
+
+export interface ResolutionStats {
+  readonly durationMs: number
+  readonly fileReadCount: number
+  readonly files: readonly FileRead[]
+  readonly totalContentLength: number
+  readonly uniqueFileCount: number
+}
+
+export interface ModuleResolutionTrace {
+  readonly error?: ErrorDetails
+  readonly graph?: ModuleGraph
+  readonly stats: ResolutionStats
+}
+
 interface Rpc {
   readonly dispose: () => void | Promise<void>
   readonly invoke: (
@@ -133,11 +161,30 @@ export const invalidateForFileChanges = (
   return true
 }
 
-export const loadEslintConfig = async (
+export function loadEslintConfig(
+  path: string,
+  filePath: string | undefined,
+  captureStats: true,
+): Promise<ModuleResolutionTrace>
+export function loadEslintConfig(
   path: string,
   filePath?: string,
-): Promise<ModuleGraph> => {
+  captureStats?: false,
+): Promise<ModuleGraph>
+export async function loadEslintConfig(
+  path: string,
+  filePath?: string,
+  captureStats = false,
+): Promise<ModuleGraph | ModuleResolutionTrace> {
   await flushInvalidatedCacheKeys()
+  if (captureStats) {
+    return invoke<ModuleResolutionTrace>(
+      'ModuleResolution.loadEslintConfig',
+      path,
+      filePath,
+      true,
+    )
+  }
   const graph = await invoke<ModuleGraph>(
     'ModuleResolution.loadEslintConfig',
     path,
@@ -147,11 +194,30 @@ export const loadEslintConfig = async (
   return graph
 }
 
-export const loadEslintModule = async (
+export function loadEslintModule(
+  path: string,
+  projectPath: string | undefined,
+  captureStats: true,
+): Promise<ModuleResolutionTrace>
+export function loadEslintModule(
   path: string,
   projectPath?: string,
-): Promise<ModuleGraph> => {
+  captureStats?: false,
+): Promise<ModuleGraph>
+export async function loadEslintModule(
+  path: string,
+  projectPath?: string,
+  captureStats = false,
+): Promise<ModuleGraph | ModuleResolutionTrace> {
   await flushInvalidatedCacheKeys()
+  if (captureStats) {
+    return invoke<ModuleResolutionTrace>(
+      'ModuleResolution.loadEslintModule',
+      path,
+      projectPath,
+      true,
+    )
+  }
   const graph = projectPath
     ? await invoke<ModuleGraph>(
         'ModuleResolution.loadEslintModule',

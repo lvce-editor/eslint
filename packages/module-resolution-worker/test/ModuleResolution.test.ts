@@ -101,6 +101,43 @@ test('transforms an esm default export to commonjs', async () => {
   expect(graph.modules[graph.entry]).toContain('exports.default')
 })
 
+test('captures fresh config resolution stats', async () => {
+  setFiles({
+    '/workspace/eslint.config.js': `export default [{ rules: {} }]`,
+  })
+  await LoadEslintConfig.loadEslintConfig('/workspace/eslint.config.js')
+
+  const trace = await LoadEslintConfig.loadEslintConfig(
+    '/workspace/eslint.config.js',
+    undefined,
+    true,
+  )
+
+  expect(trace.error).toBeUndefined()
+  expect(trace.graph?.entry).toBe('/workspace/eslint.config.js')
+  expect(trace.stats.durationMs).toBeGreaterThanOrEqual(0)
+  expect(trace.stats.fileReadCount).toBeGreaterThan(0)
+  expect(trace.stats.uniqueFileCount).toBeGreaterThan(0)
+  expect(trace.stats.files).toContainEqual(
+    expect.objectContaining({ path: '/workspace/eslint.config.js' }),
+  )
+})
+
+test('returns config resolution errors with partial stats', async () => {
+  const trace = await LoadEslintConfig.loadEslintConfig(
+    '/workspace/missing.config.js',
+    undefined,
+    true,
+  )
+
+  expect(trace.graph).toBeUndefined()
+  expect(trace.error?.message).toContain('File not found')
+  expect(trace.stats.fileReadCount).toBe(1)
+  expect(trace.stats.files[0]).toMatchObject({
+    path: '/workspace/missing.config.js',
+  })
+})
+
 test('imports a commonjs module marked as an es module without a default export', async () => {
   setFiles({
     '/workspace/eslint.config.js': `import plugin from './plugin.cjs'; export default plugin.rules`,

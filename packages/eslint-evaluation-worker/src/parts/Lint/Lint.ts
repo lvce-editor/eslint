@@ -20,6 +20,28 @@ export type LintResult = {
   }
 }
 
+interface ErrorDetails {
+  readonly code?: string | number
+  readonly message: string
+  readonly name: string
+  readonly stack?: string
+}
+
+export interface LintPerformanceTrace {
+  readonly configEvaluation: {
+    readonly durationMs: number
+  }
+  readonly error?: {
+    readonly details: ErrorDetails
+    readonly stage: 'configEvaluation' | 'lint'
+  }
+  readonly lint?: {
+    readonly diagnostics: readonly LintResult[]
+    readonly diagnosticCount: number
+    readonly durationMs: number
+  }
+}
+
 type EslintConstructor = typeof ESLint
 type LinterConstructor = typeof Linter
 type LintMessage = Linter.LintMessage
@@ -74,6 +96,24 @@ const defaultConfig = {
   },
 }
 
+const now = (): number => performance.now()
+
+const toErrorDetails = (error: unknown): ErrorDetails => {
+  if (!(error instanceof Error)) {
+    return {
+      message: String(error),
+      name: 'Error',
+    }
+  }
+  const { code } = error as Error & { readonly code?: unknown }
+  return {
+    ...((typeof code === 'string' || typeof code === 'number') && { code }),
+    message: error.message,
+    name: error.name,
+    ...(error.stack && { stack: error.stack }),
+  }
+}
+
 const getMajorVersion = (Eslint: EslintConstructor): number => {
   const [majorVersion = ''] = Eslint.version?.split('.', 1) ?? []
   const major = Number(majorVersion)
@@ -120,14 +160,11 @@ const createModernEngine = (
   }
 }
 
-const createContext = (
-  graph: ModuleGraph | undefined,
+const createContextFromLoadedConfig = (
+  loadedConfig: any,
   baseDirectory: string,
   eslint: EslintModule,
 ): LintContext => {
-  const loadedConfig = graph
-    ? LoadModuleGraph.loadModuleGraph(graph)
-    : defaultConfig
   const config = Array.isArray(loadedConfig) ? loadedConfig : [loadedConfig]
   if (
     typeof eslint.ESLint === 'function' &&
@@ -149,6 +186,17 @@ const createContext = (
     }),
     type: 'legacy',
   }
+}
+
+const createContext = (
+  graph: ModuleGraph | undefined,
+  baseDirectory: string,
+  eslint: EslintModule,
+): LintContext => {
+  const loadedConfig = graph
+    ? LoadModuleGraph.loadModuleGraph(graph)
+    : defaultConfig
+  return createContextFromLoadedConfig(loadedConfig, baseDirectory, eslint)
 }
 
 const getContextMap = (
@@ -195,21 +243,11 @@ const lintWithContext = async (
   return context.engine.verify(text, context.config, { filename: filePath })
 }
 
-export const lint = async (
-  text: string,
-  filePath: string,
-  graph: ModuleGraph | undefined,
-  eslint: EslintModule,
+const toLintResults = (
+  messages: readonly LintMessage[],
+  linterFilePath: string,
   loadedSuppressions?: LoadedSuppressions,
-): Promise<LintResult[]> => {
-  const linterFilePath = Path.toFileSystemPath(filePath)
-  const nativeLinterFilePath = toNativeAbsolutePath(linterFilePath)
-  const baseDirectory = graph
-    ? Path.dirname(Path.toFileSystemPath(graph.entry))
-    : Path.dirname(linterFilePath)
-  const nativeBaseDirectory = toNativeAbsolutePath(baseDirectory)
-  const context = getContext(graph, nativeBaseDirectory, eslint)
-  const messages = await lintWithContext(context, text, nativeLinterFilePath)
+): LintResult[] => {
   const unsuppressedMessages = ApplySuppressions.applySuppressions(
     messages,
     linterFilePath,
@@ -232,4 +270,104 @@ export const lint = async (
       ruleId: message.ruleId,
       severity: message.severity === 2 ? 'error' : 'warning',
     }))
+}
+
+const getLintPaths = (
+  filePath: string,
+  graph: ModuleGraph | undefined,
+): {
+  readonly linterFilePath: string
+  readonly nativeBaseDirectory: string
+  readonly nativeLinterFilePath: string
+} => {
+  const linterFilePath = Path.toFileSystemPath(filePath)
+  const nativeLinterFilePath = toNativeAbsolutePath(linterFilePath)
+  const baseDirectory = graph
+    ? Path.dirname(Path.toFileSystemPath(graph.entry))
+    : Path.dirname(linterFilePath)
+  return {
+    linterFilePath,
+    nativeBaseDirectory: toNativeAbsolutePath(baseDirectory),
+    nativeLinterFilePath,
+  }
+}
+
+export const lint = async (
+  text: string,
+  filePath: string,
+  graph: ModuleGraph | undefined,
+  eslint: EslintModule,
+  loadedSuppressions?: LoadedSuppressions,
+): Promise<LintResult[]> => {
+  const { linterFilePath, nativeBaseDirectory, nativeLinterFilePath } =
+    getLintPaths(filePath, graph)
+  const context = getContext(graph, nativeBaseDirectory, eslint)
+  const messages = await lintWithContext(context, text, nativeLinterFilePath)
+  return toLintResults(messages, linterFilePath, loadedSuppressions)
+}
+
+export const lintWithStats = async (
+  text: string,
+  filePath: string,
+  graph: ModuleGraph | undefined,
+  eslint: EslintModule,
+  loadedSuppressions?: LoadedSuppressions,
+): Promise<LintPerformanceTrace> => {
+  const { linterFilePath, nativeBaseDirectory, nativeLinterFilePath } =
+    getLintPaths(filePath, graph)
+  const configEvaluationStart = now()
+  let context: LintContext
+  try {
+    const loadedConfig = graph
+      ? LoadModuleGraph.loadModuleGraph(graph)
+      : defaultConfig
+    context = createContextFromLoadedConfig(
+      loadedConfig,
+      nativeBaseDirectory,
+      eslint,
+    )
+  } catch (error) {
+    return {
+      configEvaluation: {
+        durationMs: now() - configEvaluationStart,
+      },
+      error: {
+        details: toErrorDetails(error),
+        stage: 'configEvaluation',
+      },
+    }
+  }
+  const configEvaluation = {
+    durationMs: now() - configEvaluationStart,
+  }
+  const lintStart = now()
+  try {
+    const messages = await lintWithContext(context, text, nativeLinterFilePath)
+    const diagnostics = toLintResults(
+      messages,
+      linterFilePath,
+      loadedSuppressions,
+    )
+    return {
+      configEvaluation,
+      lint: {
+        diagnosticCount: diagnostics.length,
+        diagnostics,
+        durationMs: now() - lintStart,
+      },
+    }
+  } catch (error) {
+    return {
+      configEvaluation,
+      error: {
+        details: toErrorDetails(error),
+        stage: 'lint',
+      },
+      lint: {
+        diagnosticCount: 0,
+        diagnostics: [],
+        durationMs: now() - lintStart,
+      },
+    }
+  }
 }

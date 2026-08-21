@@ -42,6 +42,7 @@
     "onCodeAction:css",
     "onCodeAction:json",
     "onCommand:eslint.lint",
+    "onCommand:eslint.showPerformanceTrace",
     "onLanguage:javascript",
     "onLanguage:javascriptreact",
     "onLanguage:typescript",
@@ -54,6 +55,10 @@
     {
       "id": "eslint.lint",
       "label": "ESLint: Lint Document"
+    },
+    {
+      "id": "eslint.showPerformanceTrace",
+      "label": "ESLint: Show Performance Trace"
     }
   ],
   "outputChannels": [

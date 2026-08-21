@@ -87,6 +87,40 @@ test('keeps the worker alive until concurrent sessions complete', async () => {
   expect(dispose).toHaveBeenCalledTimes(1)
 })
 
+test('requests uncached module resolution stats', async () => {
+  const invoke = jest.fn<
+    (method: string, ...params: readonly unknown[]) => Promise<any>
+  >(async () => ({
+    graph: configGraph,
+    stats: {
+      durationMs: 1,
+      fileReadCount: 0,
+      files: [],
+      totalContentLength: 0,
+      uniqueFileCount: 0,
+    },
+  }))
+  ModuleResolutionWorker.state.createRpc = async () => ({
+    dispose: () => {},
+    invoke,
+  })
+
+  await ModuleResolutionWorker.runInSession(() =>
+    ModuleResolutionWorker.loadEslintConfig(
+      'file:///workspace/eslint.config.js',
+      'file:///workspace/src/file.js',
+      true,
+    ),
+  )
+
+  expect(invoke).toHaveBeenCalledWith(
+    'ModuleResolution.loadEslintConfig',
+    'file:///workspace/eslint.config.js',
+    'file:///workspace/src/file.js',
+    true,
+  )
+})
+
 test('defers persistent invalidation until the next resolution', async () => {
   const invocations: unknown[] = []
   const disposals: Array<ReturnType<typeof jest.fn<() => void>>> = []

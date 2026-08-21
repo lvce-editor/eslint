@@ -21,6 +21,27 @@ export interface ModuleGraph {
   readonly resolutions: Readonly<Record<string, string>>
 }
 
+interface ErrorDetails {
+  readonly code?: string | number
+  readonly message: string
+  readonly name: string
+  readonly stack?: string
+}
+
+interface ResolutionStats {
+  readonly durationMs: number
+  readonly fileReadCount: number
+  readonly files: readonly FileSystem.FileRead[]
+  readonly totalContentLength: number
+  readonly uniqueFileCount: number
+}
+
+export interface ModuleResolutionTrace {
+  readonly error?: ErrorDetails
+  readonly graph?: ModuleGraph
+  readonly stats: ResolutionStats
+}
+
 interface PackageJson {
   readonly browser?: Readonly<Record<string, string | false>> | string
   readonly exports?: Record<string, unknown> | string
@@ -79,6 +100,42 @@ const directoryEntriesCache = new Map<
   string,
   Promise<Awaited<ReturnType<typeof FileSystem.readDirWithFileTypes>>>
 >()
+
+const toErrorDetails = (error: unknown): ErrorDetails => {
+  if (!(error instanceof Error)) {
+    return {
+      message: String(error),
+      name: 'Error',
+    }
+  }
+  const { code } = error as Error & { readonly code?: unknown }
+  return {
+    ...((typeof code === 'string' || typeof code === 'number') && { code }),
+    message: error.message,
+    name: error.name,
+    ...(error.stack && { stack: error.stack }),
+  }
+}
+
+const captureResolution = async (
+  task: () => Promise<ModuleGraph>,
+): Promise<ModuleResolutionTrace> => {
+  const capture = await FileSystem.captureFileReads(task)
+  const files = capture.reads
+  const stats = {
+    durationMs: capture.durationMs,
+    fileReadCount: files.length,
+    files,
+    totalContentLength: files.reduce(
+      (total, file) => total + (file.contentLength ?? 0),
+      0,
+    ),
+    uniqueFileCount: new Set(files.map((file) => file.path)).size,
+  }
+  return capture.error
+    ? { error: toErrorDetails(capture.error), stats }
+    : { graph: capture.result, stats }
+}
 const fileTypeCache = new Map<string, Promise<FileType>>()
 const packageJsonCache = new Map<string, Promise<PackageJson | undefined>>()
 const graphIdState = { next: 1 }
@@ -1185,19 +1242,20 @@ const loadModule = async (
   cacheKeyOverride?: string,
   shouldRestore = true,
   resolutionRoot?: string,
+  bypassCache = false,
 ): Promise<ModuleGraph> => {
   const entry = normalize(modulePath)
   const cacheKey =
     cacheKeyOverride ??
     `${scanCommonJs ? 'commonjs' : 'module'}:${FileSystem.toUri(entry)}:${virtualFilePath ? FileSystem.toUri(normalize(virtualFilePath)) : ''}`
-  const cached = cache.get(cacheKey)
+  const cached = bypassCache ? undefined : cache.get(cacheKey)
   if (cached) {
     const entrySource = await FileSystem.readFile(cached.graph.entry)
     if (cached.entrySource === entrySource) {
       return cached.graph
     }
   }
-  if (shouldRestore) {
+  if (shouldRestore && !bypassCache) {
     const restored = await restoreModuleGraph(cacheKey, entry)
     if (restored) {
       return restored
@@ -1598,42 +1656,69 @@ const loadModule = async (
     modules,
     resolutions,
   }
-  cache.set(cacheKey, { entrySource, graph })
-  await ModuleGraphCache.save(cacheKey, {
-    entry,
-    files,
-    modules,
-    moduleSources,
-    resolutions,
-  })
+  if (!bypassCache) {
+    cache.set(cacheKey, { entrySource, graph })
+    await ModuleGraphCache.save(cacheKey, {
+      entry,
+      files,
+      modules,
+      moduleSources,
+      resolutions,
+    })
+  }
   return graph
 }
 /* eslint-enable sonarjs/cognitive-complexity */
 
-export const loadEslintConfig = (
+export function loadEslintConfig(
+  modulePath: string,
+  filePath: string | undefined,
+  captureStats: true,
+): Promise<ModuleResolutionTrace>
+export function loadEslintConfig(
   modulePath: string,
   filePath?: string,
-): Promise<ModuleGraph> =>
-  loadModule(modulePath, false, filePath, undefined, true, dirname(modulePath))
+  captureStats?: false,
+): Promise<ModuleGraph>
+export function loadEslintConfig(
+  modulePath: string,
+  filePath?: string,
+  captureStats = false,
+): Promise<ModuleGraph | ModuleResolutionTrace> {
+  const load = (): Promise<ModuleGraph> =>
+    loadModule(
+      modulePath,
+      false,
+      filePath,
+      undefined,
+      true,
+      dirname(modulePath),
+      captureStats,
+    )
+  return captureStats ? captureResolution(load) : load()
+}
 
-export const loadEslintModule = async (
+const loadEslintModuleGraph = async (
   filePath: string,
   projectPath?: string,
+  bypassCache = false,
 ): Promise<ModuleGraph> => {
   const resolutionRoot = projectPath
     ? dirname(normalize(projectPath))
     : undefined
   const cacheKey = `commonjs-project:${FileSystem.toUri(normalize(projectPath ?? filePath))}`
-  const cached = cache.get(cacheKey)
+  const cached = bypassCache ? undefined : cache.get(cacheKey)
   if (cached) {
     const entrySource = await FileSystem.readFile(cached.graph.entry)
     if (cached.entrySource === entrySource) {
       return cached.graph
     }
   }
-  const restored = await restoreModuleGraph(cacheKey)
-  if (restored) {
-    return restored
+  if (!bypassCache) {
+    const restored = await restoreModuleGraph(cacheKey)
+    if (restored) {
+      return restored
+    }
   }
   const entry = await resolveModule(filePath, 'eslint', resolutionRoot)
   if (!entry) {
@@ -1641,5 +1726,33 @@ export const loadEslintModule = async (
       `Cannot find ESLint in project node_modules for ${filePath}`,
     )
   }
-  return loadModule(entry, true, undefined, cacheKey, false, resolutionRoot)
+  return loadModule(
+    entry,
+    true,
+    undefined,
+    cacheKey,
+    false,
+    resolutionRoot,
+    bypassCache,
+  )
+}
+
+export function loadEslintModule(
+  filePath: string,
+  projectPath: string | undefined,
+  captureStats: true,
+): Promise<ModuleResolutionTrace>
+export function loadEslintModule(
+  filePath: string,
+  projectPath?: string,
+  captureStats?: false,
+): Promise<ModuleGraph>
+export function loadEslintModule(
+  filePath: string,
+  projectPath?: string,
+  captureStats = false,
+): Promise<ModuleGraph | ModuleResolutionTrace> {
+  const load = (): Promise<ModuleGraph> =>
+    loadEslintModuleGraph(filePath, projectPath, captureStats)
+  return captureStats ? captureResolution(load) : load()
 }

@@ -3,8 +3,16 @@ import * as FileSystem from '../FileSystem/FileSystem.ts'
 const configFileName = 'eslint.config.js'
 const configPaths = new Map<string, Promise<string | null>>()
 
+export interface ConfigDiscoveryTrace {
+  readonly configPath: string | null
+  readonly directories: readonly string[]
+  readonly directoryReadCount: number
+  readonly durationMs: number
+}
+
 const findEslintConfigUncached = async (
   startDirectory: string,
+  directories?: string[],
 ): Promise<string | null> => {
   let currentDir = startDirectory
   // Search up the directory tree
@@ -13,6 +21,7 @@ const findEslintConfigUncached = async (
 
   while (depth < maxDepth) {
     try {
+      directories?.push(currentDir)
       const entries = await FileSystem.readDirWithFileTypes(currentDir)
       const hasConfigFile = entries.some(
         (entry) => entry.isFile && entry.name === configFileName,
@@ -49,8 +58,33 @@ const getStartDirectory = (filePath: string): string => {
   return pathParts.join('/') || '/'
 }
 
-export const findEslintConfig = (filePath: string): Promise<string | null> => {
+export function findEslintConfig(
+  filePath: string,
+  captureStats: true,
+): Promise<ConfigDiscoveryTrace>
+export function findEslintConfig(
+  filePath: string,
+  captureStats?: false,
+): Promise<string | null>
+export async function findEslintConfig(
+  filePath: string,
+  captureStats = false,
+): Promise<string | null | ConfigDiscoveryTrace> {
   const startDirectory = getStartDirectory(filePath)
+  if (captureStats) {
+    const directories: string[] = []
+    const startTime = performance.now()
+    const configPath = await findEslintConfigUncached(
+      startDirectory,
+      directories,
+    )
+    return {
+      configPath,
+      directories,
+      directoryReadCount: directories.length,
+      durationMs: performance.now() - startTime,
+    }
+  }
   let configPath = configPaths.get(startDirectory)
   if (!configPath) {
     configPath = findEslintConfigUncached(startDirectory)

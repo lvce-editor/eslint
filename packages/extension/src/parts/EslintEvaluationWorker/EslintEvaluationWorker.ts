@@ -16,6 +16,31 @@ export type LintResult = {
   }
 }
 
+export interface EslintPerformanceTrace {
+  readonly configEvaluation?: {
+    readonly durationMs: number
+  }
+  readonly configResolution?: ModuleResolutionWorker.ResolutionStats
+  readonly error?: {
+    readonly details: ModuleResolutionWorker.ErrorDetails
+    readonly stage:
+      | 'configEvaluation'
+      | 'configResolution'
+      | 'eslintEvaluation'
+      | 'eslintResolution'
+      | 'lint'
+  }
+  readonly eslintEvaluation?: {
+    readonly durationMs: number
+  }
+  readonly eslintResolution?: ModuleResolutionWorker.ResolutionStats
+  readonly lint?: {
+    readonly diagnostics: readonly LintResult[]
+    readonly diagnosticCount: number
+    readonly durationMs: number
+  }
+}
+
 export interface Rpc {
   readonly invoke: (
     method: string,
@@ -58,19 +83,44 @@ export const clearCache = (): Promise<void> => {
   return invoke('EslintEvaluation.clearCache')
 }
 
-export const lint = async (
+export function lint(
+  text: string,
+  filePath: string,
+  configPath: string | undefined,
+  loadedSuppressions: LoadedSuppressions | undefined,
+  captureStats: true,
+): Promise<EslintPerformanceTrace>
+export function lint(
   text: string,
   filePath: string,
   configPath?: string,
   loadedSuppressions?: LoadedSuppressions,
-): Promise<LintResult[]> => {
-  return ModuleResolutionWorker.runInSession(() =>
-    invoke(
+  captureStats?: false,
+): Promise<LintResult[]>
+export async function lint(
+  text: string,
+  filePath: string,
+  configPath?: string,
+  loadedSuppressions?: LoadedSuppressions,
+  captureStats = false,
+): Promise<LintResult[] | EslintPerformanceTrace> {
+  return ModuleResolutionWorker.runInSession(async () => {
+    if (captureStats) {
+      return invoke<EslintPerformanceTrace>(
+        'EslintEvaluation.lint',
+        text,
+        filePath,
+        configPath,
+        loadedSuppressions,
+        true,
+      )
+    }
+    return invoke<LintResult[]>(
       'EslintEvaluation.lint',
       text,
       filePath,
       configPath,
       loadedSuppressions,
-    ),
-  )
+    )
+  })
 }
