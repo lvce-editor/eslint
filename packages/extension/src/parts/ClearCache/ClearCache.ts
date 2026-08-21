@@ -8,11 +8,11 @@ import * as ModuleResolutionWorker from '../ModuleResolutionWorker/ModuleResolut
 const CacheNamePrefix = 'eslint-'
 
 interface Dependencies {
+  readonly clearConfigDiscoveryCache: () => void
   readonly clearEvaluationCache: () => Promise<void>
   readonly clearFileHashCache: () => void
   readonly clearLintResultCache: () => void
   readonly clearModuleResolutionCache: () => void
-  readonly clearConfigDiscoveryCache: () => void
   readonly clearSuppressionsCache: () => void
   readonly deleteCache: (name: string) => Promise<boolean>
   readonly getCacheNames: () => Promise<readonly string[]>
