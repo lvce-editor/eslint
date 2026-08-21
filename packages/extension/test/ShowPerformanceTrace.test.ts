@@ -27,16 +27,63 @@ const resolutionStats = {
   uniqueFileCount: 1,
 }
 
-const parseDataUri = (uri: string): unknown => {
-  return JSON.parse(uri.slice('data://'.length))
-}
+test('uses the last linted document when the active document command is unavailable', async () => {
+  const executeCommand = jest.fn(async () => {
+    throw new Error(
+      'Command "GetActiveEditor.getTextDocument" not found (renderer worker)',
+    )
+  })
 
-test('opens a successful performance trace as json data', async () => {
-  const openUri = jest.fn<(uri: string) => Promise<void>>(async () => {})
+  await expect(
+    ShowPerformanceTrace.getActiveTextDocumentWithDependencies(
+      executeCommand,
+      () => document,
+    ),
+  ).resolves.toEqual(document)
+})
+
+test('does not use a stale document when the active document command reports no editor', async () => {
+  await expect(
+    ShowPerformanceTrace.getActiveTextDocumentWithDependencies(
+      async () => undefined,
+      () => document,
+    ),
+  ).resolves.toBeUndefined()
+})
+
+test('preserves unexpected active document errors in the trace', async () => {
+  const openTrace = jest.fn<
+    (trace: ShowPerformanceTrace.PerformanceTrace) => Promise<void>
+  >(async () => {})
   const trace = await ShowPerformanceTrace.showPerformanceTraceWithDependencies(
-    document,
+    undefined,
     {
       findEslintConfig: async () => configDiscovery,
+      getActiveTextDocument: async () => {
+        throw new Error('active editor failed')
+      },
+      lint: async () => ({}),
+      loadSuppressions: async () => undefined,
+      openTrace,
+    },
+  )
+
+  expect(trace.error).toMatchObject({
+    details: { message: 'active editor failed' },
+    stage: 'activeDocument',
+  })
+  expect(openTrace).toHaveBeenCalledWith(trace)
+})
+
+test('resolves the active document and opens a successful performance trace', async () => {
+  const openTrace = jest.fn<
+    (trace: ShowPerformanceTrace.PerformanceTrace) => Promise<void>
+  >(async () => {})
+  const trace = await ShowPerformanceTrace.showPerformanceTraceWithDependencies(
+    undefined,
+    {
+      findEslintConfig: async () => configDiscovery,
+      getActiveTextDocument: async () => document,
       lint: async () => ({
         configEvaluation: { durationMs: 3 },
         configResolution: resolutionStats,
@@ -49,7 +96,7 @@ test('opens a successful performance trace as json data', async () => {
         },
       }),
       loadSuppressions: async () => undefined,
-      openUri,
+      openTrace,
     },
   )
 
@@ -57,12 +104,13 @@ test('opens a successful performance trace as json data', async () => {
   expect(trace.fresh).toBe(true)
   expect(trace.configResolution?.fileReadCount).toBe(1)
   expect(trace.lint?.durationMs).toBe(5)
-  expect(openUri).toHaveBeenCalledTimes(1)
-  expect(parseDataUri(openUri.mock.calls[0][0])).toEqual(trace)
+  expect(openTrace).toHaveBeenCalledWith(trace)
 })
 
 test('opens a trace error when no config is found', async () => {
-  const openUri = jest.fn<(uri: string) => Promise<void>>(async () => {})
+  const openTrace = jest.fn<
+    (trace: ShowPerformanceTrace.PerformanceTrace) => Promise<void>
+  >(async () => {})
   const lint = jest.fn(async () => ({}))
   const trace = await ShowPerformanceTrace.showPerformanceTraceWithDependencies(
     document,
@@ -71,9 +119,10 @@ test('opens a trace error when no config is found', async () => {
         ...configDiscovery,
         configPath: null,
       }),
+      getActiveTextDocument: async () => undefined,
       lint,
       loadSuppressions: async () => undefined,
-      openUri,
+      openTrace,
     },
   )
 
@@ -82,15 +131,18 @@ test('opens a trace error when no config is found', async () => {
     stage: 'configDiscovery',
   })
   expect(lint).not.toHaveBeenCalled()
-  expect(parseDataUri(openUri.mock.calls[0][0])).toEqual(trace)
+  expect(openTrace).toHaveBeenCalledWith(trace)
 })
 
 test('preserves config evaluation errors in the opened trace', async () => {
-  const openUri = jest.fn<(uri: string) => Promise<void>>(async () => {})
+  const openTrace = jest.fn<
+    (trace: ShowPerformanceTrace.PerformanceTrace) => Promise<void>
+  >(async () => {})
   const trace = await ShowPerformanceTrace.showPerformanceTraceWithDependencies(
     document,
     {
       findEslintConfig: async () => configDiscovery,
+      getActiveTextDocument: async () => undefined,
       lint: async () => ({
         configEvaluation: { durationMs: 3 },
         configResolution: resolutionStats,
@@ -105,7 +157,7 @@ test('preserves config evaluation errors in the opened trace', async () => {
         eslintResolution: resolutionStats,
       }),
       loadSuppressions: async () => undefined,
-      openUri,
+      openTrace,
     },
   )
 
@@ -116,5 +168,31 @@ test('preserves config evaluation errors in the opened trace', async () => {
     },
     stage: 'configEvaluation',
   })
-  expect(parseDataUri(openUri.mock.calls[0][0])).toEqual(trace)
+  expect(openTrace).toHaveBeenCalledWith(trace)
+})
+
+test('writes a pretty-printed json trace to a named file', async () => {
+  const closeUri = jest.fn<(uri: string) => Promise<void>>(async () => {})
+  const openUri = jest.fn<(uri: string) => Promise<void>>(async () => {})
+  const writeFile = jest.fn<(uri: string, content: string) => Promise<void>>(
+    async () => {},
+  )
+  const trace = {
+    file: { uri: 'file:///workspace/test.js' },
+    fresh: true,
+    generatedAt: '2026-08-21T00:00:00.000Z',
+    schemaVersion: 1,
+    totalDurationMs: 1,
+  } as const
+
+  await ShowPerformanceTrace.openPerformanceTraceWithDependencies(trace, {
+    closeUri,
+    openUri,
+    writeFile,
+  })
+
+  const uri = 'memfs://eslint-performance-trace.json'
+  expect(closeUri).toHaveBeenCalledWith(uri)
+  expect(writeFile).toHaveBeenCalledWith(uri, JSON.stringify(trace, null, 2))
+  expect(openUri).toHaveBeenCalledWith(uri)
 })

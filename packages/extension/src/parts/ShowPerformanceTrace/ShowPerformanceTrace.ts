@@ -1,7 +1,8 @@
-import { openUri } from '@lvce-editor/api'
+import { closeUri, executeCommand, openUri, writeFile } from '@lvce-editor/api'
 import type { LoadedSuppressions } from '../LoadSuppressions/LoadSuppressions.ts'
 import * as EslintEvaluationWorker from '../EslintEvaluationWorker/EslintEvaluationWorker.ts'
 import * as FindEslintConfig from '../FindEslintConfig/FindEslintConfig.ts'
+import * as LastTextDocument from '../LastTextDocument/LastTextDocument.ts'
 import * as LoadSuppressions from '../LoadSuppressions/LoadSuppressions.ts'
 
 export interface TextDocument {
@@ -49,6 +50,7 @@ interface Dependencies {
     filePath: string,
     captureStats: true,
   ) => Promise<FindEslintConfig.ConfigDiscoveryTrace>
+  readonly getActiveTextDocument: () => Promise<TextDocument | undefined>
   readonly lint: (
     text: string,
     filePath: string,
@@ -57,14 +59,84 @@ interface Dependencies {
     captureStats: true,
   ) => Promise<EslintEvaluationWorker.EslintPerformanceTrace>
   readonly loadSuppressions: typeof LoadSuppressions.loadSuppressions
-  readonly openUri: (uri: string) => Promise<void>
+  readonly openTrace: (trace: PerformanceTrace) => Promise<void>
+}
+
+interface OutputDependencies {
+  readonly closeUri: typeof closeUri
+  readonly openUri: typeof openUri
+  readonly writeFile: typeof writeFile
+}
+
+const traceUri = 'memfs://eslint-performance-trace.json'
+
+export const openPerformanceTraceWithDependencies = async (
+  trace: PerformanceTrace,
+  dependencies: OutputDependencies,
+): Promise<void> => {
+  await dependencies.closeUri(traceUri)
+  await dependencies.writeFile(traceUri, JSON.stringify(trace, null, 2))
+  await dependencies.openUri(traceUri)
+}
+
+const openTrace = (trace: PerformanceTrace): Promise<void> => {
+  return openPerformanceTraceWithDependencies(trace, {
+    closeUri,
+    openUri,
+    writeFile,
+  })
+}
+
+type ExecuteCommand = (commandId: string) => Promise<unknown>
+
+const isTextDocument = (value: unknown): value is TextDocument => {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    typeof (value as TextDocument).text === 'string' &&
+    typeof (value as TextDocument).uri === 'string'
+  )
+}
+
+const isCommandNotFoundError = (error: unknown): boolean => {
+  return (
+    error instanceof Error &&
+    error.message.includes('GetActiveEditor.getTextDocument') &&
+    error.message.includes('not found')
+  )
+}
+
+export const getActiveTextDocumentWithDependencies = async (
+  executeCommand: ExecuteCommand,
+  getLastTextDocument: () => TextDocument | undefined,
+): Promise<TextDocument | undefined> => {
+  try {
+    const textDocument = await executeCommand('GetActiveEditor.getTextDocument')
+    if (textDocument === undefined || isTextDocument(textDocument)) {
+      return textDocument
+    }
+    throw new TypeError('Invalid active text document')
+  } catch (error) {
+    if (!isCommandNotFoundError(error)) {
+      throw error
+    }
+    return getLastTextDocument()
+  }
+}
+
+const getActiveTextDocument = (): Promise<TextDocument | undefined> => {
+  return getActiveTextDocumentWithDependencies(
+    executeCommand,
+    LastTextDocument.get,
+  )
 }
 
 const defaultDependencies: Dependencies = {
   findEslintConfig: FindEslintConfig.findEslintConfig,
+  getActiveTextDocument,
   lint: EslintEvaluationWorker.lint,
   loadSuppressions: LoadSuppressions.loadSuppressions,
-  openUri,
+  openTrace,
 }
 
 const now = (): number => performance.now()
@@ -85,11 +157,6 @@ const toErrorDetails = (error: unknown): ErrorDetails => {
   }
 }
 
-const toDataUri = (trace: PerformanceTrace): string => {
-  const json = JSON.stringify(trace)
-  return `data://${json}`
-}
-
 const createBaseTrace = (
   textDocument: TextDocument | undefined,
 ): Omit<PerformanceTrace, 'totalDurationMs'> => ({
@@ -106,9 +173,25 @@ export const showPerformanceTraceWithDependencies = async (
   dependencies: Dependencies,
 ): Promise<PerformanceTrace> => {
   const startTime = now()
-  const baseTrace = createBaseTrace(textDocument)
+  let actualTextDocument: TextDocument | undefined
+  try {
+    actualTextDocument =
+      textDocument ?? (await dependencies.getActiveTextDocument())
+  } catch (error) {
+    const trace: PerformanceTrace = {
+      ...createBaseTrace(undefined),
+      error: {
+        details: toErrorDetails(error),
+        stage: 'activeDocument',
+      },
+      totalDurationMs: now() - startTime,
+    }
+    await dependencies.openTrace(trace)
+    return trace
+  }
+  const baseTrace = createBaseTrace(actualTextDocument)
   let trace: PerformanceTrace
-  if (!textDocument) {
+  if (!actualTextDocument) {
     trace = {
       ...baseTrace,
       error: {
@@ -121,11 +204,11 @@ export const showPerformanceTraceWithDependencies = async (
       },
       totalDurationMs: now() - startTime,
     }
-    await dependencies.openUri(toDataUri(trace))
+    await dependencies.openTrace(trace)
     return trace
   }
 
-  const { text, uri: filePath } = textDocument
+  const { text, uri: filePath } = actualTextDocument
   let configDiscovery: FindEslintConfig.ConfigDiscoveryTrace
   try {
     configDiscovery = await dependencies.findEslintConfig(filePath, true)
@@ -138,7 +221,7 @@ export const showPerformanceTraceWithDependencies = async (
       },
       totalDurationMs: now() - startTime,
     }
-    await dependencies.openUri(toDataUri(trace))
+    await dependencies.openTrace(trace)
     return trace
   }
   const { configPath } = configDiscovery
@@ -157,7 +240,7 @@ export const showPerformanceTraceWithDependencies = async (
       },
       totalDurationMs: now() - startTime,
     }
-    await dependencies.openUri(toDataUri(trace))
+    await dependencies.openTrace(trace)
     return trace
   }
 
@@ -182,7 +265,7 @@ export const showPerformanceTraceWithDependencies = async (
       },
       totalDurationMs: now() - startTime,
     }
-    await dependencies.openUri(toDataUri(trace))
+    await dependencies.openTrace(trace)
     return trace
   }
   const suppressions = {
@@ -209,7 +292,7 @@ export const showPerformanceTraceWithDependencies = async (
       suppressions,
       totalDurationMs: now() - startTime,
     }
-    await dependencies.openUri(toDataUri(trace))
+    await dependencies.openTrace(trace)
     return trace
   }
   trace = {
@@ -220,7 +303,7 @@ export const showPerformanceTraceWithDependencies = async (
     suppressions,
     totalDurationMs: now() - startTime,
   }
-  await dependencies.openUri(toDataUri(trace))
+  await dependencies.openTrace(trace)
   return trace
 }
 

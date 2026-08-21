@@ -3,11 +3,13 @@ import * as EslintEvaluationWorker from '../src/parts/EslintEvaluationWorker/Esl
 import * as DiagnosticProvider from '../src/parts/ExtensionHost/ExtensionHostDiagnosticProviderEslint.ts'
 import * as FileSystem from '../src/parts/FileSystem/FileSystem.ts'
 import * as FindEslintConfig from '../src/parts/FindEslintConfig/FindEslintConfig.ts'
+import * as LastTextDocument from '../src/parts/LastTextDocument/LastTextDocument.ts'
 
 const toPath = (uri: string): string =>
   decodeURIComponent(new URL(uri).pathname)
 
 beforeEach(() => {
+  LastTextDocument.reset()
   FindEslintConfig.clearCache()
   EslintEvaluationWorker.state.rpcPromise = undefined
   EslintEvaluationWorker.state.createRpc = async () => ({
@@ -44,12 +46,14 @@ test('returns no diagnostics when the workspace has no eslint config', async () 
     throw new Error('ESLint evaluation worker should not be started')
   }
 
-  const diagnostics = await DiagnosticProvider.provideDiagnostics({
+  const textDocument = {
     text: '{ "name": "example" }',
     uri: '/workspace/package.json',
-  })
+  }
+  const diagnostics = await DiagnosticProvider.provideDiagnostics(textDocument)
 
   expect(diagnostics).toEqual([])
+  expect(LastTextDocument.get()).toBe(textDocument)
 })
 
 test('attributes invalid config errors to the config location', async () => {

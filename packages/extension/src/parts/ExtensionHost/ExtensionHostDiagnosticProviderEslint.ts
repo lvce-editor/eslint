@@ -1,6 +1,7 @@
 import type { Diagnostic } from '@lvce-editor/api'
 import * as EslintEvaluationWorker from '../EslintEvaluationWorker/EslintEvaluationWorker.ts'
 import * as FindEslintConfig from '../FindEslintConfig/FindEslintConfig.ts'
+import * as LastTextDocument from '../LastTextDocument/LastTextDocument.ts'
 import * as LintResultCache from '../LintResultCache/LintResultCache.ts'
 import * as LoadSuppressions from '../LoadSuppressions/LoadSuppressions.ts'
 
@@ -46,6 +47,7 @@ const provideDiagnosticsWithOptions = async (
   textDocument: TextDocument,
   requireConfig: boolean,
 ): Promise<readonly Diagnostic[]> => {
+  LastTextDocument.set(textDocument)
   let configPath: string | null = null
   try {
     const { text } = textDocument

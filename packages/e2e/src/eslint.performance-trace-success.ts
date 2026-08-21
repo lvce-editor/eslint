@@ -44,7 +44,7 @@ export const test: Test = async ({
       uri,
     },
   )) as any
-  await Editor.shouldHaveText(JSON.stringify(trace))
+  await Editor.shouldHaveText(JSON.stringify(trace, null, 2))
   if (trace.error) {
     throw new Error(`Unexpected trace error: ${JSON.stringify(trace.error)}`)
   }
