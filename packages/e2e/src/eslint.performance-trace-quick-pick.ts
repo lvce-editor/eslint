@@ -1,12 +1,15 @@
 import type { Test } from '@lvce-editor/test-with-playwright'
 
-export const name = 'eslint.performance-trace-config-error'
+export const name = 'eslint.performance-trace-quick-pick'
 
 export const test: Test = async ({
   Command,
   Editor,
+  expect,
   FileSystem,
+  Locator,
   Main,
+  Settings,
   Workspace,
 }) => {
   const tmpDir = await FileSystem.getTmpDir({ scheme: 'file' })
@@ -28,29 +31,43 @@ export const test: Test = async ({
       uri: `${eslintDirectory}/index.cjs`,
     },
     {
-      content: `throw new Error('broken config'); export default []`,
+      content: `export default [{ rules: { 'no-debugger': 'error' } }]`,
       uri: `${tmpDir}/eslint.config.js`,
     },
     { content: 'debugger', uri: `${tmpDir}/test.js` },
   ])
   await Workspace.setPath(tmpDir)
+  await Settings.update({ 'editor.diagnostics': true })
   const uri = `${tmpDir}/test.js`
   await Main.openUri(uri)
+  await Editor.shouldHaveDiagnostics([
+    {
+      columnIndex: 0,
+      endColumnIndex: 8,
+      endRowIndex: 0,
+      message: "Unexpected 'debugger' statement.",
+      rowIndex: 0,
+      source: 'no-debugger',
+      type: 'error',
+    },
+  ])
 
+  // Quick Pick executes extension commands without an editor-context argument.
   const trace = (await Command.executeExtensionCommand(
     'eslint.showPerformanceTrace',
-    {
-      text: 'debugger',
-      uri,
-    },
   )) as any
-  await Editor.shouldHaveText(JSON.stringify(trace, null, 2))
-  if (
-    trace.error?.stage !== 'configEvaluation' ||
-    !trace.error?.details?.message?.includes('broken config') ||
-    trace.configResolution.fileReadCount < 1 ||
-    trace.configEvaluation.durationMs < 0
-  ) {
-    throw new Error(`Unexpected config error trace: ${JSON.stringify(trace)}`)
+
+  if (trace.error) {
+    throw new Error(`Unexpected trace error: ${JSON.stringify(trace.error)}`)
   }
+  if (trace.file.uri !== uri) {
+    throw new Error(`Expected trace for ${uri}, received ${trace.file.uri}`)
+  }
+  await Editor.shouldHaveText(JSON.stringify(trace, null, 2))
+
+  const secondRow = Locator('.EditorRow').nth(1)
+  await expect(secondRow).toBeVisible()
+
+  const traceTab = Locator('.MainTab[title$="eslint-performance-trace.json"]')
+  await expect(traceTab).toBeVisible()
 }

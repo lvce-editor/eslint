@@ -22,7 +22,7 @@ export const test: Test = async ({
       uri,
     },
   )) as any
-  await Editor.shouldHaveText(JSON.stringify(trace))
+  await Editor.shouldHaveText(JSON.stringify(trace, null, 2))
   if (
     trace.error?.stage !== 'configDiscovery' ||
     trace.error?.details?.code !== 'ESLINT_CONFIG_NOT_FOUND' ||
