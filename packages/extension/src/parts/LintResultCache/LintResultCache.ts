@@ -227,6 +227,11 @@ export const clearRevisionCache = (): void => {
   graphRevisions.clear()
 }
 
+export const clearCache = (): void => {
+  graphRevisions.clear()
+  invalidatedGraphCacheKeys.clear()
+}
+
 export const invalidateGraphCacheKeys = (
   cacheKeys: readonly string[],
 ): void => {

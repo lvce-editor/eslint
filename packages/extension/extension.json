@@ -41,6 +41,7 @@
     "onCodeAction:yaml",
     "onCodeAction:css",
     "onCodeAction:json",
+    "onCommand:eslint.clearCache",
     "onCommand:eslint.lint",
     "onCommand:eslint.showPerformanceTrace",
     "onLanguage:javascript",
@@ -52,6 +53,10 @@
     "onLanguage:json"
   ],
   "commands": [
+    {
+      "id": "eslint.clearCache",
+      "label": "ESLint: Clear Cache"
+    },
     {
       "id": "eslint.lint",
       "label": "ESLint: Lint Document"

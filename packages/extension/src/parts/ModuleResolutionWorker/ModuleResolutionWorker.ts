@@ -111,6 +111,11 @@ const dispose = async (): Promise<void> => {
   }
 }
 
+export const clearCache = (): void => {
+  state.invalidatedCacheKeys.clear()
+  ModuleGraphDependencies.clear()
+}
+
 export const runInSession = async <T>(task: () => Promise<T>): Promise<T> => {
   state.activeSessions++
   try {

@@ -58,3 +58,11 @@ test('contributes the performance trace command', () => {
     label: 'ESLint: Show Performance Trace',
   })
 })
+
+test('contributes the clear cache command', () => {
+  expect(extension.activation).toContain('onCommand:eslint.clearCache')
+  expect(extension.commands).toContainEqual({
+    id: 'eslint.clearCache',
+    label: 'ESLint: Clear Cache',
+  })
+})
