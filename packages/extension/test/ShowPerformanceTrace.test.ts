@@ -14,12 +14,12 @@ const configDiscovery = {
 }
 
 const resolutionStats = {
-  durationMs: 2,
+  durationMs: 2.345679,
   fileReadCount: 1,
   files: [
     {
       contentLength: 20,
-      durationMs: 1,
+      durationMs: 1.234568,
       path: '/workspace/eslint.config.js',
     },
   ],
@@ -110,6 +110,10 @@ test('resolves the active document and opens a successful performance trace', as
     directories: ['file:///workspace'],
   })
   expect(trace.configResolution?.fileReadCount).toBe(1)
+  expect(trace.configResolution?.durationMs).toBeCloseTo(2.346)
+  expect(trace.configResolution?.files[0].durationMs).toBeCloseTo(1.235)
+  expect(trace.configResolution?.totalContentSize).toBe('20 B')
+  expect(trace.eslintResolution?.totalContentSize).toBe('20 B')
   expect(trace.configResolution?.files[0].path).toBe(
     'file:///workspace/eslint.config.js',
   )
@@ -241,11 +245,17 @@ test('writes a pretty-printed json trace to a named file', async () => {
     async () => {},
   )
   const trace = {
+    configDiscovery: {
+      configPath: '/workspace/eslint.config.js',
+      directories: ['/workspace'],
+      directoryReadCount: 1,
+      durationMs: 2.345679,
+    },
     file: { uri: 'file:///workspace/test.js' },
     fresh: true,
     generatedAt: '2026-08-21T00:00:00.000Z',
     schemaVersion: 1,
-    totalDurationMs: 1,
+    totalDurationMs: 1.234568,
   } as const
 
   await ShowPerformanceTrace.openPerformanceTraceWithDependencies(trace, {
@@ -256,6 +266,20 @@ test('writes a pretty-printed json trace to a named file', async () => {
 
   const uri = 'memfs://eslint-performance-trace.json'
   expect(closeUri).toHaveBeenCalledWith(uri)
-  expect(writeFile).toHaveBeenCalledWith(uri, JSON.stringify(trace, null, 2))
+  expect(writeFile).toHaveBeenCalledWith(
+    uri,
+    JSON.stringify(
+      {
+        ...trace,
+        configDiscovery: {
+          ...trace.configDiscovery,
+          durationMs: 2.346,
+        },
+        totalDurationMs: 1.235,
+      },
+      null,
+      2,
+    ),
+  )
   expect(openUri).toHaveBeenCalledWith(uri)
 })

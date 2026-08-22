@@ -1,4 +1,5 @@
 import { closeUri, executeCommand, openUri, writeFile } from '@lvce-editor/api'
+import prettyBytes from 'pretty-bytes'
 import type { LoadedSuppressions } from '../LoadSuppressions/LoadSuppressions.ts'
 import type * as ModuleResolutionWorker from '../ModuleResolutionWorker/ModuleResolutionWorker.ts'
 import * as EslintEvaluationWorker from '../EslintEvaluationWorker/EslintEvaluationWorker.ts'
@@ -6,6 +7,7 @@ import * as FileSystem from '../FileSystem/FileSystem.ts'
 import * as FindEslintConfig from '../FindEslintConfig/FindEslintConfig.ts'
 import * as LastTextDocument from '../LastTextDocument/LastTextDocument.ts'
 import * as LoadSuppressions from '../LoadSuppressions/LoadSuppressions.ts'
+import { stringifyPerformanceTrace } from '../StringifyPerformanceTrace/StringifyPerformanceTrace.ts'
 
 export interface TextDocument {
   readonly text: string
@@ -19,10 +21,17 @@ interface ErrorDetails {
   readonly stack?: string
 }
 
+type ResolutionStats = NonNullable<
+  EslintEvaluationWorker.EslintPerformanceTrace['configResolution']
+> & {
+  readonly totalContentSize: string
+}
+
 export type PerformanceTrace = Omit<
   EslintEvaluationWorker.EslintPerformanceTrace,
-  'error'
+  'configResolution' | 'error' | 'eslintResolution'
 > & {
+  readonly configResolution?: ResolutionStats
   readonly configDiscovery?: FindEslintConfig.ConfigDiscoveryTrace
   readonly configPath?: string | null
   readonly error?: {
@@ -41,6 +50,7 @@ export type PerformanceTrace = Omit<
   readonly fresh: true
   readonly generatedAt: string
   readonly schemaVersion: 1
+  readonly eslintResolution?: ResolutionStats
   readonly suppressions?: {
     readonly durationMs: number
   }
@@ -72,12 +82,25 @@ interface OutputDependencies {
 
 const traceUri = 'memfs://eslint-performance-trace.json'
 
+const roundTraceNumbers = (trace: PerformanceTrace): PerformanceTrace => {
+  return JSON.parse(stringifyPerformanceTrace(trace)) as PerformanceTrace
+}
+
+const openTraceAndReturn = async (
+  trace: PerformanceTrace,
+  dependencies: Dependencies,
+): Promise<PerformanceTrace> => {
+  const roundedTrace = roundTraceNumbers(trace)
+  await dependencies.openTrace(roundedTrace)
+  return roundedTrace
+}
+
 export const openPerformanceTraceWithDependencies = async (
   trace: PerformanceTrace,
   dependencies: OutputDependencies,
 ): Promise<void> => {
   await dependencies.closeUri(traceUri)
-  await dependencies.writeFile(traceUri, JSON.stringify(trace, null, 2))
+  await dependencies.writeFile(traceUri, stringifyPerformanceTrace(trace))
   await dependencies.openUri(traceUri)
 }
 
@@ -142,6 +165,37 @@ const defaultDependencies: Dependencies = {
 }
 
 const now = (): number => performance.now()
+
+const addTotalContentSize = (
+  stats: NonNullable<
+    EslintEvaluationWorker.EslintPerformanceTrace['configResolution']
+  >,
+): ResolutionStats => {
+  const { uniqueFileCount, ...rest } = stats
+  return {
+    ...rest,
+    totalContentSize: prettyBytes(stats.totalContentLength),
+    uniqueFileCount,
+  }
+}
+
+const addReadableSizes = (
+  trace: EslintEvaluationWorker.EslintPerformanceTrace,
+): Omit<
+  PerformanceTrace,
+  'file' | 'fresh' | 'generatedAt' | 'schemaVersion' | 'totalDurationMs'
+> => {
+  const { configResolution, eslintResolution, ...rest } = trace
+  return {
+    ...rest,
+    ...(configResolution && {
+      configResolution: addTotalContentSize(configResolution),
+    }),
+    ...(eslintResolution && {
+      eslintResolution: addTotalContentSize(eslintResolution),
+    }),
+  }
+}
 
 const toErrorDetails = (error: unknown): ErrorDetails => {
   if (!(error instanceof Error)) {
@@ -218,8 +272,7 @@ export const showPerformanceTraceWithDependencies = async (
       },
       totalDurationMs: now() - startTime,
     }
-    await dependencies.openTrace(trace)
-    return trace
+    return openTraceAndReturn(trace, dependencies)
   }
   const baseTrace = createBaseTrace(actualTextDocument)
   let trace: PerformanceTrace
@@ -236,8 +289,7 @@ export const showPerformanceTraceWithDependencies = async (
       },
       totalDurationMs: now() - startTime,
     }
-    await dependencies.openTrace(trace)
-    return trace
+    return openTraceAndReturn(trace, dependencies)
   }
 
   const { text, uri: filePath } = actualTextDocument
@@ -253,8 +305,7 @@ export const showPerformanceTraceWithDependencies = async (
       },
       totalDurationMs: now() - startTime,
     }
-    await dependencies.openTrace(trace)
-    return trace
+    return openTraceAndReturn(trace, dependencies)
   }
   const { configPath } = configDiscovery
   const traceConfigDiscovery = toTraceConfigDiscovery(configDiscovery)
@@ -274,8 +325,7 @@ export const showPerformanceTraceWithDependencies = async (
       },
       totalDurationMs: now() - startTime,
     }
-    await dependencies.openTrace(trace)
-    return trace
+    return openTraceAndReturn(trace, dependencies)
   }
 
   const suppressionsStart = now()
@@ -299,8 +349,7 @@ export const showPerformanceTraceWithDependencies = async (
       },
       totalDurationMs: now() - startTime,
     }
-    await dependencies.openTrace(trace)
-    return trace
+    return openTraceAndReturn(trace, dependencies)
   }
   const suppressions = {
     durationMs: now() - suppressionsStart,
@@ -326,20 +375,18 @@ export const showPerformanceTraceWithDependencies = async (
       suppressions,
       totalDurationMs: now() - startTime,
     }
-    await dependencies.openTrace(trace)
-    return trace
+    return openTraceAndReturn(trace, dependencies)
   }
   const traceWorkerTrace = toTraceWorkerTrace(workerTrace)
   trace = {
     ...baseTrace,
     configDiscovery: traceConfigDiscovery,
     configPath: configUri,
-    ...traceWorkerTrace,
+    ...addReadableSizes(traceWorkerTrace),
     suppressions,
     totalDurationMs: now() - startTime,
   }
-  await dependencies.openTrace(trace)
-  return trace
+  return openTraceAndReturn(trace, dependencies)
 }
 
 export const showPerformanceTrace = (
