@@ -29,7 +29,8 @@
     }
   },
   "dependencies": {
-    "@lvce-editor/node-shims": "*"
+    "@lvce-editor/node-shims": "*",
+    "pretty-bytes": "^7.1.1"
   },
   "devDependencies": {
     "@jest/globals": "^30.4.1",

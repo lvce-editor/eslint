@@ -1,4 +1,5 @@
 import { closeUri, executeCommand, openUri, writeFile } from '@lvce-editor/api'
+import prettyBytes from 'pretty-bytes'
 import type { LoadedSuppressions } from '../LoadSuppressions/LoadSuppressions.ts'
 import * as EslintEvaluationWorker from '../EslintEvaluationWorker/EslintEvaluationWorker.ts'
 import * as FindEslintConfig from '../FindEslintConfig/FindEslintConfig.ts'
@@ -17,10 +18,17 @@ interface ErrorDetails {
   readonly stack?: string
 }
 
+type ResolutionStats = NonNullable<
+  EslintEvaluationWorker.EslintPerformanceTrace['configResolution']
+> & {
+  readonly totalContentSize: string
+}
+
 export type PerformanceTrace = Omit<
   EslintEvaluationWorker.EslintPerformanceTrace,
-  'error'
+  'configResolution' | 'error' | 'eslintResolution'
 > & {
+  readonly configResolution?: ResolutionStats
   readonly configDiscovery?: FindEslintConfig.ConfigDiscoveryTrace
   readonly configPath?: string | null
   readonly error?: {
@@ -39,6 +47,7 @@ export type PerformanceTrace = Omit<
   readonly fresh: true
   readonly generatedAt: string
   readonly schemaVersion: 1
+  readonly eslintResolution?: ResolutionStats
   readonly suppressions?: {
     readonly durationMs: number
   }
@@ -153,6 +162,37 @@ const defaultDependencies: Dependencies = {
 }
 
 const now = (): number => performance.now()
+
+const addTotalContentSize = (
+  stats: NonNullable<
+    EslintEvaluationWorker.EslintPerformanceTrace['configResolution']
+  >,
+): ResolutionStats => {
+  const { uniqueFileCount, ...rest } = stats
+  return {
+    ...rest,
+    totalContentSize: prettyBytes(stats.totalContentLength),
+    uniqueFileCount,
+  }
+}
+
+const addReadableSizes = (
+  trace: EslintEvaluationWorker.EslintPerformanceTrace,
+): Omit<
+  PerformanceTrace,
+  'file' | 'fresh' | 'generatedAt' | 'schemaVersion' | 'totalDurationMs'
+> => {
+  const { configResolution, eslintResolution, ...rest } = trace
+  return {
+    ...rest,
+    ...(configResolution && {
+      configResolution: addTotalContentSize(configResolution),
+    }),
+    ...(eslintResolution && {
+      eslintResolution: addTotalContentSize(eslintResolution),
+    }),
+  }
+}
 
 const toErrorDetails = (error: unknown): ErrorDetails => {
   if (!(error instanceof Error)) {
@@ -312,7 +352,7 @@ export const showPerformanceTraceWithDependencies = async (
     ...baseTrace,
     configDiscovery,
     configPath,
-    ...workerTrace,
+    ...addReadableSizes(workerTrace),
     suppressions,
     totalDurationMs: now() - startTime,
   }

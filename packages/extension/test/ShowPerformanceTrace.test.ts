@@ -103,6 +103,8 @@ test('resolves the active document and opens a successful performance trace', as
   expect(trace.error).toBeUndefined()
   expect(trace.fresh).toBe(true)
   expect(trace.configResolution?.fileReadCount).toBe(1)
+  expect(trace.configResolution?.totalContentSize).toBe('20 B')
+  expect(trace.eslintResolution?.totalContentSize).toBe('20 B')
   expect(trace.lint?.durationMs).toBe(5)
   expect(openTrace).toHaveBeenCalledWith(trace)
 })
