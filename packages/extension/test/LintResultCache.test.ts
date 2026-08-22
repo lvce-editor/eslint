@@ -24,7 +24,7 @@ const getFileHashes = jest.fn(async (uris: readonly string[]) =>
 )
 
 const setGraph = async (
-  cacheKey: string,
+  cachePath: string,
   entry: string,
   uri: string,
 ): Promise<void> => {
@@ -44,7 +44,7 @@ const setGraph = async (
     JSON.stringify(revisionInput),
   )
   cacheEntries.set(
-    `https://eslint-config-files-cache.invalid/${encodeURIComponent(cacheKey)}`,
+    `https://eslint-config-files-cache.invalid/${cachePath}`,
     Response.json({ ...revisionInput, revision }),
   )
 }
@@ -52,12 +52,12 @@ const setGraph = async (
 const setProjectGraphs = async (): Promise<void> => {
   await Promise.all([
     setGraph(
-      'module:file:///workspace/eslint.config.js:file:///workspace/src/file.ts',
+      'module/file/workspace/eslint.config.js/file/workspace/src/file.ts',
       'file:///workspace/eslint.config.js',
       'file:///workspace/eslint.config.js',
     ),
     setGraph(
-      'commonjs-project:file:///workspace/eslint.config.js',
+      'commonjs-project/file/workspace/eslint.config.js',
       'file:///workspace/node_modules/eslint/index.js',
       'file:///workspace/node_modules/eslint/index.js',
     ),
