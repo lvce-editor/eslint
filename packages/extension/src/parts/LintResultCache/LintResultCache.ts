@@ -1,5 +1,6 @@
 import type { LintResult } from '../EslintEvaluationWorker/EslintEvaluationWorker.ts'
 import type { LoadedSuppressions } from '../LoadSuppressions/LoadSuppressions.ts'
+import * as CacheExpiration from '../CacheExpiration/CacheExpiration.ts'
 import * as ComputeTextHash from '../ComputeTextHash/ComputeTextHash.ts'
 import * as FileSystem from '../FileSystem/FileSystem.ts'
 
@@ -310,6 +311,7 @@ export const save = async (
         headers: {
           'Content-Length': String(contentLength),
           'Content-Type': 'application/json',
+          Expires: CacheExpiration.getExpirationDate(),
         },
       }),
     )

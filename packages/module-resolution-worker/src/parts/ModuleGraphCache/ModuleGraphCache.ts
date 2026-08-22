@@ -1,3 +1,4 @@
+import * as CacheExpiration from '../CacheExpiration/CacheExpiration.ts'
 import * as ComputeTextHash from '../ComputeTextHash/ComputeTextHash.ts'
 import * as FileSystem from '../FileSystem/FileSystem.ts'
 
@@ -157,6 +158,7 @@ const setJson = async (
     headers: {
       'Content-Length': String(contentLength),
       'Content-Type': 'application/json',
+      Expires: CacheExpiration.getExpirationDate(),
     },
   })
   await cache.put(key, response)

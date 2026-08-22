@@ -1,3 +1,5 @@
+import * as CacheExpiration from '../CacheExpiration/CacheExpiration.ts'
+
 const CacheName = 'eslint-module-analysis-v1'
 const CacheKeyPrefix = 'https://eslint-module-analysis-cache.invalid/'
 
@@ -19,7 +21,14 @@ const getCachedValue = async (key: string): Promise<unknown> => {
 const setCachedValue = async (key: string, value: unknown): Promise<void> => {
   try {
     const cache = await caches.open(CacheName)
-    await cache.put(getCacheKey(key), Response.json(value))
+    await cache.put(
+      getCacheKey(key),
+      Response.json(value, {
+        headers: {
+          Expires: CacheExpiration.getExpirationDate(),
+        },
+      }),
+    )
   } catch {
     // Persistent caching is an optimization; analysis remains the fallback.
   }

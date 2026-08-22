@@ -1,3 +1,5 @@
+import * as CacheExpiration from '../CacheExpiration/CacheExpiration.ts'
+
 const CacheName = 'eslint-file-content-v1'
 const CacheKeyPrefix = 'https://eslint-file-cache.invalid/'
 const ContentType = 'application/javascript'
@@ -19,6 +21,7 @@ export const setText = async (hash: string, content: string): Promise<void> => {
     headers: {
       'Content-Length': String(contentLength),
       'Content-Type': ContentType,
+      Expires: CacheExpiration.getExpirationDate(),
     },
   })
   await cache.put(getKey(hash), response)
