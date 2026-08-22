@@ -3,7 +3,7 @@ import * as ShowPerformanceTrace from '../src/parts/ShowPerformanceTrace/ShowPer
 
 const document = {
   text: 'debugger',
-  uri: 'file:///workspace/test.js',
+  uri: '/workspace/test.js',
 }
 
 const configDiscovery = {
@@ -102,9 +102,68 @@ test('resolves the active document and opens a successful performance trace', as
 
   expect(trace.error).toBeUndefined()
   expect(trace.fresh).toBe(true)
+  expect(trace.file.uri).toBe('file:///workspace/test.js')
+  expect(trace.configPath).toBe('file:///workspace/eslint.config.js')
+  expect(trace.configDiscovery).toEqual({
+    ...configDiscovery,
+    configPath: 'file:///workspace/eslint.config.js',
+    directories: ['file:///workspace'],
+  })
   expect(trace.configResolution?.fileReadCount).toBe(1)
+  expect(trace.configResolution?.files[0].path).toBe(
+    'file:///workspace/eslint.config.js',
+  )
+  expect(trace.eslintResolution?.files[0].path).toBe(
+    'file:///workspace/eslint.config.js',
+  )
   expect(trace.lint?.durationMs).toBe(5)
   expect(openTrace).toHaveBeenCalledWith(trace)
+})
+
+test('preserves file system provider schemes in performance trace uris', async () => {
+  const providerDocument = {
+    text: 'debugger',
+    uri: 'test-provider://workspace/test.js',
+  }
+  const providerConfigDiscovery = {
+    ...configDiscovery,
+    configPath: 'test-provider://workspace/eslint.config.js',
+    directories: ['test-provider://workspace'],
+  }
+  const providerResolutionStats = {
+    ...resolutionStats,
+    files: [
+      {
+        ...resolutionStats.files[0],
+        path: 'test-provider://workspace/eslint.config.js',
+      },
+    ],
+  }
+  const trace = await ShowPerformanceTrace.showPerformanceTraceWithDependencies(
+    providerDocument,
+    {
+      findEslintConfig: async () => providerConfigDiscovery,
+      getActiveTextDocument: async () => undefined,
+      lint: async () => ({
+        configResolution: providerResolutionStats,
+        eslintResolution: providerResolutionStats,
+      }),
+      loadSuppressions: async () => undefined,
+      openTrace: async () => {},
+    },
+  )
+
+  expect(trace.file.uri).toBe(providerDocument.uri)
+  expect(trace.configPath).toBe(providerConfigDiscovery.configPath)
+  expect(trace.configDiscovery?.directories).toEqual(
+    providerConfigDiscovery.directories,
+  )
+  expect(trace.configResolution?.files[0].path).toBe(
+    providerResolutionStats.files[0].path,
+  )
+  expect(trace.eslintResolution?.files[0].path).toBe(
+    providerResolutionStats.files[0].path,
+  )
 })
 
 test('opens a trace error when no config is found', async () => {
@@ -127,9 +186,13 @@ test('opens a trace error when no config is found', async () => {
   )
 
   expect(trace.error).toMatchObject({
-    details: { code: 'ESLINT_CONFIG_NOT_FOUND' },
+    details: {
+      code: 'ESLINT_CONFIG_NOT_FOUND',
+      message: 'No eslint.config.js was found for file:///workspace/test.js',
+    },
     stage: 'configDiscovery',
   })
+  expect(trace.configDiscovery?.directories).toEqual(['file:///workspace'])
   expect(lint).not.toHaveBeenCalled()
   expect(openTrace).toHaveBeenCalledWith(trace)
 })
