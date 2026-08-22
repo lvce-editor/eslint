@@ -178,11 +178,17 @@ test('writes a pretty-printed json trace to a named file', async () => {
     async () => {},
   )
   const trace = {
+    configDiscovery: {
+      configPath: '/workspace/eslint.config.js',
+      directories: ['/workspace'],
+      directoryReadCount: 1,
+      durationMs: 2.345679,
+    },
     file: { uri: 'file:///workspace/test.js' },
     fresh: true,
     generatedAt: '2026-08-21T00:00:00.000Z',
     schemaVersion: 1,
-    totalDurationMs: 1,
+    totalDurationMs: 1.234568,
   } as const
 
   await ShowPerformanceTrace.openPerformanceTraceWithDependencies(trace, {
@@ -193,6 +199,20 @@ test('writes a pretty-printed json trace to a named file', async () => {
 
   const uri = 'memfs://eslint-performance-trace.json'
   expect(closeUri).toHaveBeenCalledWith(uri)
-  expect(writeFile).toHaveBeenCalledWith(uri, JSON.stringify(trace, null, 2))
+  expect(writeFile).toHaveBeenCalledWith(
+    uri,
+    JSON.stringify(
+      {
+        ...trace,
+        configDiscovery: {
+          ...trace.configDiscovery,
+          durationMs: 2.346,
+        },
+        totalDurationMs: 1.235,
+      },
+      null,
+      2,
+    ),
+  )
   expect(openUri).toHaveBeenCalledWith(uri)
 })

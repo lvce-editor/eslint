@@ -70,12 +70,25 @@ interface OutputDependencies {
 
 const traceUri = 'memfs://eslint-performance-trace.json'
 
+const roundNumber = (value: number): number => {
+  return Math.round(value * 1000) / 1000
+}
+
+const stringifyTrace = (trace: PerformanceTrace): string => {
+  return JSON.stringify(
+    trace,
+    (_key, value: unknown) =>
+      typeof value === 'number' ? roundNumber(value) : value,
+    2,
+  )
+}
+
 export const openPerformanceTraceWithDependencies = async (
   trace: PerformanceTrace,
   dependencies: OutputDependencies,
 ): Promise<void> => {
   await dependencies.closeUri(traceUri)
-  await dependencies.writeFile(traceUri, JSON.stringify(trace, null, 2))
+  await dependencies.writeFile(traceUri, stringifyTrace(trace))
   await dependencies.openUri(traceUri)
 }
 
