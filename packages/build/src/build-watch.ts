@@ -1,4 +1,4 @@
-import { build, context, type BuildOptions, type Metafile } from 'esbuild'
+import { context, type BuildOptions } from 'esbuild'
 import { root } from './root.js'
 import { join } from 'node:path'
 import { readFileSync, writeFileSync } from 'node:fs'
@@ -33,7 +33,6 @@ const getBuildOptions = (outfile: string): BuildOptions => {
     ],
     packages: 'bundle',
     mainFields: ['module', 'main'],
-    metafile: true,
     conditions: ['import', 'module', 'default'],
     platform: 'browser',
     plugins: [
@@ -283,35 +282,6 @@ const getEslintEvaluationWorkerBuildOptions = (
   platform: 'browser',
   resolveExtensions: ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'],
 })
-
-const assertEslintNotBundled = (metafile: Metafile): void => {
-  const bundledEslintPath = Object.keys(metafile.inputs).find((input) =>
-    /(^|\/)node_modules\/eslint\//.test(input.replaceAll('\\', '/')),
-  )
-  if (bundledEslintPath) {
-    throw new Error(`ESLint must not be bundled: ${bundledEslintPath}`)
-  }
-}
-
-export const buildExtension = async (outfile: string): Promise<void> => {
-  const result = await build(getBuildOptions(outfile))
-  if (!result.metafile) {
-    throw new Error('Expected an esbuild metafile')
-  }
-  assertEslintNotBundled(result.metafile)
-}
-
-export const buildModuleResolutionWorker = async (
-  outfile: string,
-): Promise<void> => {
-  await build(getModuleResolutionWorkerBuildOptions(outfile))
-}
-
-export const buildEslintEvaluationWorker = async (
-  outfile: string,
-): Promise<void> => {
-  await build(getEslintEvaluationWorkerBuildOptions(outfile))
-}
 
 export const watchExtension = async (): Promise<void> => {
   const extensionOutput = join(
