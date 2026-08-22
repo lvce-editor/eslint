@@ -37,6 +37,8 @@ beforeEach(() => {
 
 test('stores computed analysis and reuses it from cache storage', async () => {
   const analysis = { source: 'transformed ✓' }
+  const content = JSON.stringify(analysis)
+  const contentLength = new TextEncoder().encode(content).byteLength
   const compute = jest.fn(async () => analysis)
 
   await expect(
@@ -56,7 +58,7 @@ test('stores computed analysis and reuses it from cache storage', async () => {
     Date.parse(put.mock.calls[0][1].headers.get('Expires') || ''),
   ).toBeGreaterThan(Date.now())
   expect(put.mock.calls[0][1].headers.get('Content-Length')).toBe(
-    String(new TextEncoder().encode(JSON.stringify(analysis)).byteLength),
+    String(contentLength),
   )
 })
 
