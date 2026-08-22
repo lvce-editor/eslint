@@ -39,5 +39,8 @@ test('stores text by content hash', async () => {
   expect(key).toBe('https://eslint-file-cache.invalid/sample-hash')
   expect(response.headers.get('Content-Length')).toBe('12')
   expect(response.headers.get('Content-Type')).toBe('application/javascript')
+  expect(Date.parse(response.headers.get('Expires') || '')).toBeGreaterThan(
+    Date.now(),
+  )
   await expect(response.text()).resolves.toBe('content 🦄')
 })

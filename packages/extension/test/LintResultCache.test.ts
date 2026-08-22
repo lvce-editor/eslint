@@ -110,6 +110,12 @@ test('restores an unchanged lint result without revalidating warm graph revision
   ).resolves.toEqual(results)
   expect(getFileHashes).toHaveBeenCalledTimes(2)
   expect(open).toHaveBeenCalledWith('eslint-lint-result-v1')
+  const response = cacheEntries.get(
+    'https://eslint-lint-result.invalid/%2Fworkspace%2Fsrc%2Ffile.ts',
+  )
+  expect(Date.parse(response?.headers.get('Expires') || '')).toBeGreaterThan(
+    Date.now(),
+  )
 })
 
 test('does not restore diagnostics for different editor text', async () => {

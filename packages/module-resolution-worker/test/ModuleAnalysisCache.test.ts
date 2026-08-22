@@ -51,6 +51,9 @@ test('stores computed analysis and reuses it from cache storage', async () => {
   expect(put.mock.calls[0][0]).toBe(
     'https://eslint-module-analysis-cache.invalid/module%3A.js%3Ahash',
   )
+  expect(
+    Date.parse(put.mock.calls[0][1].headers.get('Expires') || ''),
+  ).toBeGreaterThan(Date.now())
 })
 
 test('coalesces concurrent analysis for the same content hash', async () => {

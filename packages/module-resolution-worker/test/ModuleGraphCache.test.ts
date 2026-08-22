@@ -65,6 +65,9 @@ test('saves a compiled graph with portable uris', async () => {
     String(new TextEncoder().encode(content).byteLength),
   )
   expect(response?.headers.get('Content-Type')).toBe('application/json')
+  expect(Date.parse(response?.headers.get('Expires') || '')).toBeGreaterThan(
+    Date.now(),
+  )
   await expect(response?.json()).resolves.toEqual({
     entry: 'file:///workspace/eslint.config.js',
     files: [
@@ -87,6 +90,9 @@ test('saves a compiled graph with portable uris', async () => {
   const compiledResponse = cacheEntries.get(
     'https://eslint-compiled-module-graph.invalid/module%3Afile%3A%2F%2F%2Fworkspace%2Feslint.config.js',
   )
+  expect(
+    Date.parse(compiledResponse?.headers.get('Expires') || ''),
+  ).toBeGreaterThan(Date.now())
   await expect(compiledResponse?.json()).resolves.toEqual({
     entrySource: 'module.exports = []',
     files: [
