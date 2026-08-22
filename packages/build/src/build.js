@@ -5,7 +5,7 @@ import {
   buildEslintEvaluationWorker,
   buildExtension,
   buildModuleResolutionWorker,
-} from './build-watch.ts'
+} from './build-production.ts'
 import { root } from './root.js'
 
 const extension = path.join(root, 'packages', 'extension')

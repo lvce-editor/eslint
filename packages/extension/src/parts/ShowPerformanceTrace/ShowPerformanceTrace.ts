@@ -1,7 +1,9 @@
 import { closeUri, executeCommand, openUri, writeFile } from '@lvce-editor/api'
 import prettyBytes from 'pretty-bytes'
 import type { LoadedSuppressions } from '../LoadSuppressions/LoadSuppressions.ts'
+import type * as ModuleResolutionWorker from '../ModuleResolutionWorker/ModuleResolutionWorker.ts'
 import * as EslintEvaluationWorker from '../EslintEvaluationWorker/EslintEvaluationWorker.ts'
+import * as FileSystem from '../FileSystem/FileSystem.ts'
 import * as FindEslintConfig from '../FindEslintConfig/FindEslintConfig.ts'
 import * as LastTextDocument from '../LastTextDocument/LastTextDocument.ts'
 import * as LoadSuppressions from '../LoadSuppressions/LoadSuppressions.ts'
@@ -215,11 +217,41 @@ const createBaseTrace = (
   textDocument: TextDocument | undefined,
 ): Omit<PerformanceTrace, 'totalDurationMs'> => ({
   file: {
-    ...(textDocument?.uri && { uri: textDocument.uri }),
+    ...(textDocument?.uri && { uri: FileSystem.toUri(textDocument.uri) }),
   },
   fresh: true,
   generatedAt: new Date().toISOString(),
   schemaVersion: 1,
+})
+
+const toTraceConfigDiscovery = (
+  trace: FindEslintConfig.ConfigDiscoveryTrace,
+): FindEslintConfig.ConfigDiscoveryTrace => ({
+  ...trace,
+  configPath: trace.configPath ? FileSystem.toUri(trace.configPath) : null,
+  directories: trace.directories.map(FileSystem.toUri),
+})
+
+const toTraceResolutionStats = (
+  stats: ModuleResolutionWorker.ResolutionStats,
+): ModuleResolutionWorker.ResolutionStats => ({
+  ...stats,
+  files: stats.files.map((file) => ({
+    ...file,
+    path: FileSystem.toUri(file.path),
+  })),
+})
+
+const toTraceWorkerTrace = (
+  trace: EslintEvaluationWorker.EslintPerformanceTrace,
+): EslintEvaluationWorker.EslintPerformanceTrace => ({
+  ...trace,
+  ...(trace.configResolution && {
+    configResolution: toTraceResolutionStats(trace.configResolution),
+  }),
+  ...(trace.eslintResolution && {
+    eslintResolution: toTraceResolutionStats(trace.eslintResolution),
+  }),
 })
 
 export const showPerformanceTraceWithDependencies = async (
@@ -276,15 +308,17 @@ export const showPerformanceTraceWithDependencies = async (
     return openTraceAndReturn(trace, dependencies)
   }
   const { configPath } = configDiscovery
+  const traceConfigDiscovery = toTraceConfigDiscovery(configDiscovery)
+  const configUri = configPath ? FileSystem.toUri(configPath) : null
   if (!configPath) {
     trace = {
       ...baseTrace,
-      configDiscovery,
-      configPath,
+      configDiscovery: traceConfigDiscovery,
+      configPath: configUri,
       error: {
         details: {
           code: 'ESLINT_CONFIG_NOT_FOUND',
-          message: `No eslint.config.js was found for ${filePath}`,
+          message: `No eslint.config.js was found for ${FileSystem.toUri(filePath)}`,
           name: 'Error',
         },
         stage: 'configDiscovery',
@@ -304,8 +338,8 @@ export const showPerformanceTraceWithDependencies = async (
   } catch (error) {
     trace = {
       ...baseTrace,
-      configDiscovery,
-      configPath,
+      configDiscovery: traceConfigDiscovery,
+      configPath: configUri,
       error: {
         details: toErrorDetails(error),
         stage: 'suppressions',
@@ -332,8 +366,8 @@ export const showPerformanceTraceWithDependencies = async (
   } catch (error) {
     trace = {
       ...baseTrace,
-      configDiscovery,
-      configPath,
+      configDiscovery: traceConfigDiscovery,
+      configPath: configUri,
       error: {
         details: toErrorDetails(error),
         stage: 'lint',
@@ -343,11 +377,12 @@ export const showPerformanceTraceWithDependencies = async (
     }
     return openTraceAndReturn(trace, dependencies)
   }
+  const traceWorkerTrace = toTraceWorkerTrace(workerTrace)
   trace = {
     ...baseTrace,
-    configDiscovery,
-    configPath,
-    ...addReadableSizes(workerTrace),
+    configDiscovery: traceConfigDiscovery,
+    configPath: configUri,
+    ...addReadableSizes(traceWorkerTrace),
     suppressions,
     totalDurationMs: now() - startTime,
   }
