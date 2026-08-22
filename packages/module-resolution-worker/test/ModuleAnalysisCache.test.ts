@@ -36,14 +36,17 @@ beforeEach(() => {
 })
 
 test('stores computed analysis and reuses it from cache storage', async () => {
-  const compute = jest.fn(async () => ({ source: 'transformed' }))
+  const analysis = { source: 'transformed ✓' }
+  const content = JSON.stringify(analysis)
+  const contentLength = new TextEncoder().encode(content).byteLength
+  const compute = jest.fn(async () => analysis)
 
   await expect(
     ModuleAnalysisCache.getOrCompute('module:.js:hash', isAnalysis, compute),
-  ).resolves.toEqual({ source: 'transformed' })
+  ).resolves.toEqual(analysis)
   await expect(
     ModuleAnalysisCache.getOrCompute('module:.js:hash', isAnalysis, compute),
-  ).resolves.toEqual({ source: 'transformed' })
+  ).resolves.toEqual(analysis)
 
   expect(compute).toHaveBeenCalledTimes(1)
   expect(open).toHaveBeenCalledWith('eslint-module-analysis-v1')
@@ -54,6 +57,9 @@ test('stores computed analysis and reuses it from cache storage', async () => {
   expect(
     Date.parse(put.mock.calls[0][1].headers.get('Expires') || ''),
   ).toBeGreaterThan(Date.now())
+  expect(put.mock.calls[0][1].headers.get('Content-Length')).toBe(
+    String(contentLength),
+  )
 })
 
 test('coalesces concurrent analysis for the same content hash', async () => {

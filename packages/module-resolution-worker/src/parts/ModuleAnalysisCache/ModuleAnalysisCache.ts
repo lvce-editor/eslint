@@ -20,11 +20,15 @@ const getCachedValue = async (key: string): Promise<unknown> => {
 
 const setCachedValue = async (key: string, value: unknown): Promise<void> => {
   try {
+    const content = JSON.stringify(value)
+    const contentLength = new TextEncoder().encode(content).byteLength
     const cache = await caches.open(CacheName)
     await cache.put(
       getCacheKey(key),
-      Response.json(value, {
+      new Response(content, {
         headers: {
+          'Content-Length': String(contentLength),
+          'Content-Type': 'application/json',
           Expires: CacheExpiration.getExpirationDate(),
         },
       }),
