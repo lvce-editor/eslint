@@ -5,6 +5,7 @@ import * as EslintEvaluationWorker from '../EslintEvaluationWorker/EslintEvaluat
 import * as FindEslintConfig from '../FindEslintConfig/FindEslintConfig.ts'
 import * as LastTextDocument from '../LastTextDocument/LastTextDocument.ts'
 import * as LoadSuppressions from '../LoadSuppressions/LoadSuppressions.ts'
+import { stringifyPerformanceTrace } from '../StringifyPerformanceTrace/StringifyPerformanceTrace.ts'
 
 export interface TextDocument {
   readonly text: string
@@ -79,17 +80,17 @@ interface OutputDependencies {
 
 const traceUri = 'memfs://eslint-performance-trace.json'
 
-const roundNumber = (value: number): number => {
-  return Math.round(value * 1000) / 1000
+const roundTraceNumbers = (trace: PerformanceTrace): PerformanceTrace => {
+  return JSON.parse(stringifyPerformanceTrace(trace)) as PerformanceTrace
 }
 
-const stringifyTrace = (trace: PerformanceTrace): string => {
-  return JSON.stringify(
-    trace,
-    (_key, value: unknown) =>
-      typeof value === 'number' ? roundNumber(value) : value,
-    2,
-  )
+const openTraceAndReturn = async (
+  trace: PerformanceTrace,
+  dependencies: Dependencies,
+): Promise<PerformanceTrace> => {
+  const roundedTrace = roundTraceNumbers(trace)
+  await dependencies.openTrace(roundedTrace)
+  return roundedTrace
 }
 
 export const openPerformanceTraceWithDependencies = async (
@@ -97,7 +98,7 @@ export const openPerformanceTraceWithDependencies = async (
   dependencies: OutputDependencies,
 ): Promise<void> => {
   await dependencies.closeUri(traceUri)
-  await dependencies.writeFile(traceUri, stringifyTrace(trace))
+  await dependencies.writeFile(traceUri, stringifyPerformanceTrace(trace))
   await dependencies.openUri(traceUri)
 }
 
@@ -239,8 +240,7 @@ export const showPerformanceTraceWithDependencies = async (
       },
       totalDurationMs: now() - startTime,
     }
-    await dependencies.openTrace(trace)
-    return trace
+    return openTraceAndReturn(trace, dependencies)
   }
   const baseTrace = createBaseTrace(actualTextDocument)
   let trace: PerformanceTrace
@@ -257,8 +257,7 @@ export const showPerformanceTraceWithDependencies = async (
       },
       totalDurationMs: now() - startTime,
     }
-    await dependencies.openTrace(trace)
-    return trace
+    return openTraceAndReturn(trace, dependencies)
   }
 
   const { text, uri: filePath } = actualTextDocument
@@ -274,8 +273,7 @@ export const showPerformanceTraceWithDependencies = async (
       },
       totalDurationMs: now() - startTime,
     }
-    await dependencies.openTrace(trace)
-    return trace
+    return openTraceAndReturn(trace, dependencies)
   }
   const { configPath } = configDiscovery
   if (!configPath) {
@@ -293,8 +291,7 @@ export const showPerformanceTraceWithDependencies = async (
       },
       totalDurationMs: now() - startTime,
     }
-    await dependencies.openTrace(trace)
-    return trace
+    return openTraceAndReturn(trace, dependencies)
   }
 
   const suppressionsStart = now()
@@ -318,8 +315,7 @@ export const showPerformanceTraceWithDependencies = async (
       },
       totalDurationMs: now() - startTime,
     }
-    await dependencies.openTrace(trace)
-    return trace
+    return openTraceAndReturn(trace, dependencies)
   }
   const suppressions = {
     durationMs: now() - suppressionsStart,
@@ -345,8 +341,7 @@ export const showPerformanceTraceWithDependencies = async (
       suppressions,
       totalDurationMs: now() - startTime,
     }
-    await dependencies.openTrace(trace)
-    return trace
+    return openTraceAndReturn(trace, dependencies)
   }
   trace = {
     ...baseTrace,
@@ -356,8 +351,7 @@ export const showPerformanceTraceWithDependencies = async (
     suppressions,
     totalDurationMs: now() - startTime,
   }
-  await dependencies.openTrace(trace)
-  return trace
+  return openTraceAndReturn(trace, dependencies)
 }
 
 export const showPerformanceTrace = (

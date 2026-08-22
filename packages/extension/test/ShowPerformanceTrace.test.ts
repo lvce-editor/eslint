@@ -14,12 +14,12 @@ const configDiscovery = {
 }
 
 const resolutionStats = {
-  durationMs: 2,
+  durationMs: 2.345679,
   fileReadCount: 1,
   files: [
     {
       contentLength: 20,
-      durationMs: 1,
+      durationMs: 1.234568,
       path: '/workspace/eslint.config.js',
     },
   ],
@@ -103,6 +103,8 @@ test('resolves the active document and opens a successful performance trace', as
   expect(trace.error).toBeUndefined()
   expect(trace.fresh).toBe(true)
   expect(trace.configResolution?.fileReadCount).toBe(1)
+  expect(trace.configResolution?.durationMs).toBeCloseTo(2.346)
+  expect(trace.configResolution?.files[0].durationMs).toBeCloseTo(1.235)
   expect(trace.configResolution?.totalContentSize).toBe('20 B')
   expect(trace.eslintResolution?.totalContentSize).toBe('20 B')
   expect(trace.lint?.durationMs).toBe(5)
