@@ -37,8 +37,22 @@ interface CachedLintResult {
 const graphRevisions = new Map<string, Promise<string | undefined>>()
 const invalidatedGraphCacheKeys = new Set<string>()
 
+const toReadableCachePath = (cacheKey: string): string => {
+  const separatorIndex = cacheKey.indexOf(':')
+  const kind = cacheKey.slice(0, separatorIndex)
+  const rawUriPath = cacheKey.slice(separatorIndex + 1)
+  const uriPath =
+    kind === 'module' && rawUriPath.endsWith(':')
+      ? rawUriPath.slice(0, -1)
+      : rawUriPath
+  const readableUriPath = uriPath
+    .replace(/^([a-z][a-z\d+.-]*):\/+/i, '$1/')
+    .replaceAll(/:([a-z][a-z\d+.-]*):\/+/gi, '/$1/')
+  return `${kind}/${readableUriPath}`
+}
+
 const getGraphCacheKey = (cacheKey: string): string =>
-  `${GraphCacheKeyPrefix}${encodeURIComponent(cacheKey)}`
+  `${GraphCacheKeyPrefix}${toReadableCachePath(cacheKey)}`
 
 const getResultCacheKey = (filePath: string): string =>
   `${ResultCacheKeyPrefix}${encodeURIComponent(filePath)}`

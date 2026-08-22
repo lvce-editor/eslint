@@ -10,6 +10,20 @@ const CacheVersion = 3
 const CompiledCacheVersion = 1
 const maxConcurrentCacheReads = 64
 
+const toReadableCachePath = (cacheKey: string): string => {
+  const separatorIndex = cacheKey.indexOf(':')
+  const kind = cacheKey.slice(0, separatorIndex)
+  const rawUriPath = cacheKey.slice(separatorIndex + 1)
+  const uriPath =
+    kind === 'module' && rawUriPath.endsWith(':')
+      ? rawUriPath.slice(0, -1)
+      : rawUriPath
+  const readableUriPath = uriPath
+    .replace(/^([a-z][a-z\d+.-]*):\/+/i, '$1/')
+    .replaceAll(/:([a-z][a-z\d+.-]*):\/+/gi, '/$1/')
+  return `${kind}/${readableUriPath}`
+}
+
 export interface ModuleGraphToCache {
   readonly entry: string
   readonly files: Readonly<Record<string, string>>
@@ -57,10 +71,10 @@ interface CompiledModuleGraph {
 }
 
 const getCacheKey = (cacheKey: string): string =>
-  `${CacheKeyPrefix}${encodeURIComponent(cacheKey)}`
+  `${CacheKeyPrefix}${toReadableCachePath(cacheKey)}`
 
 const getCompiledCacheKey = (cacheKey: string): string =>
-  `${CompiledCacheKeyPrefix}${encodeURIComponent(cacheKey)}`
+  `${CompiledCacheKeyPrefix}${toReadableCachePath(cacheKey)}`
 
 const isCachedFile = (value: unknown): value is CachedFile => {
   if (!value || typeof value !== 'object') {
