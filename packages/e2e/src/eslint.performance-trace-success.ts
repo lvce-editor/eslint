@@ -48,11 +48,23 @@ export const test: Test = async ({
   if (trace.error) {
     throw new Error(`Unexpected trace error: ${JSON.stringify(trace.error)}`)
   }
+  const fileUri = new URL(uri, 'file://').href
+  const configUri = new URL(`${tmpDir}/eslint.config.js`, 'file://').href
   if (
     trace.schemaVersion !== 1 ||
     trace.fresh !== true ||
-    trace.file.uri !== uri ||
-    trace.configPath !== `${tmpDir}/eslint.config.js`
+    trace.file.uri !== fileUri ||
+    trace.configPath !== configUri ||
+    trace.configDiscovery.configPath !== configUri ||
+    trace.configDiscovery.directories.some(
+      (directory: string) => !directory.startsWith('file://'),
+    ) ||
+    trace.configResolution.files.some(
+      (file: { path: string }) => !file.path.startsWith('file://'),
+    ) ||
+    trace.eslintResolution.files.some(
+      (file: { path: string }) => !file.path.startsWith('file://'),
+    )
   ) {
     throw new Error(`Unexpected trace metadata: ${JSON.stringify(trace)}`)
   }
