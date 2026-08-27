@@ -11,10 +11,10 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
-    "@babel/preset-typescript": "^8.0.1",
+    "@babel/preset-typescript": "^7.28.5",
     "@lvce-editor/node-shims": "*",
     "@lvce-editor/package-extension": "^3.7.0",
-    "@rollup/plugin-babel": "^7.1.0",
+    "@rollup/plugin-babel": "^6.1.0",
     "@rollup/plugin-commonjs": "^29.0.3",
     "@rollup/plugin-json": "^6.1.0",
     "@rollup/plugin-node-resolve": "^16.0.3",
