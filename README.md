@@ -54,3 +54,11 @@ not already available.
 
 Pass `--reload` to populate persistent caches first and profile only the
 subsequent renderer reload and lint.
+
+Pass `--heap` to attach to `builtin.eslint.evaluation-worker`, force garbage
+collection after linting, and write `heap.heapsnapshot` plus
+`heap-summary.json`. The summary reports total heap, string shallow size,
+module-graph source, evaluator-script source, TypeScript localization catalogs,
+and duplicate large scripts. Use `--extension <path>` to run the same cold or
+warm benchmark against another built ESLint extension for before/after
+comparisons.

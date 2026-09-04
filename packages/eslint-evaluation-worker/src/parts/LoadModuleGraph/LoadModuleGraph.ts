@@ -6,6 +6,35 @@ type CommonJsModule = {
   exports: any
 }
 
+interface RuntimeState {
+  readonly evaluatedGraphIds: Map<string, string>
+  readonly evaluatedModules: Map<string, CommonJsModule>
+  readonly executableFingerprints: Map<string, string>
+  readonly files: Record<string, string>
+  readonly lazyModules: Record<string, string>
+  readonly modules: Record<string, string>
+  readonly resolutions: Record<string, string>
+  readonly virtualDirectories: Set<string>
+  readonly virtualDirectoryEntries: Map<string, Set<string>>
+}
+
+export interface EvaluatedModuleGraph {
+  readonly entry: string
+  readonly exports: any
+  readonly id: string
+}
+
+export interface ModuleRuntime {
+  evaluate(graph: ModuleGraph): EvaluatedModuleGraph
+}
+
+export class ModuleRuntimeConflictError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'ModuleRuntimeConflictError'
+  }
+}
+
 type CommonJsRequire = {
   (specifier: string): any
   extensions: Readonly<Record<string, unknown>>
@@ -240,7 +269,7 @@ const isDeepStrictEqual = (
   )
 }
 
-const createVirtualProcess = (graph: ModuleGraph) => {
+const createVirtualProcess = (entry: string) => {
   const startTime = globalThis.performance.now()
   const getElapsedNanoseconds = (): number =>
     Math.floor((globalThis.performance.now() - startTime) * 1_000_000)
@@ -266,7 +295,7 @@ const createVirtualProcess = (graph: ModuleGraph) => {
   )
   return {
     argv: [] as readonly string[],
-    cwd: (): string => Path.dirname(graph.entry),
+    cwd: (): string => Path.dirname(entry),
     env: Object.freeze({}),
     features: Object.freeze({ typescript: false }),
     hrtime,
@@ -299,41 +328,30 @@ const encodeVirtualFile = (content: string): Uint8Array => {
   return bytes
 }
 
-const createBuiltins = (graph: ModuleGraph): Readonly<Record<string, any>> => {
-  const virtualFiles = { ...graph.files, ...graph.modules }
-  const virtualDirectories = new Set<string>()
-  const virtualDirectoryEntries = new Map<string, Set<string>>()
-  for (const filePath of Object.keys(virtualFiles)) {
-    let child = filePath
-    let parent = Path.dirname(child)
-    while (parent !== child) {
-      virtualDirectories.add(parent)
-      const entries = virtualDirectoryEntries.get(parent) ?? new Set<string>()
-      entries.add(Path.basename(child))
-      virtualDirectoryEntries.set(parent, entries)
-      child = parent
-      parent = Path.dirname(child)
-    }
-  }
-  const path = createPathModule(Path.dirname(graph.entry))
+const createBuiltins = (
+  state: RuntimeState,
+  entry: string,
+): Readonly<Record<string, any>> => {
+  const path = createPathModule(Path.dirname(entry))
   path.posix = path
   path.win32 = path
   const existsSync = (filePath: string): boolean =>
-    Object.hasOwn(virtualFiles, Path.normalize(filePath))
+    state.executableFingerprints.has(Path.normalize(filePath)) ||
+    Object.hasOwn(state.files, Path.normalize(filePath))
   const readFileSync = (
     filePath: string,
     encoding?: string,
   ): string | Uint8Array => {
     const normalized = Path.normalize(filePath)
-    if (!Object.hasOwn(virtualFiles, normalized)) {
+    if (!Object.hasOwn(state.files, normalized)) {
       throw new Error(`Virtual file is not available: ${normalized}`)
     }
-    const content = virtualFiles[normalized]
+    const content = state.files[normalized]
     return encoding ? content : encodeVirtualFile(content)
   }
   const readdirSync = (directory: string): readonly string[] => {
     const normalized = Path.normalize(directory).replace(/\/$/, '')
-    return [...(virtualDirectoryEntries.get(normalized) ?? [])]
+    return [...(state.virtualDirectoryEntries.get(normalized) ?? [])]
   }
   const realpathSync = Object.assign(
     (path: string): string => Path.normalize(path),
@@ -343,8 +361,10 @@ const createBuiltins = (graph: ModuleGraph): Readonly<Record<string, any>> => {
   )
   const statSync = (path: string) => {
     const normalized = Path.normalize(path).replace(/\/$/, '')
-    const isFile = Object.hasOwn(virtualFiles, normalized)
-    const isDirectory = virtualDirectories.has(normalized)
+    const isFile =
+      state.executableFingerprints.has(normalized) ||
+      Object.hasOwn(state.files, normalized)
+    const isDirectory = state.virtualDirectories.has(normalized)
     return {
       isDirectory: (): boolean => isDirectory,
       isFile: (): boolean => isFile,
@@ -436,7 +456,7 @@ const createBuiltins = (graph: ModuleGraph): Readonly<Record<string, any>> => {
   const utilTypes = {
     isRegExp: (value: unknown): value is RegExp => value instanceof RegExp,
   }
-  const process = createVirtualProcess(graph)
+  const process = createVirtualProcess(entry)
   return {
     'node:assert': assertModule,
     'node:assert/strict': assertModule,
@@ -533,10 +553,124 @@ const getDefaultExport = (value: any): any => {
   return value
 }
 
-export const loadModuleGraph = (graph: ModuleGraph): any => {
-  const cache = new Map<string, CommonJsModule>()
-  const builtins = createBuiltins(graph)
-  const files = graph.files ?? {}
+const fingerprint = (source: string): string => {
+  let first = 2_166_136_261
+  let second = 2_654_435_769
+  for (let index = 0; index < source.length; index++) {
+    const code = source.codePointAt(index)!
+    first = Math.imul(first ^ code, 16_777_619)
+    second = Math.imul(second ^ code, 2_246_822_519)
+  }
+  return `${source.length}:${first >>> 0}:${second >>> 0}`
+}
+
+const addVirtualPath = (state: RuntimeState, filePath: string): void => {
+  let child = filePath
+  let parent = Path.dirname(child)
+  while (parent !== child) {
+    state.virtualDirectories.add(parent)
+    const entries =
+      state.virtualDirectoryEntries.get(parent) ?? new Set<string>()
+    entries.add(Path.basename(child))
+    state.virtualDirectoryEntries.set(parent, entries)
+    child = parent
+    parent = Path.dirname(child)
+  }
+}
+
+const mergeFiles = (
+  state: RuntimeState,
+  files: Readonly<Record<string, string>>,
+): void => {
+  for (const [rawPath, source] of Object.entries(files)) {
+    const path = Path.normalize(rawPath)
+    if (Object.hasOwn(state.files, path) && state.files[path] !== source) {
+      throw new ModuleRuntimeConflictError(
+        `Virtual file changed while evaluating the project: ${path}`,
+      )
+    }
+    state.files[path] = source
+    addVirtualPath(state, path)
+  }
+}
+
+const mergeExecutables = (
+  state: RuntimeState,
+  sources: Readonly<Record<string, string>>,
+  target: Record<string, string>,
+): void => {
+  for (const [rawPath, source] of Object.entries(sources)) {
+    const path = Path.normalize(rawPath)
+    const nextFingerprint = fingerprint(source)
+    const existingFingerprint = state.executableFingerprints.get(path)
+    if (existingFingerprint && existingFingerprint !== nextFingerprint) {
+      throw new ModuleRuntimeConflictError(
+        `Module changed while evaluating the project: ${path}`,
+      )
+    }
+    state.executableFingerprints.set(path, nextFingerprint)
+    if (!state.evaluatedModules.has(path)) {
+      if (target === state.modules) {
+        delete state.lazyModules[path]
+        target[path] = source
+      } else if (!Object.hasOwn(state.modules, path)) {
+        target[path] = source
+      }
+    }
+    addVirtualPath(state, path)
+  }
+}
+
+const mergeResolutions = (
+  state: RuntimeState,
+  resolutions: Readonly<Record<string, string>>,
+): void => {
+  for (const [rawKey, rawResolved] of Object.entries(resolutions)) {
+    const separatorIndex = rawKey.indexOf('\0')
+    const parent = Path.normalize(rawKey.slice(0, separatorIndex))
+    const specifier = rawKey.slice(separatorIndex + 1)
+    const key = resolutionKey(parent, specifier)
+    const resolved = rawResolved.startsWith('node:')
+      ? rawResolved
+      : Path.normalize(rawResolved)
+    if (
+      Object.hasOwn(state.resolutions, key) &&
+      state.resolutions[key] !== resolved
+    ) {
+      throw new ModuleRuntimeConflictError(
+        `Module resolution changed while evaluating the project: ${parent} -> ${specifier}`,
+      )
+    }
+    state.resolutions[key] = resolved
+  }
+}
+
+const mergeGraph = (state: RuntimeState, graph: ModuleGraph): string => {
+  mergeFiles(state, graph.files ?? {})
+  mergeExecutables(state, graph.lazyModules ?? {}, state.lazyModules)
+  mergeExecutables(state, graph.modules, state.modules)
+  mergeResolutions(state, graph.resolutions)
+  return Path.normalize(graph.entry)
+}
+
+const createState = (): RuntimeState => ({
+  evaluatedGraphIds: new Map(),
+  evaluatedModules: new Map(),
+  executableFingerprints: new Map(),
+  files: {},
+  lazyModules: {},
+  modules: {},
+  resolutions: {},
+  virtualDirectories: new Set(),
+  virtualDirectoryEntries: new Map(),
+})
+
+const evaluateGraph = (
+  state: RuntimeState,
+  graph: ModuleGraph,
+): EvaluatedModuleGraph => {
+  const entry = mergeGraph(state, graph)
+  const builtins = createBuiltins(state, entry)
   const resolvePreloadedPath = (specifier: string): string | undefined => {
     if (!specifier.startsWith('/')) {
       return undefined
@@ -555,13 +689,13 @@ export const loadModuleGraph = (graph: ModuleGraph): any => {
     ]
     return candidates.find(
       (candidate) =>
-        Object.hasOwn(graph.modules, candidate) ||
-        Object.hasOwn(files, candidate),
+        state.executableFingerprints.has(candidate) ||
+        state.evaluatedModules.has(candidate),
     )
   }
   const resolveKnownSpecifier = (specifier: string): string | undefined => {
     const suffix = `\0${specifier}`
-    for (const [key, resolved] of Object.entries(graph.resolutions)) {
+    for (const [key, resolved] of Object.entries(state.resolutions)) {
       if (key.endsWith(suffix)) {
         return resolved
       }
@@ -574,108 +708,149 @@ export const loadModuleGraph = (graph: ModuleGraph): any => {
     if (builtin) {
       return builtin
     }
-    const cached = cache.get(id)
+    const cached = state.evaluatedModules.get(id)
     if (cached) {
       return cached.exports
     }
-    if (!Object.hasOwn(graph.modules, id) && !Object.hasOwn(files, id)) {
+    if (
+      !Object.hasOwn(state.modules, id) &&
+      !Object.hasOwn(state.lazyModules, id)
+    ) {
       throw new Error(`Module is not in the preloaded graph: ${id}`)
     }
-    const source = graph.modules[id] ?? files[id]
+    const source = state.modules[id] ?? state.lazyModules[id]
+    const sourceContainer = Object.hasOwn(state.modules, id)
+      ? state.modules
+      : state.lazyModules
     const module: CommonJsModule = { exports: {} }
-    cache.set(id, module)
-    if (id.endsWith('.json')) {
-      module.exports = JSON.parse(source)
-      return module.exports
-    }
-    const require = ((specifier: string): any => {
-      if (specifier === 'module' || specifier === 'node:module') {
-        const builtinModules = Object.keys(builtins).map((id) => id.slice(5))
-        return {
-          builtinModules,
-          createRequire: () => require,
-          isBuiltin: (id: string): boolean =>
-            Boolean(builtins[id.startsWith('node:') ? id : `node:${id}`]),
-        }
+    state.evaluatedModules.set(id, module)
+    try {
+      if (id.endsWith('.json')) {
+        module.exports = JSON.parse(source)
+        delete sourceContainer[id]
+        return module.exports
       }
-      const normalizedBuiltin = specifier.startsWith('node:')
-        ? specifier
-        : `node:${specifier}`
-      if (builtins[normalizedBuiltin]) {
-        return builtins[normalizedBuiltin]
-      }
-      const resolved = graph.resolutions[resolutionKey(id, specifier)]
-      if (!resolved) {
-        const dynamicPath = specifier.startsWith('.')
-          ? Path.join(Path.dirname(id), specifier)
-          : specifier
-        const preloadedPath = resolvePreloadedPath(dynamicPath)
-        if (preloadedPath) {
-          return load(preloadedPath)
+      const require = ((specifier: string): any => {
+        if (specifier === 'module' || specifier === 'node:module') {
+          const builtinModules = Object.keys(builtins).map((id) => id.slice(5))
+          return {
+            builtinModules,
+            createRequire: () => require,
+            isBuiltin: (id: string): boolean =>
+              Boolean(builtins[id.startsWith('node:') ? id : `node:${id}`]),
+          }
         }
-        const knownResolution = resolveKnownSpecifier(specifier)
-        if (knownResolution) {
-          return load(knownResolution)
+        const normalizedBuiltin = specifier.startsWith('node:')
+          ? specifier
+          : `node:${specifier}`
+        if (builtins[normalizedBuiltin]) {
+          return builtins[normalizedBuiltin]
         }
-        throw new Error(`Module '${specifier}' was not preloaded for ${id}`)
-      }
-      return load(resolved)
-    }) as CommonJsRequire
-    require.extensions = Object.freeze({ '.js': undefined, '.json': undefined })
-    require.resolve = (specifier: string): string => {
-      const normalizedBuiltin = specifier.startsWith('node:')
-        ? specifier
-        : `node:${specifier}`
-      if (builtins[normalizedBuiltin]) {
-        return normalizedBuiltin
-      }
-      const resolved = graph.resolutions[resolutionKey(id, specifier)]
-      if (!resolved) {
-        const dynamicPath = specifier.startsWith('.')
-          ? Path.join(Path.dirname(id), specifier)
-          : specifier
-        const preloadedPath = resolvePreloadedPath(dynamicPath)
-        if (preloadedPath) {
-          return preloadedPath
+        const resolved = state.resolutions[resolutionKey(id, specifier)]
+        if (!resolved) {
+          const dynamicPath = specifier.startsWith('.')
+            ? Path.join(Path.dirname(id), specifier)
+            : specifier
+          const preloadedPath = resolvePreloadedPath(dynamicPath)
+          if (preloadedPath) {
+            return load(preloadedPath)
+          }
+          const knownResolution = resolveKnownSpecifier(specifier)
+          if (knownResolution) {
+            return load(knownResolution)
+          }
+          throw new Error(`Module '${specifier}' was not preloaded for ${id}`)
         }
-        const knownResolution = resolveKnownSpecifier(specifier)
-        if (knownResolution) {
-          return knownResolution
+        return load(resolved)
+      }) as CommonJsRequire
+      require.extensions = Object.freeze({
+        '.js': undefined,
+        '.json': undefined,
+      })
+      require.resolve = (specifier: string): string => {
+        const normalizedBuiltin = specifier.startsWith('node:')
+          ? specifier
+          : `node:${specifier}`
+        if (builtins[normalizedBuiltin]) {
+          return normalizedBuiltin
         }
-        throw new Error(`Module '${specifier}' was not preloaded for ${id}`)
+        const resolved = state.resolutions[resolutionKey(id, specifier)]
+        if (!resolved) {
+          const dynamicPath = specifier.startsWith('.')
+            ? Path.join(Path.dirname(id), specifier)
+            : specifier
+          const preloadedPath = resolvePreloadedPath(dynamicPath)
+          if (preloadedPath) {
+            return preloadedPath
+          }
+          const knownResolution = resolveKnownSpecifier(specifier)
+          if (knownResolution) {
+            return knownResolution
+          }
+          throw new Error(`Module '${specifier}' was not preloaded for ${id}`)
+        }
+        return resolved
       }
-      return resolved
-    }
-    const createEvaluator = new Function(
-      'global',
-      'process',
-      'clearImmediate',
-      'setImmediate',
-      'SharedArrayBuffer',
-      `'use strict';
+      const createEvaluator = new Function(
+        'global',
+        'process',
+        'clearImmediate',
+        'setImmediate',
+        'SharedArrayBuffer',
+        `'use strict';
       return function (module, exports, require, __filename, __dirname) {
         'use strict';
         ${source}
         //# sourceURL=${id}
       }`,
-    )
-    const evaluate = createEvaluator(
-      globalThis,
-      builtins['node:process'],
-      clearImmediate,
-      setImmediate,
-      globalThis.SharedArrayBuffer ?? globalThis.ArrayBuffer,
-    )
-    try {
+      )
+      const evaluate = createEvaluator(
+        globalThis,
+        builtins['node:process'],
+        clearImmediate,
+        setImmediate,
+        globalThis.SharedArrayBuffer ?? globalThis.ArrayBuffer,
+      )
       evaluate(module, module.exports, require, id, Path.dirname(id))
+      delete sourceContainer[id]
+      return module.exports
     } catch (error) {
+      state.evaluatedModules.delete(id)
       const message = error instanceof Error ? error.message : String(error)
-      throw new Error(`Failed to evaluate ESLint module ${id}: ${message}`, {
-        cause: error,
+      const wrapped = new Error(
+        `Failed to evaluate ESLint module ${id}: ${message}`,
+        {
+          cause: error,
+        },
+      )
+      Object.defineProperty(wrapped, 'name', {
+        value: error instanceof Error ? error.name : 'Error',
       })
+      throw wrapped
     }
-    return module.exports
   }
 
-  return getDefaultExport(load(graph.entry))
+  const exports = getDefaultExport(load(entry))
+  let id = state.evaluatedGraphIds.get(entry)
+  if (!id) {
+    const { id: graphId } = graph
+    id = graphId
+    state.evaluatedGraphIds.set(entry, id)
+  }
+  return {
+    entry,
+    exports,
+    id,
+  }
+}
+
+export const createModuleRuntime = (): ModuleRuntime => {
+  const state = createState()
+  return {
+    evaluate: (graph) => evaluateGraph(state, graph),
+  }
+}
+
+export const loadModuleGraph = (graph: ModuleGraph): any => {
+  return createModuleRuntime().evaluate(graph).exports
 }

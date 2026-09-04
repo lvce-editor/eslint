@@ -31,6 +31,7 @@ const setGraph = async (
   const revisionInput = {
     entry,
     files: [],
+    lazyModules: [],
     modules: [
       {
         compiledHash: `compiled-${hashes.get(uri)}`,
@@ -38,7 +39,7 @@ const setGraph = async (
         uri,
       },
     ],
-    version: 3,
+    version: 4,
   }
   const revision = await ComputeTextHash.computeTextHash(
     JSON.stringify(revisionInput),

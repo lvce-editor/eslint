@@ -77,3 +77,29 @@ export function loadEslintModule(
     ? Rpc.invoke('ModuleResolution.loadEslintModule', path, projectPath)
     : Rpc.invoke('ModuleResolution.loadEslintModule', path)
 }
+
+export const reloadEslintConfig = (
+  path: string,
+  filePath: string,
+): Promise<ModuleGraph> => {
+  return Rpc.invoke(
+    'ModuleResolution.loadEslintConfig',
+    path,
+    filePath,
+    false,
+    true,
+  )
+}
+
+export const reloadEslintModule = (
+  path: string,
+  projectPath?: string,
+): Promise<ModuleGraph> => {
+  return Rpc.invoke(
+    'ModuleResolution.loadEslintModule',
+    path,
+    projectPath,
+    false,
+    true,
+  )
+}

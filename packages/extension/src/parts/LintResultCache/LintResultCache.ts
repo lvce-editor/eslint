@@ -6,7 +6,7 @@ import * as FileSystem from '../FileSystem/FileSystem.ts'
 
 const GraphCacheName = 'eslint-config-files-cache'
 const GraphCacheKeyPrefix = 'https://eslint-config-files-cache.invalid/'
-const GraphCacheVersion = 3
+const GraphCacheVersion = 4
 const ResultCacheName = 'eslint-lint-result-v1'
 const ResultCacheKeyPrefix = 'https://eslint-lint-result.invalid/'
 const ResultCacheVersion = 1
@@ -23,6 +23,7 @@ interface CachedModule extends CachedFile {
 interface CachedModuleGraph {
   readonly entry: string
   readonly files: readonly CachedFile[]
+  readonly lazyModules: readonly CachedFile[]
   readonly modules: readonly CachedModule[]
   readonly revision: string
   readonly version: number
@@ -108,6 +109,8 @@ const isCachedModuleGraph = (value: unknown): value is CachedModuleGraph => {
     typeof candidate.entry === 'string' &&
     Array.isArray(candidate.files) &&
     candidate.files.every(isCachedFile) &&
+    Array.isArray(candidate.lazyModules) &&
+    candidate.lazyModules.every(isCachedFile) &&
     Array.isArray(candidate.modules) &&
     candidate.modules.every(isCachedModule) &&
     typeof candidate.revision === 'string'
@@ -164,7 +167,7 @@ const loadGraphRevision = async (
     if ((await computeGraphRevision(revisionInput)) !== revision) {
       return undefined
     }
-    const entries = [...value.modules, ...value.files]
+    const entries = [...value.modules, ...value.lazyModules, ...value.files]
     const hashes = await FileSystem.getFileHashes(
       entries.map((entry) => entry.uri),
     )

@@ -1,16 +1,22 @@
 import { expect, test } from '@jest/globals'
 import { ESLint, Linter } from 'eslint'
+import type { EvaluatedModuleGraph } from '../src/parts/LoadModuleGraph/LoadModuleGraph.ts'
 import type { ModuleGraph } from '../src/parts/ModuleGraph/ModuleGraph.ts'
 import * as Lint from '../src/parts/Lint/Lint.ts'
+import * as LoadModuleGraph from '../src/parts/LoadModuleGraph/LoadModuleGraph.ts'
 
 const eslint = { ESLint, Linter }
 
-const createGraph = (config: string, id = config): ModuleGraph => ({
-  entry: '/workspace/eslint.config.js',
-  id,
-  modules: { '/workspace/eslint.config.js': config },
-  resolutions: {},
-})
+const evaluate = (graph: ModuleGraph): EvaluatedModuleGraph =>
+  LoadModuleGraph.createModuleRuntime().evaluate(graph)
+
+const createGraph = (config: string, id = config): EvaluatedModuleGraph =>
+  evaluate({
+    entry: '/workspace/eslint.config.js',
+    id,
+    modules: { '/workspace/eslint.config.js': config },
+    resolutions: {},
+  })
 
 test('uses the secure default config when no project config exists', async () => {
   const results = await Lint.lint(
@@ -53,7 +59,7 @@ test('uses rules from a loaded flat config', async () => {
 test('runs a dynamically loaded plugin rule', async () => {
   const configPath = '/workspace/eslint.config.js'
   const pluginPath = '/workspace/node_modules/eslint-plugin-demo/index.js'
-  const graph: ModuleGraph = {
+  const graph = evaluate({
     entry: configPath,
     id: 'plugin-graph',
     modules: {
@@ -63,7 +69,7 @@ test('runs a dynamically loaded plugin rule', async () => {
     resolutions: {
       [`${configPath}\0eslint-plugin-demo`]: pluginPath,
     },
-  }
+  })
   const results = await Lint.lint(
     'const foo = 1',
     '/workspace/file.js',
@@ -82,25 +88,27 @@ test('runs a dynamically loaded plugin rule', async () => {
 test('reuses loaded config modules until the graph changes', async () => {
   const configPath = '/workspace/eslint.config.js'
   const pluginPath = '/workspace/plugin.js'
-  const graph: ModuleGraph = {
-    entry: configPath,
-    files: {},
-    id: 'reused-graph',
-    modules: {
-      [configPath]: `const plugin = require('./plugin.js'); module.exports = [{ plugins: { test: plugin }, rules: { 'test/count': 'error' } }]`,
-      [pluginPath]: `let count = 0; module.exports = { rules: { count: { create(context) { const message = String(++count); return { Program(node) { context.report({ node, message }) } } } } } }`,
-    },
-    resolutions: {
-      [`${configPath}\0./plugin.js`]: pluginPath,
-    },
-  }
+  const createCountingGraph = (id: string): EvaluatedModuleGraph =>
+    evaluate({
+      entry: configPath,
+      files: {},
+      id,
+      modules: {
+        [configPath]: `const plugin = require('./plugin.js'); module.exports = [{ plugins: { test: plugin }, rules: { 'test/count': 'error' } }]`,
+        [pluginPath]: `let count = 0; module.exports = { rules: { count: { create(context) { const message = String(++count); return { Program(node) { context.report({ node, message }) } } } } } }`,
+      },
+      resolutions: {
+        [`${configPath}\0./plugin.js`]: pluginPath,
+      },
+    })
+  const graph = createCountingGraph('reused-graph')
 
   const first = await Lint.lint('', '/workspace/file.js', graph, eslint)
   const second = await Lint.lint('', '/workspace/file.js', graph, eslint)
   const reloaded = await Lint.lint(
     '',
     '/workspace/file.js',
-    { ...graph, id: 'reloaded-graph' },
+    createCountingGraph('reloaded-graph'),
     eslint,
   )
 
@@ -156,14 +164,14 @@ test('falls back to a cached Linter for ESLint 8', async () => {
 
 test('passes an absolute file path to parser services', async () => {
   const configPath = '/workspace/eslint.config.js'
-  const graph: ModuleGraph = {
+  const graph = evaluate({
     entry: configPath,
     id: 'parser-services-graph',
     modules: {
       [configPath]: `module.exports = [{ files: ['**/*.ts'], plugins: { test: { rules: { filename: { create(context) { return { Program(node) { context.report({ node, message: context.filename }) } } } } } } }, rules: { 'test/filename': 'error' } }]`,
     },
     resolutions: {},
-  }
+  })
   const results = await Lint.lint(
     '',
     '/workspace/source/file.ts',
