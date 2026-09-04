@@ -14,6 +14,7 @@ interface FileSystemApi {
     uri: string,
   ) => Promise<readonly DirectoryEntry[]>
   readonly readFile: (uri: string) => Promise<string>
+  readonly readFileAsBase64?: (uri: string) => Promise<string>
   readonly stat: (
     uri: string,
   ) => Promise<{ readonly isDirectory: boolean; readonly isFile: boolean }>
@@ -43,6 +44,7 @@ export const state: {
     readDirWithFileTypes: (uri) =>
       Rpc.invoke('FileSystem.readDirWithFileTypes', uri),
     readFile: (uri) => Rpc.invoke('FileSystem.readFile', uri),
+    readFileAsBase64: (uri) => Rpc.invoke('FileSystem.readFileAsBase64', uri),
     stat: (uri) => Rpc.invoke('FileSystem.stat', uri),
   },
 }
@@ -124,6 +126,31 @@ export const readFile = async (path: string): Promise<string> => {
     return content
   } catch (error) {
     capture.push({
+      durationMs: now() - startTime,
+      error: error instanceof Error ? error.message : String(error),
+      path,
+    })
+    throw error
+  }
+}
+
+export const readFileAsBase64 = async (path: string): Promise<string> => {
+  const read = state.api.readFileAsBase64
+  if (!read) {
+    throw new Error('Binary file reads are not available')
+  }
+  const capture = state.activeCapture
+  const startTime = now()
+  try {
+    const content = await read(toUri(path))
+    capture?.push({
+      contentLength: Math.floor((content.length * 3) / 4),
+      durationMs: now() - startTime,
+      path,
+    })
+    return content
+  } catch (error) {
+    capture?.push({
       durationMs: now() - startTime,
       error: error instanceof Error ? error.message : String(error),
       path,

@@ -3,6 +3,7 @@ import {
   getFileHashes as getFileHashesApi,
   readDirWithFileTypes as readDirWithFileTypesApi,
   readFile as readFileApi,
+  readFileAsBlob as readFileAsBlobApi,
   stat as statApi,
 } from '@lvce-editor/api'
 import * as ComputeTextHash from '../ComputeTextHash/ComputeTextHash.ts'
@@ -14,6 +15,7 @@ interface FileSystemApi {
   readonly getFileHashes: typeof getFileHashesApi
   readonly readDirWithFileTypes: typeof readDirWithFileTypesApi
   readonly readFile: typeof readFileApi
+  readonly readFileAsBlob?: typeof readFileAsBlobApi
   readonly stat: typeof statApi
 }
 
@@ -33,6 +35,7 @@ export const state: {
     getFileHashes: getFileHashesApi,
     readDirWithFileTypes: readDirWithFileTypesApi,
     readFile: readFileApi,
+    readFileAsBlob: readFileAsBlobApi,
     stat: statApi,
   },
   cache: FileContentCache,
@@ -149,6 +152,24 @@ const readFileCached = async (uri: string): Promise<string> => {
 export const readFile = async (path: string): Promise<string> => {
   const uri = toUri(path)
   return readFileCached(uri)
+}
+
+const bytesToBase64 = (bytes: Uint8Array): string => {
+  const chunkSize = 32_768
+  let binary = ''
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    binary += String.fromCodePoint(...bytes.subarray(index, index + chunkSize))
+  }
+  return btoa(binary)
+}
+
+export const readFileAsBase64 = async (path: string): Promise<string> => {
+  const { readFileAsBlob } = state.api
+  if (!readFileAsBlob) {
+    throw new Error('Binary file reads are not available')
+  }
+  const blob = await readFileAsBlob(toUri(path))
+  return bytesToBase64(new Uint8Array(await blob.arrayBuffer()))
 }
 
 export const readDirWithFileTypes = async (

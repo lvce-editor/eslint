@@ -5,6 +5,8 @@ import type { ModuleGraph } from '../src/parts/ModuleGraph/ModuleGraph.ts'
 import * as Lint from '../src/parts/Lint/Lint.ts'
 import * as LoadModuleGraph from '../src/parts/LoadModuleGraph/LoadModuleGraph.ts'
 
+// cspell:ignore mistkae
+
 const eslint = { ESLint, Linter }
 
 const evaluate = (graph: ModuleGraph): EvaluatedModuleGraph =>
@@ -82,6 +84,37 @@ test('runs a dynamically loaded plugin rule', async () => {
       ruleId: 'demo/no-foo',
       severity: 'error',
     }),
+  ])
+})
+
+test('replays only cspell after deferred checking completes', async () => {
+  const configPath = '/workspace/eslint.config.js'
+  const workerPath = '/workspace/worker.js'
+  const graph = evaluate({
+    entry: configPath,
+    id: 'deferred-cspell-graph',
+    modules: {
+      '/workspace/checker.js': `exports.check = async value => ({ errors: [], issues: [value] })`,
+      [configPath]: `const { createSyncFn } = require('synckit'); const check = createSyncFn(require.resolve('./worker.js')); const plugin = { rules: { spellchecker: { create(context) { return { Program(node) { if (check('mistkae').issues.length) context.report({ node, message: 'spelling issue' }) } } } } } }; module.exports = [{ plugins: { '@cspell': plugin }, rules: { '@cspell/spellchecker': 'error', 'no-debugger': 'error' } }]`,
+      [workerPath]: `const { runAsWorker } = require('synckit'); runAsWorker(async value => require('./checker.js').check(value))`,
+    },
+    resolutions: {
+      [`${configPath}\0./worker.js`]: workerPath,
+      [`${configPath}\0synckit`]: 'compat:cspell-deferred-sync',
+      [`${workerPath}\0./checker.js`]: '/workspace/checker.js',
+      [`${workerPath}\0synckit`]: 'compat:cspell-deferred-sync',
+    },
+  })
+
+  const results = await Lint.lint(
+    'debugger',
+    '/workspace/file.js',
+    graph,
+    eslint,
+  )
+  expect(results.map(({ ruleId }) => ruleId)).toEqual([
+    '@cspell/spellchecker',
+    'no-debugger',
   ])
 })
 

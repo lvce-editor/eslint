@@ -2,6 +2,8 @@ import { expect, test } from '@jest/globals'
 import type { ModuleGraph } from '../src/parts/ModuleGraph/ModuleGraph.ts'
 import * as LoadModuleGraph from '../src/parts/LoadModuleGraph/LoadModuleGraph.ts'
 
+/* cspell:disable */
+
 const graph = (
   modules: Record<string, string>,
   resolutions: Record<string, string> = {},
@@ -19,6 +21,58 @@ test('loads a commonjs config', () => {
     }),
   )
   expect(value).toEqual([{ rules: {} }])
+})
+
+test('runs deferred cspell-compatible work without worker threads', async () => {
+  const loaded = LoadModuleGraph.createModuleRuntime().evaluate(
+    graph(
+      {
+        '/workspace/checker.js': `exports.check = async value => ({ errors: [], issues: [value] })`,
+        '/workspace/eslint.config.js': `const { createSyncFn } = require('synckit'); module.exports = createSyncFn(require.resolve('./worker.js'))`,
+        '/workspace/worker.js': `const { runAsWorker } = require('synckit'); runAsWorker(async value => require('./checker.js').check(value))`,
+      },
+      {
+        '/workspace/eslint.config.js\0./worker.js': '/workspace/worker.js',
+        '/workspace/eslint.config.js\0synckit': 'compat:cspell-deferred-sync',
+        '/workspace/worker.js\0./checker.js': '/workspace/checker.js',
+        '/workspace/worker.js\0synckit': 'compat:cspell-deferred-sync',
+      },
+    ),
+  )
+
+  expect(loaded.exports('mistkae')).toEqual({ errors: [], issues: [] })
+  expect(loaded.compatibilityRuntime.hasPending()).toBe(true)
+  await loaded.compatibilityRuntime.flush()
+  expect(loaded.exports('mistkae')).toEqual({
+    errors: [],
+    issues: ['mistkae'],
+  })
+  expect(loaded.compatibilityRuntime.hasPending()).toBe(false)
+})
+
+test('reads and decompresses binary virtual files', () => {
+  const value = LoadModuleGraph.loadModuleGraph({
+    ...graph({
+      '/workspace/eslint.config.js': `const fs = require('node:fs'); const zlib = require('node:zlib'); module.exports = zlib.gunzipSync(fs.readFileSync('/workspace/words.txt.gz')).toString('utf8')`,
+    }),
+    files: {
+      '/workspace/words.txt.gz': {
+        content: 'H4sIAAAAAAAAA8tIzcnJBwCGphA2BQAAAA==',
+        encoding: 'base64',
+      },
+    },
+  })
+  expect(value).toBe('hello')
+})
+
+test('resolves preloaded file urls with cache-busting fragments', () => {
+  const value = LoadModuleGraph.loadModuleGraph(
+    graph({
+      '/workspace/config.js': `module.exports = 'loaded'`,
+      '/workspace/eslint.config.js': `module.exports = require('file:///workspace/config.js#loader=1')`,
+    }),
+  )
+  expect(value).toBe('loaded')
 })
 
 test('unwraps a babel esm default export', () => {

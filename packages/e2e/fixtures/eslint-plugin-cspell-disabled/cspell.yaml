@@ -1,0 +1,8 @@
+version: '0.2'
+words:
+  - lvceaccepted
+dictionaryDefinitions:
+  - name: local-words
+    path: ./custom-words.txt
+dictionaries:
+  - local-words
