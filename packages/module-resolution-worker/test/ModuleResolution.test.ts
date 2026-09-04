@@ -1085,6 +1085,69 @@ test('loads the closest project ESLint package as a graph', async () => {
   expect(graph.modules[graph.entry]).toContain('ProjectLinter')
 })
 
+test('preloads only TypeScript runtime library files needed by parsers', async () => {
+  setFiles({
+    '/workspace/node_modules/eslint/index.js': `require('typescript'); class ProjectLinter {}; module.exports = { Linter: ProjectLinter }`,
+    '/workspace/node_modules/eslint/package.json': `{"main":"index.js"}`,
+    '/workspace/node_modules/typescript/lib/_tsc.js': `module.exports = {}`,
+    '/workspace/node_modules/typescript/lib/_tsserver.js': `module.exports = {}`,
+    '/workspace/node_modules/typescript/lib/_typingsInstaller.js': `module.exports = {}`,
+    '/workspace/node_modules/typescript/lib/cs/diagnosticMessages.generated.json': `{"diagnostic":"translated"}`,
+    '/workspace/node_modules/typescript/lib/lib.d.ts': `/// <reference no-default-lib="true"/>`,
+    '/workspace/node_modules/typescript/lib/lib.dom.d.ts': `interface Document {}`,
+    '/workspace/node_modules/typescript/lib/lib.esnext.custom.d.ts': `interface Custom {}`,
+    '/workspace/node_modules/typescript/lib/typescript.d.ts': `export interface CompilerOptions {}`,
+    '/workspace/node_modules/typescript/lib/typescript.js': `module.exports = { version: 'test' }`,
+    '/workspace/node_modules/typescript/lib/typesMap.json': `{"jquery":"jquery"}`,
+    '/workspace/node_modules/typescript/package.json': `{"main":"lib/typescript.js"}`,
+  })
+
+  const graph = await LoadEslintConfig.loadEslintModule(
+    '/workspace/src/file.ts',
+  )
+
+  expect(
+    Object.hasOwn(
+      graph.modules,
+      '/workspace/node_modules/typescript/lib/typescript.js',
+    ),
+  ).toBe(true)
+  expect(graph.files).toMatchObject({
+    '/workspace/node_modules/typescript/lib/lib.d.ts': `/// <reference no-default-lib="true"/>`,
+    '/workspace/node_modules/typescript/lib/lib.dom.d.ts': `interface Document {}`,
+    '/workspace/node_modules/typescript/lib/lib.esnext.custom.d.ts': `interface Custom {}`,
+    '/workspace/node_modules/typescript/lib/typesMap.json': `{"jquery":"jquery"}`,
+  })
+  for (const path of [
+    '/workspace/node_modules/typescript/lib/_tsc.js',
+    '/workspace/node_modules/typescript/lib/_tsserver.js',
+    '/workspace/node_modules/typescript/lib/_typingsInstaller.js',
+    '/workspace/node_modules/typescript/lib/typescript.d.ts',
+    '/workspace/node_modules/typescript/lib/cs/diagnosticMessages.generated.json',
+  ]) {
+    expect(Object.hasOwn(graph.files, path)).toBe(false)
+  }
+})
+
+test('separates dynamically discovered project modules from virtual files', async () => {
+  setFiles({
+    '/workspace/node_modules/eslint/index.js': `const fs = require('fs'); fs.readdirSync(__dirname + '/rules'); class ProjectLinter {}; module.exports = { Linter: ProjectLinter }`,
+    '/workspace/node_modules/eslint/package.json': `{"main":"index.js"}`,
+    '/workspace/node_modules/eslint/rules/first.js': `module.exports = true`,
+  })
+
+  const graph = await LoadEslintConfig.loadEslintModule(
+    '/workspace/src/file.js',
+  )
+
+  expect(graph.lazyModules).toMatchObject({
+    '/workspace/node_modules/eslint/rules/first.js': `module.exports = true`,
+  })
+  expect(
+    Object.hasOwn(graph.files, '/workspace/node_modules/eslint/rules/first.js'),
+  ).toBe(false)
+})
+
 test('does not read above the ESLint config directory when locating ESLint', async () => {
   setFiles({
     '/workspace/node_modules/eslint/index.js':

@@ -6,8 +6,8 @@ const CacheName = 'eslint-config-files-cache'
 const CacheKeyPrefix = 'https://eslint-config-files-cache.invalid/'
 const CompiledCacheName = 'eslint-compiled-module-graph-v1'
 const CompiledCacheKeyPrefix = 'https://eslint-compiled-module-graph.invalid/'
-const CacheVersion = 3
-const CompiledCacheVersion = 1
+const CacheVersion = 4
+const CompiledCacheVersion = 2
 const maxConcurrentCacheReads = 64
 
 const toReadableCachePath = (cacheKey: string): string => {
@@ -27,6 +27,7 @@ const toReadableCachePath = (cacheKey: string): string => {
 export interface ModuleGraphToCache {
   readonly entry: string
   readonly files: Readonly<Record<string, string>>
+  readonly lazyModules: Readonly<Record<string, string>>
   readonly modules: Readonly<Record<string, string>>
   readonly moduleSources: Readonly<Record<string, string>>
   readonly resolutions: Readonly<Record<string, string>>
@@ -36,6 +37,7 @@ export interface RestoredModuleGraph {
   readonly entry: string
   readonly entrySource: string
   readonly files: Readonly<Record<string, string>>
+  readonly lazyModules: Readonly<Record<string, string>>
   readonly modules: Readonly<Record<string, string>>
   readonly resolutions: Readonly<Record<string, string>>
 }
@@ -52,6 +54,7 @@ interface CachedModule extends CachedFile {
 interface CachedModuleGraph {
   readonly entry: string
   readonly files: readonly CachedFile[]
+  readonly lazyModules: readonly CachedFile[]
   readonly modules: readonly CachedModule[]
   readonly revision: string
   readonly version: number
@@ -65,6 +68,7 @@ interface CachedSource {
 interface CompiledModuleGraph {
   readonly entrySource: string
   readonly files: readonly CachedSource[]
+  readonly lazyModules: readonly CachedSource[]
   readonly modules: readonly CachedSource[]
   readonly resolutions: Readonly<Record<string, string>>
   readonly version: number
@@ -101,6 +105,8 @@ const isCachedModuleGraph = (value: unknown): value is CachedModuleGraph => {
     typeof candidate.entry === 'string' &&
     Array.isArray(candidate.files) &&
     candidate.files.every(isCachedFile) &&
+    Array.isArray(candidate.lazyModules) &&
+    candidate.lazyModules.every(isCachedFile) &&
     Array.isArray(candidate.modules) &&
     candidate.modules.every(isCachedModule) &&
     typeof candidate.revision === 'string'
@@ -129,6 +135,8 @@ const isCompiledModuleGraph = (
     typeof candidate.entrySource === 'string' &&
     Array.isArray(candidate.files) &&
     candidate.files.every(isCachedSource) &&
+    Array.isArray(candidate.lazyModules) &&
+    candidate.lazyModules.every(isCachedSource) &&
     Array.isArray(candidate.modules) &&
     candidate.modules.every(isCachedSource) &&
     Boolean(candidate.resolutions) &&
@@ -213,6 +221,9 @@ const hasValidCachedContent = async (
   const compiledFiles = new Map(
     compiled.files.map((file) => [file.uri, file.source]),
   )
+  const compiledLazyModules = new Map(
+    compiled.lazyModules.map((module) => [module.uri, module.source]),
+  )
   const entryModule = cached.modules.find(
     (module) => module.uri === cached.entry,
   )
@@ -231,6 +242,19 @@ const hasValidCachedContent = async (
     )
   })
   if (validModules.includes(false)) {
+    return false
+  }
+  const validLazyModules = await mapConcurrent(
+    cached.lazyModules,
+    async (module) => {
+      const source = compiledLazyModules.get(module.uri)
+      return (
+        source !== undefined &&
+        (await ComputeTextHash.computeTextHash(source)) === module.hash
+      )
+    },
+  )
+  if (validLazyModules.includes(false)) {
     return false
   }
   const validFiles = await mapConcurrent(cached.files, async (file) => {
@@ -256,7 +280,7 @@ const hasCurrentHashes = async (
   if ((await computeRevision(revisionInput)) !== revision) {
     return false
   }
-  const entries = [...cached.modules, ...cached.files]
+  const entries = [...cached.modules, ...cached.lazyModules, ...cached.files]
   const hashes = await FileSystem.getFileHashes(
     entries.map((entry) => entry.uri),
   )
@@ -299,6 +323,7 @@ export const restore = async (
       entry: FileSystem.toPath(cached.entry),
       entrySource: compiled.entrySource,
       files: mapSources(compiled.files),
+      lazyModules: mapSources(compiled.lazyModules),
       modules: mapSources(compiled.modules),
       resolutions: mapResolutionPaths(compiled.resolutions, FileSystem.toPath),
     }
@@ -313,10 +338,12 @@ export const save = async (
 ): Promise<void> => {
   try {
     const modulePaths = Object.keys(graph.moduleSources)
+    const lazyModulePaths = Object.keys(graph.lazyModules)
     const filePaths = Object.keys(graph.files)
-    const paths = [...modulePaths, ...filePaths]
+    const paths = [...modulePaths, ...lazyModulePaths, ...filePaths]
     const contents = [
       ...Object.values(graph.moduleSources),
+      ...Object.values(graph.lazyModules),
       ...Object.values(graph.files),
     ]
     if (
@@ -342,13 +369,23 @@ export const save = async (
       0,
       modulePaths.length,
     ) as readonly string[]
-    const fileHashes = hashes.slice(modulePaths.length) as readonly string[]
+    const lazyModuleHashes = hashes.slice(
+      modulePaths.length,
+      modulePaths.length + lazyModulePaths.length,
+    ) as readonly string[]
+    const fileHashes = hashes.slice(
+      modulePaths.length + lazyModulePaths.length,
+    ) as readonly string[]
     const compiledHashes = await mapConcurrent(
       modulePaths.map((path) => graph.modules[path]),
       ComputeTextHash.computeTextHash,
     )
     const files = filePaths.map((path, index) => ({
       hash: fileHashes[index],
+      uri: FileSystem.toUri(path),
+    }))
+    const lazyModules = lazyModulePaths.map((path, index) => ({
+      hash: lazyModuleHashes[index],
       uri: FileSystem.toUri(path),
     }))
     const modules = modulePaths.map((path, index) => ({
@@ -359,6 +396,7 @@ export const save = async (
     const revisionInput = {
       entry: FileSystem.toUri(graph.entry),
       files,
+      lazyModules,
       modules,
       version: CacheVersion,
     }
@@ -367,6 +405,10 @@ export const save = async (
       entrySource: graph.moduleSources[graph.entry],
       files: filePaths.map((path) => ({
         source: graph.files[path],
+        uri: FileSystem.toUri(path),
+      })),
+      lazyModules: lazyModulePaths.map((path) => ({
+        source: graph.lazyModules[path],
         uri: FileSystem.toUri(path),
       })),
       modules: modulePaths.map((path) => ({

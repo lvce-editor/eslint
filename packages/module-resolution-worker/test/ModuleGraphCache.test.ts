@@ -19,6 +19,8 @@ const hashes: Readonly<Record<string, string>> = {
     '48208f9428d64634bd8e28ff345bf0eab60d53c18fa2fbdb0b9bc1e84df2b5f6',
   'file:///workspace/eslint.config.js':
     '3a5910661bd79b2a6b41d83a225b9d8556bdaa62d1991417e199efb7121b1276',
+  'file:///workspace/lazy.js':
+    'c4d1f14387e26733af8c5c17379fce7cf38440bc0bff2f5493aec14bf46cfd80',
 }
 const getFileHashes = jest.fn(async (uris: readonly string[]) =>
   uris.map((uri) => hashes[uri] ?? null),
@@ -45,6 +47,7 @@ test('saves a compiled graph with portable uris', async () => {
     {
       entry: '/workspace/eslint.config.js',
       files: { '/workspace/data.json': '{"value":1}' },
+      lazyModules: { '/workspace/lazy.js': 'module.exports = true' },
       modules: { '/workspace/eslint.config.js': 'module.exports = []' },
       moduleSources: {
         '/workspace/eslint.config.js': 'module.exports = []',
@@ -57,6 +60,7 @@ test('saves a compiled graph with portable uris', async () => {
 
   expect(getFileHashes).toHaveBeenCalledWith([
     'file:///workspace/eslint.config.js',
+    'file:///workspace/lazy.js',
     'file:///workspace/data.json',
   ])
   expect(open).toHaveBeenCalledWith('eslint-config-files-cache')
@@ -79,6 +83,12 @@ test('saves a compiled graph with portable uris', async () => {
         uri: 'file:///workspace/data.json',
       },
     ],
+    lazyModules: [
+      {
+        hash: hashes['file:///workspace/lazy.js'],
+        uri: 'file:///workspace/lazy.js',
+      },
+    ],
     modules: [
       {
         compiledHash:
@@ -88,7 +98,7 @@ test('saves a compiled graph with portable uris', async () => {
       },
     ],
     revision: expect.any(String),
-    version: 3,
+    version: 4,
   })
   const compiledResponse = cacheEntries.get(
     'https://eslint-compiled-module-graph.invalid/module/file/workspace/eslint.config.js/file/workspace/src/file.ts',
@@ -104,6 +114,12 @@ test('saves a compiled graph with portable uris', async () => {
         uri: 'file:///workspace/data.json',
       },
     ],
+    lazyModules: [
+      {
+        source: 'module.exports = true',
+        uri: 'file:///workspace/lazy.js',
+      },
+    ],
     modules: [
       {
         source: 'module.exports = []',
@@ -113,7 +129,7 @@ test('saves a compiled graph with portable uris', async () => {
     resolutions: {
       'file:///workspace/eslint.config.js\0🦄': 'file:///workspace/data.json',
     },
-    version: 1,
+    version: 2,
   })
 })
 
@@ -121,6 +137,7 @@ test('restores a compiled graph after validating every hash in one request', asy
   await ModuleGraphCache.save('module:file:///workspace/eslint.config.js', {
     entry: '/workspace/eslint.config.js',
     files: { '/workspace/data.json': '{"value":1}' },
+    lazyModules: {},
     modules: { '/workspace/eslint.config.js': 'module.exports = []' },
     moduleSources: {
       '/workspace/eslint.config.js': 'module.exports = []',
@@ -138,6 +155,7 @@ test('restores a compiled graph after validating every hash in one request', asy
     entry: '/workspace/eslint.config.js',
     entrySource: 'module.exports = []',
     files: { '/workspace/data.json': '{"value":1}' },
+    lazyModules: {},
     modules: { '/workspace/eslint.config.js': 'module.exports = []' },
     resolutions: {
       '/workspace/eslint.config.js\0./data.json': '/workspace/data.json',
@@ -155,6 +173,7 @@ test('restores compiled modules and files from batched cache records', async () 
   await ModuleGraphCache.save('module:file:///workspace/eslint.config.js', {
     entry: '/workspace/eslint.config.js',
     files: { '/workspace/data.json': '{"value":1}' },
+    lazyModules: {},
     modules: {
       '/workspace/eslint.config.js': 'exports.default = []',
     },
@@ -171,6 +190,7 @@ test('restores compiled modules and files from batched cache records', async () 
     entry: '/workspace/eslint.config.js',
     entrySource: 'module.exports = []',
     files: { '/workspace/data.json': '{"value":1}' },
+    lazyModules: {},
     modules: {
       '/workspace/eslint.config.js': 'exports.default = []',
     },
@@ -183,6 +203,7 @@ test('does not restore a graph when one file changed', async () => {
   await ModuleGraphCache.save('module:file:///workspace/eslint.config.js', {
     entry: '/workspace/eslint.config.js',
     files: {},
+    lazyModules: {},
     modules: { '/workspace/eslint.config.js': 'module.exports = []' },
     moduleSources: {
       '/workspace/eslint.config.js': 'module.exports = []',
@@ -220,6 +241,7 @@ test('does not save a graph when a file changes between reading and hashing', as
   await ModuleGraphCache.save('module:file:///workspace/eslint.config.js', {
     entry: '/workspace/eslint.config.js',
     files: {},
+    lazyModules: {},
     modules: { '/workspace/eslint.config.js': 'module.exports = changed' },
     moduleSources: {
       '/workspace/eslint.config.js': 'module.exports = changed',
@@ -234,6 +256,7 @@ test('does not restore content that does not match its content hash', async () =
   await ModuleGraphCache.save('module:file:///workspace/eslint.config.js', {
     entry: '/workspace/eslint.config.js',
     files: {},
+    lazyModules: {},
     modules: { '/workspace/eslint.config.js': 'module.exports = []' },
     moduleSources: {
       '/workspace/eslint.config.js': 'module.exports = []',

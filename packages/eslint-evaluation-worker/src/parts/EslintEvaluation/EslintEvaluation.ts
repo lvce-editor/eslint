@@ -4,6 +4,7 @@ import type { ModuleGraph } from '../ModuleGraph/ModuleGraph.ts'
 import * as Lint from '../Lint/Lint.ts'
 import * as LoadEslint from '../LoadEslint/LoadEslint.ts'
 import * as ModuleResolution from '../ModuleResolution/ModuleResolution.ts'
+import * as ModuleRuntime from '../ModuleRuntime/ModuleRuntime.ts'
 
 interface Dependencies {
   readonly loadEslintConfig: (
@@ -14,11 +15,21 @@ interface Dependencies {
     path: string,
     projectPath?: string,
   ) => Promise<ModuleGraph>
+  readonly reloadEslintConfig?: (
+    path: string,
+    filePath: string,
+  ) => Promise<ModuleGraph>
+  readonly reloadEslintModule?: (
+    path: string,
+    projectPath?: string,
+  ) => Promise<ModuleGraph>
 }
 
 const defaultDependencies: Dependencies = {
   loadEslintConfig: ModuleResolution.loadEslintConfig,
   loadEslintModule: ModuleResolution.loadEslintModule,
+  reloadEslintConfig: ModuleResolution.reloadEslintConfig,
+  reloadEslintModule: ModuleResolution.reloadEslintModule,
 }
 
 interface TraceDependencies {
@@ -76,32 +87,105 @@ const toErrorDetails = (error: unknown): ModuleResolution.ErrorDetails => {
   }
 }
 
-const configGraphs = new Map<string, Promise<ModuleGraph>>()
-const eslintGraphs = new Map<string, Promise<ModuleGraph>>()
+interface EvaluationCache {
+  readonly pending: Map<string, Promise<ModuleRuntime.EvaluatedModuleGraph>>
+  readonly results: Map<string, ModuleRuntime.EvaluatedModuleGraph>
+}
 
-const getOrLoadGraph = (
-  cache: Map<string, Promise<ModuleGraph>>,
+interface ProjectRuntime {
+  readonly configs: EvaluationCache
+  readonly eslint: EvaluationCache
+  readonly runtime: ModuleRuntime.ModuleRuntime
+}
+
+const projects = new Map<string, ProjectRuntime>()
+
+const createEvaluationCache = (): EvaluationCache => ({
+  pending: new Map(),
+  results: new Map(),
+})
+
+const createProjectRuntime = (): ProjectRuntime => ({
+  configs: createEvaluationCache(),
+  eslint: createEvaluationCache(),
+  runtime: ModuleRuntime.createModuleRuntime(),
+})
+
+const getProjectRuntime = (key: string): ProjectRuntime => {
+  let project = projects.get(key)
+  if (!project) {
+    project = createProjectRuntime()
+    projects.set(key, project)
+  }
+  return project
+}
+
+const getOrEvaluate = async (
+  cache: EvaluationCache,
   key: string,
   load: () => Promise<ModuleGraph>,
-): Promise<ModuleGraph> => {
-  let graph = cache.get(key)
-  if (!graph) {
-    graph = load()
-    cache.set(key, graph)
-    void graph.catch(() => {
-      if (cache.get(key) === graph) {
-        cache.delete(key)
-      }
-    })
+  runtime: ModuleRuntime.ModuleRuntime,
+): Promise<ModuleRuntime.EvaluatedModuleGraph> => {
+  const result = cache.results.get(key)
+  if (result) {
+    return result
   }
-  return graph
+  let pending = cache.pending.get(key)
+  if (pending) {
+    return pending
+  }
+  pending = (async () => runtime.evaluate(await load()))()
+  cache.pending.set(key, pending)
+  try {
+    const evaluated = await pending
+    if (cache.pending.get(key) === pending) {
+      cache.results.set(key, evaluated)
+    }
+    return evaluated
+  } finally {
+    if (cache.pending.get(key) === pending) {
+      cache.pending.delete(key)
+    }
+  }
 }
 
 export const clearCache = (): void => {
-  configGraphs.clear()
-  eslintGraphs.clear()
+  projects.clear()
   Lint.clearCache()
-  LoadEslint.clearCache()
+}
+
+const lintWithDependenciesAttempt = async (
+  text: string,
+  filePath: string,
+  configPath: string | undefined,
+  loadedSuppressions: LoadedSuppressions | undefined,
+  dependencies: Dependencies,
+  fresh: boolean,
+): Promise<LintResult[]> => {
+  const projectKey = configPath ?? filePath.slice(0, filePath.lastIndexOf('/'))
+  const project = getProjectRuntime(projectKey)
+  const configGraph = configPath
+    ? await getOrEvaluate(
+        project.configs,
+        filePath,
+        () =>
+          fresh && dependencies.reloadEslintConfig
+            ? dependencies.reloadEslintConfig(configPath, filePath)
+            : dependencies.loadEslintConfig(configPath, filePath),
+        project.runtime,
+      )
+    : undefined
+  const eslintGraph = await getOrEvaluate(
+    project.eslint,
+    'eslint',
+    () =>
+      fresh && dependencies.reloadEslintModule
+        ? dependencies.reloadEslintModule(filePath, configPath)
+        : dependencies.loadEslintModule(filePath, configPath),
+    project.runtime,
+  )
+  const eslint = LoadEslint.loadEslint(eslintGraph)
+  return Lint.lint(text, filePath, configGraph, eslint, loadedSuppressions)
 }
 
 export const lintWithDependencies = async (
@@ -111,17 +195,32 @@ export const lintWithDependencies = async (
   loadedSuppressions: LoadedSuppressions | undefined,
   dependencies: Dependencies,
 ): Promise<LintResult[]> => {
-  const configGraph = configPath
-    ? await getOrLoadGraph(configGraphs, `${configPath}\0${filePath}`, () =>
-        dependencies.loadEslintConfig(configPath, filePath),
-      )
-    : undefined
-  const eslintGraphKey = configPath ?? filePath
-  const eslintGraph = await getOrLoadGraph(eslintGraphs, eslintGraphKey, () =>
-    dependencies.loadEslintModule(filePath, configPath),
-  )
-  const eslint = LoadEslint.loadEslint(eslintGraph)
-  return Lint.lint(text, filePath, configGraph, eslint, loadedSuppressions)
+  try {
+    return await lintWithDependenciesAttempt(
+      text,
+      filePath,
+      configPath,
+      loadedSuppressions,
+      dependencies,
+      false,
+    )
+  } catch (error) {
+    if (!(error instanceof ModuleRuntime.ModuleRuntimeConflictError)) {
+      throw error
+    }
+    const projectKey =
+      configPath ?? filePath.slice(0, filePath.lastIndexOf('/'))
+    projects.delete(projectKey)
+    Lint.clearCache()
+    return lintWithDependenciesAttempt(
+      text,
+      filePath,
+      configPath,
+      loadedSuppressions,
+      dependencies,
+      true,
+    )
+  }
 }
 
 export const traceWithDependencies = async (
@@ -132,7 +231,9 @@ export const traceWithDependencies = async (
   dependencies: TraceDependencies,
 ): Promise<EslintPerformanceTrace> => {
   clearCache()
-  let configGraph: ModuleGraph | undefined
+  const runtime = ModuleRuntime.createModuleRuntime()
+  let configGraph: ModuleRuntime.EvaluatedModuleGraph | undefined
+  let configModuleEvaluationDuration = 0
   let configResolution: ModuleResolution.ResolutionStats | undefined
   if (configPath) {
     const resolution = await dependencies.loadEslintConfig(
@@ -152,7 +253,22 @@ export const traceWithDependencies = async (
         },
       }
     }
-    configGraph = resolution.graph
+    const configEvaluationStart = now()
+    try {
+      configGraph = runtime.evaluate(resolution.graph)
+      configModuleEvaluationDuration = now() - configEvaluationStart
+    } catch (error) {
+      return {
+        configEvaluation: {
+          durationMs: now() - configEvaluationStart,
+        },
+        configResolution,
+        error: {
+          details: toErrorDetails(error),
+          stage: 'configEvaluation',
+        },
+      }
+    }
   }
   const eslintResolutionResult = await dependencies.loadEslintModule(
     filePath,
@@ -175,7 +291,8 @@ export const traceWithDependencies = async (
   const eslintEvaluationStart = now()
   let eslint
   try {
-    eslint = LoadEslint.loadEslint(eslintResolutionResult.graph)
+    const evaluatedEslint = runtime.evaluate(eslintResolutionResult.graph)
+    eslint = LoadEslint.loadEslint(evaluatedEslint)
   } catch (error) {
     return {
       configResolution,
@@ -200,7 +317,10 @@ export const traceWithDependencies = async (
     loadedSuppressions,
   )
   return {
-    configEvaluation: lintTrace.configEvaluation,
+    configEvaluation: {
+      durationMs:
+        configModuleEvaluationDuration + lintTrace.configEvaluation.durationMs,
+    },
     configResolution,
     ...(lintTrace.error && { error: lintTrace.error }),
     eslintEvaluation,

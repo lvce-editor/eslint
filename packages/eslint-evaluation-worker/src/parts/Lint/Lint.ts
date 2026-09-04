@@ -1,9 +1,8 @@
 import type { ESLint, Linter } from 'eslint'
 import type { LoadedSuppressions } from '../ApplySuppressions/ApplySuppressions.ts'
 import type { EslintModule } from '../LoadEslint/LoadEslint.ts'
-import type { ModuleGraph } from '../ModuleGraph/ModuleGraph.ts'
+import type { EvaluatedModuleGraph } from '../ModuleRuntime/ModuleRuntime.ts'
 import * as ApplySuppressions from '../ApplySuppressions/ApplySuppressions.ts'
-import * as LoadModuleGraph from '../LoadModuleGraph/LoadModuleGraph.ts'
 import * as Path from '../Path/Path.ts'
 
 export type LintResult = {
@@ -189,18 +188,16 @@ const createContextFromLoadedConfig = (
 }
 
 const createContext = (
-  graph: ModuleGraph | undefined,
+  graph: EvaluatedModuleGraph | undefined,
   baseDirectory: string,
   eslint: EslintModule,
 ): LintContext => {
-  const loadedConfig = graph
-    ? LoadModuleGraph.loadModuleGraph(graph)
-    : defaultConfig
+  const loadedConfig = graph ? graph.exports : defaultConfig
   return createContextFromLoadedConfig(loadedConfig, baseDirectory, eslint)
 }
 
 const getContextMap = (
-  graph: ModuleGraph | undefined,
+  graph: EvaluatedModuleGraph | undefined,
   baseDirectory: string,
 ): WeakMap<EslintModule, LintContext> => {
   const contexts = graph ? graphContexts : defaultContexts
@@ -214,7 +211,7 @@ const getContextMap = (
 }
 
 const getContext = (
-  graph: ModuleGraph | undefined,
+  graph: EvaluatedModuleGraph | undefined,
   baseDirectory: string,
   eslint: EslintModule,
 ): LintContext => {
@@ -274,7 +271,7 @@ const toLintResults = (
 
 const getLintPaths = (
   filePath: string,
-  graph: ModuleGraph | undefined,
+  graph: EvaluatedModuleGraph | undefined,
 ): {
   readonly linterFilePath: string
   readonly nativeBaseDirectory: string
@@ -295,7 +292,7 @@ const getLintPaths = (
 export const lint = async (
   text: string,
   filePath: string,
-  graph: ModuleGraph | undefined,
+  graph: EvaluatedModuleGraph | undefined,
   eslint: EslintModule,
   loadedSuppressions?: LoadedSuppressions,
 ): Promise<LintResult[]> => {
@@ -309,7 +306,7 @@ export const lint = async (
 export const lintWithStats = async (
   text: string,
   filePath: string,
-  graph: ModuleGraph | undefined,
+  graph: EvaluatedModuleGraph | undefined,
   eslint: EslintModule,
   loadedSuppressions?: LoadedSuppressions,
 ): Promise<LintPerformanceTrace> => {
@@ -318,9 +315,7 @@ export const lintWithStats = async (
   const configEvaluationStart = now()
   let context: LintContext
   try {
-    const loadedConfig = graph
-      ? LoadModuleGraph.loadModuleGraph(graph)
-      : defaultConfig
+    const loadedConfig = graph ? graph.exports : defaultConfig
     context = createContextFromLoadedConfig(
       loadedConfig,
       nativeBaseDirectory,

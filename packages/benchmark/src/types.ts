@@ -1,6 +1,8 @@
 export interface BenchmarkOptions {
+  readonly extension: string
   readonly file: string
   readonly headed: boolean
+  readonly heap: boolean
   readonly output: string
   readonly reload: boolean
   readonly repo: string

@@ -17,6 +17,7 @@ export interface ModuleGraph {
   readonly entry: string
   readonly files: Readonly<Record<string, string>>
   readonly id: string
+  readonly lazyModules: Readonly<Record<string, string>>
   readonly modules: Readonly<Record<string, string>>
   readonly resolutions: Readonly<Record<string, string>>
 }
@@ -1221,6 +1222,7 @@ const restoreModuleGraph = async (
       entry: restored.entry,
       files: restored.files,
       id: `${cacheKey}:${graphIdState.next++}`,
+      lazyModules: restored.lazyModules,
       modules: restored.modules,
       resolutions: restored.resolutions,
     }
@@ -1264,6 +1266,7 @@ const loadModule = async (
   const entrySource = await FileSystem.readFile(entry)
   clearResolutionCaches()
   const files: Record<string, string> = {}
+  const lazyModules: Record<string, string> = {}
   const modules: Record<string, string> = {}
   const moduleSources: Record<string, string> = {}
   const resolutions: Record<string, string> = {}
@@ -1291,7 +1294,10 @@ const loadModule = async (
       )
     }
     const source =
-      knownSource ?? files[path] ?? (await FileSystem.readFile(path))
+      knownSource ??
+      lazyModules[path] ??
+      files[path] ??
+      (await FileSystem.readFile(path))
     totalBytes += source.length
     if (totalBytes > maxTotalBytes) {
       throw new Error('ESLint config exceeds the 64 MB module limit')
@@ -1304,7 +1310,7 @@ const loadModule = async (
       usesLazyLoadingRuleMap,
       usesReaddirSync,
     } = await transpile(path, source, scanCommonJs)
-    delete files[path]
+    delete lazyModules[path]
     moduleSources[path] = source
     modules[path] = transformed
     for (const specifier of fileSpecifiers) {
@@ -1312,7 +1318,6 @@ const loadModule = async (
         ? normalize(specifier)
         : join(dirname(path), specifier)
       if (
-        Object.hasOwn(modules, filePath) ||
         Object.hasOwn(files, filePath) ||
         !(await isFile(filePath, getResolutionRoot(filePath)))
       ) {
@@ -1347,7 +1352,7 @@ const loadModule = async (
     if (usesGlobSync || usesLazyLoadingRuleMap || usesReaddirSync) {
       const directory = dirname(path)
       if (scanCommonJs) {
-        await preloadVirtualFiles(directory, new Set())
+        await preloadVirtualFiles(directory, new Set(), lazyModules)
       } else if (usesGlobSync) {
         await visitDirectoryFiles(directory)
       } else {
@@ -1402,6 +1407,7 @@ const loadModule = async (
   const preloadVirtualFiles = async (
     directory: string,
     ignoredDirectories: ReadonlySet<string>,
+    target: Record<string, string> = files,
   ): Promise<void> => {
     const entries = await FileSystem.readDirWithFileTypes(directory)
     await Promise.all(
@@ -1409,7 +1415,7 @@ const loadModule = async (
         const path = join(directory, entry.name)
         if (entry.isDirectory) {
           if (!ignoredDirectories.has(entry.name)) {
-            await preloadVirtualFiles(path, ignoredDirectories)
+            await preloadVirtualFiles(path, ignoredDirectories, target)
           }
           return
         }
@@ -1418,12 +1424,15 @@ const loadModule = async (
           virtualFileExtensions.every(
             (extension) => !path.endsWith(extension),
           ) ||
-          Object.hasOwn(modules, path)
+          Object.hasOwn(modules, path) ||
+          Object.hasOwn(target, path)
         ) {
           return
         }
         if (
-          Object.keys(modules).length + Object.keys(files).length >=
+          Object.keys(modules).length +
+            Object.keys(lazyModules).length +
+            Object.keys(files).length >=
           maxModuleCount
         ) {
           throw new Error(
@@ -1435,8 +1444,8 @@ const loadModule = async (
         if (totalBytes > maxTotalBytes) {
           throw new Error('ESLint config exceeds the 64 MB file limit')
         }
-        files[path] = source
-        if (scanCommonJs && !path.endsWith('.json')) {
+        target[path] = source
+        if (target === lazyModules && scanCommonJs && !path.endsWith('.json')) {
           for (const specifier of getCommonJsSpecifiers(source)) {
             if (!specifier.startsWith('.') && !specifier.startsWith('/')) {
               preloadedDependencies.push({ path, specifier })
@@ -1593,7 +1602,11 @@ const loadModule = async (
     await preloadFile(normalizedVirtualFilePath)
     await preloadDocumentDependencies(normalizedVirtualFilePath)
   } else {
-    await preloadVirtualFiles(virtualFileDirectory, ignoredWorkspaceDirectories)
+    await preloadVirtualFiles(
+      virtualFileDirectory,
+      ignoredWorkspaceDirectories,
+      scanCommonJs ? lazyModules : files,
+    )
   }
   const typeScriptConfigPath = join(virtualFileDirectory, 'tsconfig.json')
   if (await isFile(typeScriptConfigPath, resolutionRoot)) {
@@ -1615,10 +1628,20 @@ const loadModule = async (
       .map(dirname),
   )
   for (const directory of typeScriptLibDirectories) {
-    await preloadVirtualFiles(directory, new Set())
+    const entries = await FileSystem.readDirWithFileTypes(directory)
+    await Promise.all(
+      entries.map(async (entry) => {
+        if (
+          entry.isFile &&
+          (entry.name === 'typesMap.json' || /^lib.*\.d\.ts$/.test(entry.name))
+        ) {
+          await preloadFile(join(directory, entry.name))
+        }
+      }),
+    )
   }
   const packageDirectories = new Set<string>()
-  for (const path of Object.keys(modules)) {
+  for (const path of [...Object.keys(modules), ...Object.keys(lazyModules)]) {
     const marker = '/node_modules/'
     const markerIndex = path.lastIndexOf(marker)
     if (markerIndex === -1) {
@@ -1653,6 +1676,7 @@ const loadModule = async (
     entry,
     files,
     id: `${cacheKey}:${graphIdState.next++}`,
+    lazyModules,
     modules,
     resolutions,
   }
@@ -1661,6 +1685,7 @@ const loadModule = async (
     await ModuleGraphCache.save(cacheKey, {
       entry,
       files,
+      lazyModules,
       modules,
       moduleSources,
       resolutions,
@@ -1684,6 +1709,7 @@ export function loadEslintConfig(
   modulePath: string,
   filePath?: string,
   captureStats = false,
+  bypassCache = false,
 ): Promise<ModuleGraph | ModuleResolutionTrace> {
   const load = (): Promise<ModuleGraph> =>
     loadModule(
@@ -1693,7 +1719,7 @@ export function loadEslintConfig(
       undefined,
       true,
       dirname(modulePath),
-      captureStats,
+      captureStats || bypassCache,
     )
   return captureStats ? captureResolution(load) : load()
 }
@@ -1751,8 +1777,9 @@ export function loadEslintModule(
   filePath: string,
   projectPath?: string,
   captureStats = false,
+  bypassCache = false,
 ): Promise<ModuleGraph | ModuleResolutionTrace> {
   const load = (): Promise<ModuleGraph> =>
-    loadEslintModuleGraph(filePath, projectPath, captureStats)
+    loadEslintModuleGraph(filePath, projectPath, captureStats || bypassCache)
   return captureStats ? captureResolution(load) : load()
 }
