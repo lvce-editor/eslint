@@ -1,4 +1,6 @@
 /* eslint-disable @typescript-eslint/no-implied-eval, sonarjs/code-eval -- project modules execute inside the isolated evaluation worker */
+import { Buffer } from 'buffer/index.js'
+import { gzip, ungzip } from 'pako'
 import type { ModuleGraph } from '../ModuleGraph/ModuleGraph.ts'
 import * as Path from '../Path/Path.ts'
 
@@ -6,11 +8,13 @@ type CommonJsModule = {
   exports: any
 }
 
+type VirtualFile = NonNullable<ModuleGraph['files']>[string]
+
 interface RuntimeState {
   readonly evaluatedGraphIds: Map<string, string>
   readonly evaluatedModules: Map<string, CommonJsModule>
   readonly executableFingerprints: Map<string, string>
-  readonly files: Record<string, string>
+  readonly files: Record<string, VirtualFile>
   readonly lazyModules: Record<string, string>
   readonly modules: Record<string, string>
   readonly resolutions: Record<string, string>
@@ -19,6 +23,7 @@ interface RuntimeState {
 }
 
 export interface EvaluatedModuleGraph {
+  readonly compatibilityRuntime: ModuleCompatibilityRuntime
   readonly entry: string
   readonly exports: any
   readonly id: string
@@ -39,6 +44,82 @@ type CommonJsRequire = {
   (specifier: string): any
   extensions: Readonly<Record<string, unknown>>
   resolve(specifier: string): string
+}
+
+interface DeferredRequest {
+  readonly arguments: readonly unknown[]
+  readonly key: string
+  readonly workerPath: string
+}
+
+export interface ModuleCompatibilityRuntime {
+  flush: () => Promise<void>
+  hasPending: () => boolean
+}
+
+const createDeferredSyncRuntime = (
+  loadWorker: (path: string) => void,
+): ModuleCompatibilityRuntime & { readonly adapter: object } => {
+  const callbacks = new Map<string, (...args: any[]) => Promise<unknown>>()
+  const pending = new Map<string, DeferredRequest>()
+  const results = new Map<string, unknown>()
+  let activeWorkerPath = ''
+  const rememberResult = (key: string, value: unknown): void => {
+    results.delete(key)
+    results.set(key, value)
+    while (results.size > 32) {
+      results.delete(results.keys().next().value!)
+    }
+  }
+  const adapter = {
+    createSyncFn:
+      (workerPath: string) =>
+      (...args: readonly unknown[]): unknown => {
+        const key = JSON.stringify([workerPath, args])
+        if (results.has(key)) {
+          const result = results.get(key)
+          results.delete(key)
+          results.set(key, result)
+          return result
+        }
+        pending.set(key, { arguments: args, key, workerPath })
+        return { errors: [], issues: [] }
+      },
+    runAsWorker: (callback: (...args: any[]) => Promise<unknown>): void => {
+      if (!activeWorkerPath) {
+        throw new Error('CSpell worker adapter was loaded outside a flush')
+      }
+      callbacks.set(activeWorkerPath, callback)
+    },
+  }
+  return {
+    adapter,
+    flush: async (): Promise<void> => {
+      while (pending.size > 0) {
+        const requests = pending.values().toArray()
+        pending.clear()
+        for (const request of requests) {
+          let callback = callbacks.get(request.workerPath)
+          if (!callback) {
+            activeWorkerPath = request.workerPath
+            try {
+              loadWorker(request.workerPath)
+            } finally {
+              activeWorkerPath = ''
+            }
+            callback = callbacks.get(request.workerPath)
+          }
+          if (!callback) {
+            throw new Error(
+              `CSpell worker did not register a handler: ${request.workerPath}`,
+            )
+          }
+          rememberResult(request.key, await callback(...request.arguments))
+        }
+      }
+    },
+    hasPending: (): boolean => pending.size > 0,
+  }
 }
 
 const clearImmediate = (handle: ReturnType<typeof setTimeout>): void => {
@@ -178,6 +259,31 @@ const workerThreadsUnavailable = (): never => {
   )
 }
 
+const writeUnavailable = (): never => {
+  throw new Error('The ESLint config virtual file system is read-only')
+}
+
+const toCallbackError = (error: unknown): Error => {
+  if (error instanceof Error) {
+    return error
+  }
+  return new Error(typeof error === 'string' ? error : 'Callback failed')
+}
+
+const promisify = (fn: (...args: any[]) => any) => {
+  return (...args: any[]): Promise<unknown> =>
+    new Promise((resolve, reject) => {
+      const callback = (error: unknown, value: unknown): void => {
+        if (error) {
+          reject(toCallbackError(error))
+        } else {
+          resolve(value)
+        }
+      }
+      fn(...args, callback)
+    })
+}
+
 const runInNewContext = (source: string): undefined => {
   const compiled = new Function(`'use strict';\n${source}`)
   Object.freeze(compiled)
@@ -297,6 +403,7 @@ const createVirtualProcess = (entry: string) => {
     argv: [] as readonly string[],
     cwd: (): string => Path.dirname(entry),
     env: Object.freeze({}),
+    execPath: '/usr/bin/node',
     features: Object.freeze({ typescript: false }),
     hrtime,
     memoryUsage: () => ({
@@ -317,15 +424,17 @@ const createVirtualProcess = (entry: string) => {
   }
 }
 
-const encodeVirtualFile = (content: string): Uint8Array => {
-  const bytes = new TextEncoder().encode(content)
-  Object.defineProperty(bytes, 'toString', {
-    value: (encoding = 'utf8', start = 0): string => {
-      const decoderEncoding = encoding === 'utf16le' ? 'utf-16le' : 'utf8'
-      return new TextDecoder(decoderEncoding).decode(bytes.subarray(start))
-    },
-  })
-  return bytes
+const decodeBase64 = (content: string): Uint8Array => {
+  const binary = atob(content)
+  return Uint8Array.from(binary, (character) => character.codePointAt(0)!)
+}
+
+const encodeVirtualFile = (
+  content: NonNullable<ModuleGraph['files']>[string],
+): Buffer => {
+  return typeof content === 'string'
+    ? Buffer.from(content, 'utf8')
+    : Buffer.from(decodeBase64(content.content))
 }
 
 const createBuiltins = (
@@ -335,23 +444,46 @@ const createBuiltins = (
   const path = createPathModule(Path.dirname(entry))
   path.posix = path
   path.win32 = path
-  const existsSync = (filePath: string): boolean =>
-    state.executableFingerprints.has(Path.normalize(filePath)) ||
-    Object.hasOwn(state.files, Path.normalize(filePath))
+  const existsSync = (filePath: string): boolean => {
+    const normalized = Path.normalize(filePath).replace(/\/$/, '')
+    return (
+      state.executableFingerprints.has(normalized) ||
+      Object.hasOwn(state.files, normalized) ||
+      state.virtualDirectories.has(normalized)
+    )
+  }
   const readFileSync = (
     filePath: string,
     encoding?: string,
-  ): string | Uint8Array => {
+  ): string | Buffer => {
     const normalized = Path.normalize(filePath)
     if (!Object.hasOwn(state.files, normalized)) {
       throw new Error(`Virtual file is not available: ${normalized}`)
     }
     const content = state.files[normalized]
-    return encoding ? content : encodeVirtualFile(content)
+    const buffer = encodeVirtualFile(content)
+    return encoding ? buffer.toString(encoding) : buffer
   }
-  const readdirSync = (directory: string): readonly string[] => {
+  const readdirSync = (
+    directory: string,
+    options?: string | { readonly withFileTypes?: boolean },
+  ): readonly unknown[] => {
     const normalized = Path.normalize(directory).replace(/\/$/, '')
-    return [...(state.virtualDirectoryEntries.get(normalized) ?? [])]
+    const entries = [...(state.virtualDirectoryEntries.get(normalized) ?? [])]
+    if (typeof options === 'object' && options.withFileTypes) {
+      return entries.map((name) => {
+        const path = Path.join(normalized, name)
+        return {
+          isDirectory: (): boolean => state.virtualDirectories.has(path),
+          isFile: (): boolean =>
+            state.executableFingerprints.has(path) ||
+            Object.hasOwn(state.files, path),
+          isSymbolicLink: (): boolean => false,
+          name,
+        }
+      })
+    }
+    return entries
   }
   const realpathSync = Object.assign(
     (path: string): string => Path.normalize(path),
@@ -365,9 +497,15 @@ const createBuiltins = (
       state.executableFingerprints.has(normalized) ||
       Object.hasOwn(state.files, normalized)
     const isDirectory = state.virtualDirectories.has(normalized)
+    const size = Object.hasOwn(state.files, normalized)
+      ? encodeVirtualFile(state.files[normalized]).length
+      : 0
     return {
       isDirectory: (): boolean => isDirectory,
       isFile: (): boolean => isFile,
+      isSymbolicLink: (): boolean => false,
+      mtimeMs: 0,
+      size,
     }
   }
   const fs = {
@@ -376,6 +514,67 @@ const createBuiltins = (
     readFileSync,
     realpathSync,
     statSync,
+    writeFile: writeUnavailable,
+    writeFileSync: writeUnavailable,
+  }
+  const fsPromises = {
+    readdir: async (
+      directory: string,
+      options?: string | { readonly withFileTypes?: boolean },
+    ) => readdirSync(directory, options),
+    readFile: async (filePath: string, encoding?: string) =>
+      readFileSync(filePath, encoding),
+    stat: async (filePath: string) => statSync(filePath),
+    writeFile: async (): Promise<never> => writeUnavailable(),
+  }
+  Object.assign(fs, { promises: fsPromises })
+  class AsyncLocalStorage<T = unknown> {
+    private store: T | undefined
+
+    disable(): void {
+      this.store = undefined
+    }
+
+    enterWith(store: T): void {
+      this.store = store
+    }
+
+    getStore(): T | undefined {
+      return this.store
+    }
+
+    run<R>(store: T, callback: (...args: any[]) => R, ...args: any[]): R {
+      const previous = this.store
+      this.store = store
+      try {
+        return callback(...args)
+      } finally {
+        this.store = previous
+      }
+    }
+  }
+  const gzipCallback = (
+    input: Uint8Array | string,
+    optionsOrCallback: object | ((error: Error | null, data: Buffer) => void),
+    optionalCallback?: (error: Error | null, data: Buffer) => void,
+  ): void => {
+    const callback =
+      typeof optionsOrCallback === 'function'
+        ? optionsOrCallback
+        : optionalCallback
+    if (!callback) {
+      throw new TypeError('The gzip callback is required')
+    }
+    queueMicrotask(() => {
+      try {
+        callback(null, Buffer.from(gzip(input)))
+      } catch (error) {
+        callback(
+          error instanceof Error ? error : new Error(String(error)),
+          Buffer.alloc(0),
+        )
+      }
+    })
   }
   class MessageChannel {
     readonly port1 = {}
@@ -460,6 +659,12 @@ const createBuiltins = (
   return {
     'node:assert': assertModule,
     'node:assert/strict': assertModule,
+    'node:async_hooks': {
+      AsyncLocalStorage,
+    },
+    'node:buffer': {
+      Buffer,
+    },
     'node:child_process': {
       execFileSync: childProcessesUnavailable,
       execSync: childProcessesUnavailable,
@@ -471,10 +676,7 @@ const createBuiltins = (
     },
     'node:events': events,
     'node:fs': fs,
-    'node:fs/promises': {
-      readFile: async (filePath: string, encoding?: string) =>
-        readFileSync(filePath, encoding),
-    },
+    'node:fs/promises': fsPromises,
     'node:inspector': {
       Session: undefined,
     },
@@ -520,10 +722,7 @@ const createBuiltins = (
     'node:util': {
       inspect: (value: unknown): string => JSON.stringify(value),
       isDeepStrictEqual,
-      promisify:
-        (fn: (...args: any[]) => any) =>
-        (...args: any[]) =>
-          Promise.resolve(fn(...args)),
+      promisify,
       types: utilTypes,
     },
     'node:util/types': utilTypes,
@@ -537,6 +736,10 @@ const createBuiltins = (
       receiveMessageOnPort: workerThreadsUnavailable,
       Worker,
       workerData: null,
+    },
+    'node:zlib': {
+      gunzipSync: (input: Uint8Array): Buffer => Buffer.from(ungzip(input)),
+      gzip: gzipCallback,
     },
   }
 }
@@ -578,13 +781,27 @@ const addVirtualPath = (state: RuntimeState, filePath: string): void => {
   }
 }
 
+const areVirtualFilesEqual = (a: VirtualFile, b: VirtualFile): boolean => {
+  if (typeof a === 'string') {
+    return a === b
+  }
+  return (
+    typeof b !== 'string' &&
+    a.encoding === b.encoding &&
+    a.content === b.content
+  )
+}
+
 const mergeFiles = (
   state: RuntimeState,
-  files: Readonly<Record<string, string>>,
+  files: Readonly<Record<string, VirtualFile>>,
 ): void => {
   for (const [rawPath, source] of Object.entries(files)) {
     const path = Path.normalize(rawPath)
-    if (Object.hasOwn(state.files, path) && state.files[path] !== source) {
+    const hasChanged =
+      Object.hasOwn(state.files, path) &&
+      !areVirtualFilesEqual(state.files[path], source)
+    if (hasChanged) {
       throw new ModuleRuntimeConflictError(
         `Virtual file changed while evaluating the project: ${path}`,
       )
@@ -630,9 +847,10 @@ const mergeResolutions = (
     const parent = Path.normalize(rawKey.slice(0, separatorIndex))
     const specifier = rawKey.slice(separatorIndex + 1)
     const key = resolutionKey(parent, specifier)
-    const resolved = rawResolved.startsWith('node:')
-      ? rawResolved
-      : Path.normalize(rawResolved)
+    const resolved =
+      rawResolved.startsWith('node:') || rawResolved.startsWith('compat:')
+        ? rawResolved
+        : Path.normalize(rawResolved)
     if (
       Object.hasOwn(state.resolutions, key) &&
       state.resolutions[key] !== resolved
@@ -672,10 +890,13 @@ const evaluateGraph = (
   const entry = mergeGraph(state, graph)
   const builtins = createBuiltins(state, entry)
   const resolvePreloadedPath = (specifier: string): string | undefined => {
-    if (!specifier.startsWith('/')) {
+    const path = specifier.startsWith('file:')
+      ? decodeURIComponent(new URL(specifier).pathname)
+      : specifier.split(/[?#]/, 1)[0]
+    if (!path.startsWith('/')) {
       return undefined
     }
-    const normalized = Path.normalize(specifier)
+    const normalized = Path.normalize(path)
     const candidates = [
       normalized,
       `${normalized}.js`,
@@ -703,7 +924,13 @@ const evaluateGraph = (
     return undefined
   }
 
+  const runtimeState: {
+    runtime?: ReturnType<typeof createDeferredSyncRuntime>
+  } = {}
   const load = (id: string): any => {
+    if (id === 'compat:cspell-deferred-sync') {
+      return runtimeState.runtime!.adapter
+    }
     const builtin = builtins[id]
     if (builtin) {
       return builtin
@@ -830,6 +1057,8 @@ const evaluateGraph = (
     }
   }
 
+  const compatibilityRuntime = createDeferredSyncRuntime((id) => load(id))
+  runtimeState.runtime = compatibilityRuntime
   const exports = getDefaultExport(load(entry))
   let id = state.evaluatedGraphIds.get(entry)
   if (!id) {
@@ -838,6 +1067,7 @@ const evaluateGraph = (
     state.evaluatedGraphIds.set(entry, id)
   }
   return {
+    compatibilityRuntime,
     entry,
     exports,
     id,

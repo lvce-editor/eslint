@@ -48,6 +48,7 @@ const commandMap = {
   'FileSystem.getFileHashes': FileSystem.getFileHashes,
   'FileSystem.readDirWithFileTypes': FileSystem.readDirWithFileTypes,
   'FileSystem.readFile': FileSystem.readFile,
+  'FileSystem.readFileAsBase64': FileSystem.readFileAsBase64,
   'FileSystem.stat': FileSystem.stat,
 }
 

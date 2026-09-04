@@ -3,6 +3,8 @@ import { beforeEach, expect, jest, test } from '@jest/globals'
 import * as FileSystem from '../src/parts/FileSystem/FileSystem.ts'
 import * as LoadEslintConfig from '../src/parts/ModuleResolution/ModuleResolution.ts'
 
+// cspell:ignore customword Ymlu
+
 const state: { files: Record<string, string> } = { files: {} }
 const cacheEntries = new Map<string, Response>()
 const getRequestKey = (key: string | Request): string =>
@@ -83,11 +85,55 @@ beforeEach(() => {
   FileSystem.state.api = {
     readDirWithFileTypes,
     readFile,
+    readFileAsBase64: async (uri) => btoa(await readFile(uri)),
     stat,
   }
   LoadEslintConfig.invalidateForFileChanges({
     changed: ['file:///eslint.config.js'],
   })
+})
+
+test('applies the cspell compatibility manifest and preloads dictionaries', async () => {
+  setFiles({
+    '/workspace/cspell.yaml': 'words:\n  - lvce',
+    '/workspace/eslint.config.js': `module.exports = require('@cspell/eslint-plugin')`,
+    '/workspace/node_modules/@cspell/cspell-bundled-dicts/cspell-default.config.js': `export default { import: ['@cspell/dict-test/cspell-ext.json'] }`,
+    '/workspace/node_modules/@cspell/cspell-bundled-dicts/cspell-default.json': `{"import":["./cspell-default.config.js"]}`,
+    '/workspace/node_modules/@cspell/cspell-bundled-dicts/package.json': `{"name":"@cspell/cspell-bundled-dicts","exports":{"./cspell-default.config.js":"./cspell-default.config.js","./cspell-default.json":"./cspell-default.json"},"dependencies":{"@cspell/dict-test":"1.0.0"}}`,
+    '/workspace/node_modules/@cspell/dict-test/cspell-ext.json': `{"dictionaryDefinitions":[{"name":"test","path":"./words.trie.gz"}]}`,
+    '/workspace/node_modules/@cspell/dict-test/package.json': `{"name":"@cspell/dict-test","exports":{".":"./cspell-ext.json","./cspell-ext.json":"./cspell-ext.json"}}`,
+    '/workspace/node_modules/@cspell/dict-test/words.trie.gz': 'binary',
+    '/workspace/node_modules/@cspell/eslint-plugin/dist/spellCheckAST/spellCheck.mjs': `export const spellCheck = async () => ({ issues: [], errors: [] })`,
+    '/workspace/node_modules/@cspell/eslint-plugin/dist/spellCheckAST/worker.mjs': `import { runAsWorker } from 'synckit'; runAsWorker(async () => (await import('./spellCheck.mjs')).spellCheck())`,
+    '/workspace/node_modules/@cspell/eslint-plugin/index.js': `module.exports = require('./dist/spellCheckAST/worker.mjs')`,
+    '/workspace/node_modules/@cspell/eslint-plugin/package.json': `{"name":"@cspell/eslint-plugin","version":"10.0.1","main":"index.js"}`,
+    '/workspace/words.txt': 'customword',
+  })
+
+  const graph = await LoadEslintConfig.loadEslintConfig(
+    '/workspace/eslint.config.js',
+  )
+  const worker =
+    '/workspace/node_modules/@cspell/eslint-plugin/dist/spellCheckAST/worker.mjs'
+  expect(graph.resolutions[`${worker}\0synckit`]).toBe(
+    'compat:cspell-deferred-sync',
+  )
+  expect(
+    Object.hasOwn(
+      graph.modules,
+      '/workspace/node_modules/@cspell/eslint-plugin/dist/spellCheckAST/spellCheck.mjs',
+    ),
+  ).toBe(true)
+  expect(
+    graph.files['/workspace/node_modules/@cspell/dict-test/words.trie.gz'],
+  ).toEqual({ content: 'YmluYXJ5', encoding: 'base64' })
+  expect(
+    graph.files[
+      '/workspace/node_modules/@cspell/cspell-bundled-dicts/cspell-default.json'
+    ],
+  ).toBe('{"import":["./cspell-default.config.js"]}')
+  expect(graph.files['/workspace/cspell.yaml']).toBe('words:\n  - lvce')
+  expect(graph.files['/workspace/words.txt']).toBe('customword')
 })
 
 test('transforms an esm default export to commonjs', async () => {

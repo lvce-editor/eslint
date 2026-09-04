@@ -12,7 +12,14 @@ The evaluation worker has no network access. Configs and plugins can only read
 files that were preloaded into the virtual module graph, and only a small
 allowlist of Node builtins is available. Process creation, sockets, worker
 threads, and access to the host filesystem are not exposed. Graphs are limited
-to 512 modules and 5 MB of source.
+to 8,192 modules and 64 MB of source and preloaded assets.
+
+`@cspell/eslint-plugin` 10.x is supported through a sandbox compatibility
+adapter. The adapter runs CSpell's asynchronous checker between two ESLint
+passes without exposing worker threads. Inline settings, conventional JSON,
+JSONC, and YAML CSpell configs, bundled dictionaries, and local dictionary files
+are supported. JavaScript CSpell configs and remote config or dictionary imports
+remain unavailable in the sandbox.
 
 Some Node-specific plugins may still be incompatible when they depend on native
 addons, unsupported Node builtins, dynamic module paths, or synchronous reads of

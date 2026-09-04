@@ -4,7 +4,7 @@ import * as FileSystem from '../FileSystem/FileSystem.ts'
 
 const CacheName = 'eslint-config-files-cache'
 const CacheKeyPrefix = 'https://eslint-config-files-cache.invalid/'
-const CompiledCacheName = 'eslint-compiled-module-graph-v1'
+const CompiledCacheName = 'eslint-compiled-module-graph-v2'
 const CompiledCacheKeyPrefix = 'https://eslint-compiled-module-graph.invalid/'
 const CacheVersion = 4
 const CompiledCacheVersion = 2
@@ -26,7 +26,7 @@ const toReadableCachePath = (cacheKey: string): string => {
 
 export interface ModuleGraphToCache {
   readonly entry: string
-  readonly files: Readonly<Record<string, string>>
+  readonly files: Readonly<Record<string, VirtualFile>>
   readonly lazyModules: Readonly<Record<string, string>>
   readonly modules: Readonly<Record<string, string>>
   readonly moduleSources: Readonly<Record<string, string>>
@@ -36,7 +36,7 @@ export interface ModuleGraphToCache {
 export interface RestoredModuleGraph {
   readonly entry: string
   readonly entrySource: string
-  readonly files: Readonly<Record<string, string>>
+  readonly files: Readonly<Record<string, VirtualFile>>
   readonly lazyModules: Readonly<Record<string, string>>
   readonly modules: Readonly<Record<string, string>>
   readonly resolutions: Readonly<Record<string, string>>
@@ -60,8 +60,15 @@ interface CachedModuleGraph {
   readonly version: number
 }
 
+interface EncodedVirtualFile {
+  readonly content: string
+  readonly encoding: 'base64'
+}
+
+type VirtualFile = EncodedVirtualFile | string
+
 interface CachedSource {
-  readonly source: string
+  readonly source: VirtualFile
   readonly uri: string
 }
 
@@ -118,8 +125,15 @@ const isCachedSource = (value: unknown): value is CachedSource => {
     return false
   }
   const candidate = value as Partial<CachedSource>
+  const { source } = candidate
+  const isEncoded =
+    Boolean(source) &&
+    typeof source === 'object' &&
+    (source as Partial<EncodedVirtualFile>).encoding === 'base64' &&
+    typeof (source as Partial<EncodedVirtualFile>).content === 'string'
   return (
-    typeof candidate.source === 'string' && typeof candidate.uri === 'string'
+    (typeof source === 'string' || isEncoded) &&
+    typeof candidate.uri === 'string'
   )
 }
 
@@ -205,10 +219,21 @@ const mapConcurrent = async <T, U>(
 
 const mapSources = (
   entries: readonly CachedSource[],
-): Readonly<Record<string, string>> => {
+): Readonly<Record<string, VirtualFile>> => {
   return Object.fromEntries(
     entries.map((entry) => [FileSystem.toPath(entry.uri), entry.source]),
   )
+}
+
+const decodeBase64 = (content: string): Uint8Array => {
+  const binary = atob(content)
+  return Uint8Array.from(binary, (character) => character.codePointAt(0)!)
+}
+
+const computeVirtualFileHash = (source: VirtualFile): Promise<string> => {
+  return typeof source === 'string'
+    ? ComputeTextHash.computeTextHash(source)
+    : ComputeTextHash.computeBytesHash(decodeBase64(source.content))
 }
 
 const hasValidCachedContent = async (
@@ -237,7 +262,7 @@ const hasValidCachedContent = async (
   const validModules = await mapConcurrent(cached.modules, async (module) => {
     const source = compiledModules.get(module.uri)
     return (
-      source !== undefined &&
+      typeof source === 'string' &&
       (await ComputeTextHash.computeTextHash(source)) === module.compiledHash
     )
   })
@@ -249,7 +274,7 @@ const hasValidCachedContent = async (
     async (module) => {
       const source = compiledLazyModules.get(module.uri)
       return (
-        source !== undefined &&
+        typeof source === 'string' &&
         (await ComputeTextHash.computeTextHash(source)) === module.hash
       )
     },
@@ -261,7 +286,7 @@ const hasValidCachedContent = async (
     const source = compiledFiles.get(file.uri)
     return (
       source !== undefined &&
-      (await ComputeTextHash.computeTextHash(source)) === file.hash
+      (await computeVirtualFileHash(source)) === file.hash
     )
   })
   return !validFiles.includes(false)
@@ -323,8 +348,10 @@ export const restore = async (
       entry: FileSystem.toPath(cached.entry),
       entrySource: compiled.entrySource,
       files: mapSources(compiled.files),
-      lazyModules: mapSources(compiled.lazyModules),
-      modules: mapSources(compiled.modules),
+      lazyModules: mapSources(compiled.lazyModules) as Readonly<
+        Record<string, string>
+      >,
+      modules: mapSources(compiled.modules) as Readonly<Record<string, string>>,
       resolutions: mapResolutionPaths(compiled.resolutions, FileSystem.toPath),
     }
   } catch {
@@ -353,10 +380,7 @@ export const save = async (
       return
     }
     const hashes = await FileSystem.getFileHashes(paths)
-    const contentHashes = await mapConcurrent(
-      contents,
-      ComputeTextHash.computeTextHash,
-    )
+    const contentHashes = await mapConcurrent(contents, computeVirtualFileHash)
     if (
       hashes.length !== paths.length ||
       hashes.some(

@@ -16,6 +16,9 @@ export const getFn = (
     case 'FileSystem.readFile':
       // @ts-ignore
       return FileSystem.readFile
+    case 'FileSystem.readFileAsBase64':
+      // @ts-ignore
+      return FileSystem.readFileAsBase64
     case 'FileSystem.stat':
       // @ts-ignore
       return FileSystem.stat

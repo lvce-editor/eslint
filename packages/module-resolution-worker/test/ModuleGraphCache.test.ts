@@ -2,6 +2,8 @@ import { beforeEach, expect, jest, test } from '@jest/globals'
 import * as FileSystem from '../src/parts/FileSystem/FileSystem.ts'
 import * as ModuleGraphCache from '../src/parts/ModuleGraphCache/ModuleGraphCache.ts'
 
+/* cspell:disable */
+
 const cacheEntries = new Map<string, Response>()
 const getRequestKey = (key: string | Request): string =>
   typeof key === 'string' ? key : key.url
@@ -21,6 +23,8 @@ const hashes: Readonly<Record<string, string>> = {
     '3a5910661bd79b2a6b41d83a225b9d8556bdaa62d1991417e199efb7121b1276',
   'file:///workspace/lazy.js':
     'c4d1f14387e26733af8c5c17379fce7cf38440bc0bff2f5493aec14bf46cfd80',
+  'file:///workspace/words.txt.gz':
+    'f901eda57fd86d4239806fd4b76f64036c1c20711267a7bc776ab2aa45069b2a',
 }
 const getFileHashes = jest.fn(async (uris: readonly string[]) =>
   uris.map((uri) => hashes[uri] ?? null),
@@ -167,6 +171,34 @@ test('restores a compiled graph after validating every hash in one request', asy
     'file:///workspace/data.json',
   ])
   expect(match).toHaveBeenCalledTimes(2)
+})
+
+test('round-trips binary virtual files', async () => {
+  const binaryFile = {
+    content: 'H4sIAAAAAAAAA8tIzcnJBwCGphA2BQAAAA==',
+    encoding: 'base64' as const,
+  }
+  await ModuleGraphCache.save('module:file:///workspace/eslint.config.js', {
+    entry: '/workspace/eslint.config.js',
+    files: { '/workspace/words.txt.gz': binaryFile },
+    lazyModules: {},
+    modules: { '/workspace/eslint.config.js': 'module.exports = []' },
+    moduleSources: {
+      '/workspace/eslint.config.js': 'module.exports = []',
+    },
+    resolutions: {},
+  })
+
+  await expect(
+    ModuleGraphCache.restore('module:file:///workspace/eslint.config.js'),
+  ).resolves.toEqual({
+    entry: '/workspace/eslint.config.js',
+    entrySource: 'module.exports = []',
+    files: { '/workspace/words.txt.gz': binaryFile },
+    lazyModules: {},
+    modules: { '/workspace/eslint.config.js': 'module.exports = []' },
+    resolutions: {},
+  })
 })
 
 test('restores compiled modules and files from batched cache records', async () => {

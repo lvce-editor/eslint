@@ -1,6 +1,6 @@
 import type { Test } from '@lvce-editor/test-with-playwright'
 
-export const name = 'eslint.plugin-cspell-disabled'
+export const name = 'eslint.plugin-cspell'
 
 export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
   const workspacePath = decodeURIComponent(
@@ -19,7 +19,10 @@ export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
     uri,
   })) as readonly { readonly source: string; readonly type: string }[]
   const actual = diagnostics.map(({ source, type }) => ({ source, type }))
-  const expected = [{ source: 'no-debugger', type: 'error' }]
+  const expected = [
+    { source: '@cspell/spellchecker', type: 'error' },
+    { source: 'no-debugger', type: 'error' },
+  ]
   if (JSON.stringify(actual) !== JSON.stringify(expected)) {
     throw new Error(`Unexpected diagnostics: ${JSON.stringify(diagnostics)}`)
   }

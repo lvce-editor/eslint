@@ -3,6 +3,7 @@ import * as ComputeTextHash from '../ComputeTextHash/ComputeTextHash.ts'
 import * as FileSystem from '../FileSystem/FileSystem.ts'
 import * as ModuleAnalysisCache from '../ModuleAnalysisCache/ModuleAnalysisCache.ts'
 import * as ModuleGraphCache from '../ModuleGraphCache/ModuleGraphCache.ts'
+import packageCompatibility from './packageCompatibility.json' with { type: 'json' }
 
 export interface FileChanges {
   readonly changed?: readonly string[]
@@ -15,12 +16,19 @@ const suppressionsFileName = 'eslint-suppressions.json'
 
 export interface ModuleGraph {
   readonly entry: string
-  readonly files: Readonly<Record<string, string>>
+  readonly files: Readonly<Record<string, VirtualFile>>
   readonly id: string
   readonly lazyModules: Readonly<Record<string, string>>
   readonly modules: Readonly<Record<string, string>>
   readonly resolutions: Readonly<Record<string, string>>
 }
+
+interface EncodedVirtualFile {
+  readonly content: string
+  readonly encoding: 'base64'
+}
+
+type VirtualFile = EncodedVirtualFile | string
 
 interface ErrorDetails {
   readonly code?: string | number
@@ -45,16 +53,32 @@ export interface ModuleResolutionTrace {
 
 interface PackageJson {
   readonly browser?: Readonly<Record<string, string | false>> | string
+  readonly dependencies?: Readonly<Record<string, string>>
   readonly exports?: Record<string, unknown> | string
   readonly main?: string
   readonly module?: string
+  readonly name?: string
+  readonly version?: string
 }
+
+interface CompatibilityRule {
+  readonly additionalDependencies: Readonly<Record<string, readonly string[]>>
+  readonly assetPackage: string
+  readonly assetPackageDependencyPattern: string
+  readonly majorVersions: readonly number[]
+  readonly moduleSubstitutions: Readonly<Record<string, string>>
+  readonly package: string
+}
+
+const compatibilityRules = packageCompatibility as readonly CompatibilityRule[]
 
 type FileType = 'directory' | 'file' | 'missing'
 
 const builtins = new Set([
   'assert',
   'assert/strict',
+  'async_hooks',
+  'buffer',
   'child_process',
   'crypto',
   'events',
@@ -76,6 +100,7 @@ const builtins = new Set([
   'util/types',
   'vm',
   'worker_threads',
+  'zlib',
 ])
 const extensions = ['', '.js', '.cjs', '.mjs', '.json', '.ts', '.tsx']
 const virtualFileExtensions = [
@@ -87,6 +112,15 @@ const virtualFileExtensions = [
   '.ts',
   '.tsx',
 ]
+const cspellVirtualFileExtensions = [
+  '.json',
+  '.jsonc',
+  '.trie',
+  '.txt',
+  '.yaml',
+  '.yml',
+]
+const cspellBinaryFileExtensions = ['.gz', '.trie']
 const ignoredWorkspaceDirectories = new Set([
   '.git',
   '.tmp',
@@ -176,7 +210,9 @@ const isVirtualWorkspaceFile = (path: string, entry: string): boolean => {
   const pathParts = relativePath.split('/')
   return (
     pathParts.every((part) => !ignoredWorkspaceDirectories.has(part)) &&
-    virtualFileExtensions.some((extension) => path.endsWith(extension))
+    [...virtualFileExtensions, ...cspellVirtualFileExtensions, '.gz'].some(
+      (extension) => path.endsWith(extension),
+    )
   )
 }
 
@@ -454,6 +490,41 @@ const readPackageJson = async (
   })()
   packageJsonCache.set(cacheKey, result)
   return result
+}
+
+interface MatchedCompatibility {
+  readonly packageDirectory: string
+  readonly relativePath: string
+  readonly rule: CompatibilityRule
+}
+
+const matchCompatibility = async (
+  path: string,
+  root?: string,
+): Promise<MatchedCompatibility | undefined> => {
+  for (const rule of compatibilityRules) {
+    const marker = `/node_modules/${rule.package}/`
+    const markerIndex = path.lastIndexOf(marker)
+    if (markerIndex === -1) {
+      continue
+    }
+    const packageDirectory = path.slice(0, markerIndex + marker.length - 1)
+    const manifest = await readPackageJson(packageDirectory, root)
+    const major = Number(manifest?.version?.split('.', 1)[0])
+    if (
+      manifest?.name !== rule.package ||
+      !Number.isSafeInteger(major) ||
+      !rule.majorVersions.includes(major)
+    ) {
+      continue
+    }
+    return {
+      packageDirectory,
+      relativePath: path.slice(packageDirectory.length + 1),
+      rule,
+    }
+  }
+  return undefined
 }
 
 const selectExport = (value: any): string | undefined => {
@@ -1138,6 +1209,7 @@ const transpileUncached = (
           ] as const)
         : []),
       transformDynamicModuleLoading,
+      'transform-export-namespace-from',
       'transform-modules-commonjs',
       preserveCommonJsDefaultImport,
     ],
@@ -1265,7 +1337,7 @@ const loadModule = async (
   }
   const entrySource = await FileSystem.readFile(entry)
   clearResolutionCaches()
-  const files: Record<string, string> = {}
+  const files: Record<string, VirtualFile> = {}
   const lazyModules: Record<string, string> = {}
   const modules: Record<string, string> = {}
   const moduleSources: Record<string, string> = {}
@@ -1275,6 +1347,7 @@ const loadModule = async (
     specifier: string
   }> = []
   const pendingVisits = new Map<string, Promise<void>>()
+  const matchedCompatibility = new Map<string, MatchedCompatibility>()
   let totalBytes = 0
   const getResolutionRoot = (path: string): string | undefined =>
     resolutionRoot && isWithinDirectory(resolutionRoot, normalize(path))
@@ -1293,24 +1366,44 @@ const loadModule = async (
         `ESLint config exceeds the ${maxModuleCount} module limit`,
       )
     }
+    const preloadedSource = files[path]
+    if (preloadedSource && typeof preloadedSource !== 'string') {
+      throw new Error(`Cannot evaluate binary module: ${path}`)
+    }
     const source =
       knownSource ??
       lazyModules[path] ??
-      files[path] ??
+      preloadedSource ??
       (await FileSystem.readFile(path))
     totalBytes += source.length
     if (totalBytes > maxTotalBytes) {
       throw new Error('ESLint config exceeds the 64 MB module limit')
     }
+    const analysis = await transpile(path, source, scanCommonJs)
     const {
-      dependencies,
       fileSpecifiers,
       source: transformed,
       usesGlobSync,
       usesLazyLoadingRuleMap,
       usesReaddirSync,
-    } = await transpile(path, source, scanCommonJs)
+    } = analysis
     delete lazyModules[path]
+    const compatibility = await matchCompatibility(
+      path,
+      getResolutionRoot(path),
+    )
+    if (compatibility) {
+      matchedCompatibility.set(compatibility.packageDirectory, compatibility)
+    }
+    const dependencies = [
+      ...analysis.dependencies,
+      ...(
+        compatibility?.rule.additionalDependencies[
+          compatibility.relativePath
+        ] ?? []
+      ).map((specifier) => ({ optional: false, specifier })),
+    ]
+    delete files[path]
     moduleSources[path] = source
     modules[path] = transformed
     for (const specifier of fileSpecifiers) {
@@ -1332,6 +1425,11 @@ const loadModule = async (
     }
     await Promise.all(
       dependencies.map(async ({ optional, specifier }) => {
+        const adapter = compatibility?.rule.moduleSubstitutions[specifier]
+        if (adapter) {
+          resolutions[`${path}\0${specifier}`] = `compat:${adapter}`
+          return
+        }
         const resolved = await resolveModule(
           path,
           specifier,
@@ -1407,7 +1505,7 @@ const loadModule = async (
   const preloadVirtualFiles = async (
     directory: string,
     ignoredDirectories: ReadonlySet<string>,
-    target: Record<string, string> = files,
+    target: Record<string, VirtualFile> = files,
   ): Promise<void> => {
     const entries = await FileSystem.readDirWithFileTypes(directory)
     await Promise.all(
@@ -1456,6 +1554,122 @@ const loadModule = async (
     )
   }
 
+  const preloadCspellFile = async (path: string): Promise<void> => {
+    if (Object.hasOwn(lazyModules, path) || Object.hasOwn(files, path)) {
+      return
+    }
+    const isJavaScriptModule = ['.cjs', '.js', '.mjs'].some((extension) =>
+      path.endsWith(extension),
+    )
+    if (isJavaScriptModule && Object.hasOwn(modules, path)) {
+      return
+    }
+    if (
+      Object.keys(modules).length +
+        Object.keys(lazyModules).length +
+        Object.keys(files).length >=
+      maxModuleCount
+    ) {
+      throw new Error(`ESLint config exceeds the ${maxModuleCount} file limit`)
+    }
+    if (isJavaScriptModule) {
+      await visit(path)
+      return
+    }
+    if (
+      cspellBinaryFileExtensions.some((extension) => path.endsWith(extension))
+    ) {
+      const content = await FileSystem.readFileAsBase64(path)
+      const byteLength = Math.floor((content.length * 3) / 4)
+      totalBytes += byteLength
+      files[path] = { content, encoding: 'base64' }
+    } else {
+      const content = await FileSystem.readFile(path)
+      totalBytes += content.length
+      files[path] = content
+    }
+    if (totalBytes > maxTotalBytes) {
+      throw new Error('ESLint config exceeds the 64 MB file limit')
+    }
+  }
+
+  const preloadCspellDirectory = async (
+    directory: string,
+    ignoredDirectories: ReadonlySet<string>,
+    includeAllFiles: boolean,
+  ): Promise<void> => {
+    const entries = await FileSystem.readDirWithFileTypes(directory)
+    for (const entry of entries) {
+      const path = join(directory, entry.name)
+      if (entry.isDirectory) {
+        if (!ignoredDirectories.has(entry.name)) {
+          await preloadCspellDirectory(
+            path,
+            ignoredDirectories,
+            includeAllFiles,
+          )
+        }
+      } else if (
+        entry.isFile &&
+        (includeAllFiles ||
+          entry.name === 'package.json' ||
+          [...cspellVirtualFileExtensions, '.gz'].some((extension) =>
+            entry.name.endsWith(extension),
+          ))
+      ) {
+        await preloadCspellFile(path)
+      }
+    }
+  }
+
+  const preloadCspellAssets = async (
+    compatibility: MatchedCompatibility,
+    workspaceDirectory: string,
+  ): Promise<void> => {
+    const nodeModulesMarker = '/node_modules/'
+    const nodeModulesIndex =
+      compatibility.packageDirectory.lastIndexOf(nodeModulesMarker)
+    const nodeModulesDirectory = compatibility.packageDirectory.slice(
+      0,
+      nodeModulesIndex + nodeModulesMarker.length - 1,
+    )
+    const assetDirectory = join(
+      nodeModulesDirectory,
+      compatibility.rule.assetPackage,
+    )
+    const manifest = await readPackageJson(assetDirectory, resolutionRoot)
+    const packageNames = Object.keys(manifest?.dependencies ?? {}).filter(
+      (name) => {
+        const prefix = compatibility.rule.assetPackageDependencyPattern.replace(
+          /\*$/,
+          '',
+        )
+        return name.startsWith(prefix)
+      },
+    )
+    await preloadCspellDirectory(assetDirectory, new Set(), true)
+    const defaultConfigPath = join(assetDirectory, 'cspell-default.config.js')
+    for (const packageName of packageNames) {
+      const packageDirectory = join(nodeModulesDirectory, packageName)
+      if (!(await isDirectory(packageDirectory, resolutionRoot))) {
+        continue
+      }
+      await preloadCspellDirectory(packageDirectory, new Set(), true)
+      const configSpecifier = `${packageName}/cspell-ext.json`
+      const configPath = join(packageDirectory, 'cspell-ext.json')
+      if (await isFile(configPath, resolutionRoot)) {
+        resolutions[`${defaultConfigPath}\0${packageName}`] = configPath
+        resolutions[`${defaultConfigPath}\0${packageName}/cspell`] = configPath
+        resolutions[`${defaultConfigPath}\0${configSpecifier}`] = configPath
+      }
+    }
+    await preloadCspellDirectory(
+      workspaceDirectory,
+      ignoredWorkspaceDirectories,
+      false,
+    )
+  }
+
   const preloadFile = async (path: string): Promise<void> => {
     if (
       Object.hasOwn(modules, path) ||
@@ -1484,7 +1698,7 @@ const loadModule = async (
       '.ts',
       '.tsx',
     ].some((extension) => path.endsWith(extension))
-    if (!source || !isJavaScriptLike) {
+    if (typeof source !== 'string' || !isJavaScriptLike) {
       return
     }
     const { dependencies } = await analyzeDocumentDependencies(path, source)
@@ -1538,7 +1752,7 @@ const loadModule = async (
     preloadedTypeScriptConfigs.add(configPath)
     await preloadFile(configPath)
     const source = files[configPath]
-    if (!source) {
+    if (typeof source !== 'string') {
       return
     }
     const configDirectory = dirname(configPath)
@@ -1594,6 +1808,9 @@ const loadModule = async (
 
   await visit(entry, entrySource)
   const workspaceDirectory = dirname(entry)
+  for (const compatibility of matchedCompatibility.values()) {
+    await preloadCspellAssets(compatibility, workspaceDirectory)
+  }
   const virtualFileDirectory = virtualFilePath
     ? await findTypeScriptProjectDirectory(workspaceDirectory, virtualFilePath)
     : workspaceDirectory
