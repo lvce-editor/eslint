@@ -32,6 +32,7 @@ interface MutableOptions {
   file: string
   headed: boolean
   heap: boolean
+  memoryBudget: string
   output: string
   reload: boolean
   repo: string
@@ -60,6 +61,12 @@ const parseArgument = (
     case '--heap':
       options.heap = true
       return index + 1
+    case '--memory-budget':
+      options.memoryBudget = resolve(
+        invocationDirectory,
+        takeValue(argv, index, argument),
+      )
+      return index + 2
     case '--output':
       options.output = resolve(
         invocationDirectory,
@@ -89,6 +96,7 @@ export const parseArgs = (argv: readonly string[]): BenchmarkOptions => {
     file: '',
     headed: false,
     heap: false,
+    memoryBudget: '',
     output: resolve(invocationDirectory, '.tmp', 'benchmark-results'),
     reload: false,
     repo: '',
@@ -104,6 +112,9 @@ export const parseArgs = (argv: readonly string[]): BenchmarkOptions => {
   }
   if (!options.file) {
     throw new Error('Missing required option --file')
+  }
+  if (options.memoryBudget && !options.heap) {
+    throw new Error('--memory-budget requires --heap')
   }
 
   return options
@@ -121,4 +132,5 @@ Options:
   --timeout <ms>        Editor and lint timeout (default: 120000)
   --headed              Show the Chromium window
   --heap                Force GC and capture the ESLint evaluation-worker heap
+  --memory-budget <path>  Fail when the heap summary exceeds a JSON memory budget
 `

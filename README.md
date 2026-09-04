@@ -69,3 +69,9 @@ module-graph source, evaluator-script source, TypeScript localization catalogs,
 and duplicate large scripts. Use `--extension <path>` to run the same cold or
 warm benchmark against another built ESLint extension for before/after
 comparisons.
+
+Pass `--memory-budget <path>` together with `--heap` to fail when any scalar
+heap-summary category exceeds the limits in the JSON file. Pull-request and
+main-branch CI run the cold `problems-view` benchmark against the versioned
+limits in `packages/benchmark/memory-budget.json`. The workload is pinned to a
+specific repository commit so only ESLint or runtime changes move the result.
