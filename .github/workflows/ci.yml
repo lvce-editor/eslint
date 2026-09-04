@@ -56,6 +56,45 @@ jobs:
         run: node scripts/build-static.js
         env:
           PATH_PREFIX: auto
+      - name: Check out memory benchmark workspace
+        if: matrix.os == 'ubuntu-24.04'
+        uses: actions/checkout@v4
+        with:
+          repository: lvce-editor/problems-view
+          ref: 9072ff883dde4b921be696578f70182ef1d8ec16
+          path: benchmark-workspace/problems-view
+      - name: Install memory benchmark workspace dependencies
+        if: matrix.os == 'ubuntu-24.04'
+        working-directory: benchmark-workspace/problems-view
+        run: npm ci
+      - name: Run memory benchmark
+        if: matrix.os == 'ubuntu-24.04'
+        run: >-
+          npm run benchmark --
+          --repo "$GITHUB_WORKSPACE/benchmark-workspace/problems-view"
+          --file packages/problems-view/src/problemsViewWorkerMain.ts
+          --heap
+          --memory-budget packages/benchmark/memory-budget.json
+          --output benchmark-results/memory
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: 0
+      - name: Upload memory benchmark summary
+        if: always() && matrix.os == 'ubuntu-24.04'
+        uses: actions/upload-artifact@v4
+        with:
+          name: eslint-memory-summary
+          path: |
+            benchmark-results/memory/benchmark.json
+            benchmark-results/memory/heap-summary.json
+            packages/benchmark/memory-budget.json
+          if-no-files-found: warn
+      - name: Upload failed memory benchmark heap
+        if: failure() && matrix.os == 'ubuntu-24.04'
+        uses: actions/upload-artifact@v4
+        with:
+          name: eslint-memory-heap-failure
+          path: benchmark-results/memory/heap.heapsnapshot
+          if-no-files-found: ignore
       - name: Upload artifact
         if: matrix.os == 'ubuntu-24.04'
         uses: actions/upload-pages-artifact@v5

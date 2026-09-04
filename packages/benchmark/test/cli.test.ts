@@ -18,6 +18,7 @@ await test('parses required benchmark options', () => {
       file: 'src/file.ts',
       headed: false,
       heap: false,
+      memoryBudget: '',
       output: resolve(invocationDirectory, '.tmp', 'benchmark-results'),
       reload: false,
       repo: 'https://example.com/repo.git',
@@ -37,6 +38,8 @@ await test('parses optional benchmark options', () => {
       '../eslint-extension',
       '--headed',
       '--heap',
+      '--memory-budget',
+      'memory-budget.json',
       '--output',
       'results',
       '--reload',
@@ -48,6 +51,7 @@ await test('parses optional benchmark options', () => {
       file: 'src/file.ts',
       headed: true,
       heap: true,
+      memoryBudget: resolve(invocationDirectory, 'memory-budget.json'),
       output: resolve(invocationDirectory, 'results'),
       reload: true,
       repo: '/tmp/repo',
@@ -68,5 +72,17 @@ await test('rejects invalid options', () => {
     () =>
       parseArgs(['--repo', '/tmp/repo', '--file', 'file.ts', '--timeout', '0']),
     /positive integer/,
+  )
+  assert.throws(
+    () =>
+      parseArgs([
+        '--repo',
+        '/tmp/repo',
+        '--file',
+        'file.ts',
+        '--memory-budget',
+        'budget.json',
+      ]),
+    /requires --heap/,
   )
 })

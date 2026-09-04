@@ -5,7 +5,8 @@ import { chromium, type Browser, type CDPSession } from 'playwright'
 import type { BenchmarkOptions, RunningServer } from './types.ts'
 import { createBenchmarkTest } from './benchmarkTest.ts'
 import { startCpuProfile, stopCpuProfile } from './cpuProfile.ts'
-import { captureHeapSnapshot } from './heapSnapshot.ts'
+import { captureHeapSnapshot, type HeapSummary } from './heapSnapshot.ts'
+import { assertMemoryBudget, loadMemoryBudget } from './memoryBudget.ts'
 import { prepareRepository, resolveBenchmarkFile } from './repository.ts'
 import { startServer } from './server.ts'
 
@@ -21,6 +22,18 @@ const ignoreError = async (
   } catch {
     // Best-effort cleanup must not hide the benchmark result.
   }
+}
+
+const validateMemoryBudget = async (
+  heapSummary: HeapSummary | undefined,
+  memoryBudgetPath: string,
+): Promise<void> => {
+  if (!heapSummary || !memoryBudgetPath) {
+    return
+  }
+  const memoryBudget = await loadMemoryBudget(memoryBudgetPath)
+  assertMemoryBudget(heapSummary, memoryBudget)
+  process.stdout.write('ESLint memory budget passed\n')
 }
 
 export const runBenchmark = async (
@@ -148,6 +161,7 @@ export const runBenchmark = async (
       join(output, 'benchmark.json'),
       `${JSON.stringify(metadata, undefined, 2)}\n`,
     )
+    await validateMemoryBudget(heapSummary, options.memoryBudget)
     process.stdout.write(
       `ESLint benchmark completed in ${(durationMs / 1000).toFixed(2)}s\n`,
     )
