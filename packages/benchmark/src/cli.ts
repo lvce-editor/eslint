@@ -28,8 +28,10 @@ const parseTimeout = (value: string): number => {
 }
 
 interface MutableOptions {
+  extension: string
   file: string
   headed: boolean
+  heap: boolean
   output: string
   reload: boolean
   repo: string
@@ -43,11 +45,20 @@ const parseArgument = (
 ): number => {
   const argument = argv[index]
   switch (argument) {
+    case '--extension':
+      options.extension = resolve(
+        invocationDirectory,
+        takeValue(argv, index, argument),
+      )
+      return index + 2
     case '--file':
       options.file = takeValue(argv, index, argument)
       return index + 2
     case '--headed':
       options.headed = true
+      return index + 1
+    case '--heap':
+      options.heap = true
       return index + 1
     case '--output':
       options.output = resolve(
@@ -74,8 +85,10 @@ const parseArgument = (
 
 export const parseArgs = (argv: readonly string[]): BenchmarkOptions => {
   const options: MutableOptions = {
+    extension: '',
     file: '',
     headed: false,
+    heap: false,
     output: resolve(invocationDirectory, '.tmp', 'benchmark-results'),
     reload: false,
     repo: '',
@@ -100,10 +113,12 @@ const getHelpText =
   (): string => `Usage: npm run benchmark -- --repo <repository> --file <relative-path> [options]
 
 Options:
+  --extension <path>     Built ESLint extension to measure (default: this checkout)
   --repo <repository>   Git URL to clone or local repository path
   --file <path>         File to open, relative to the repository root
   --output <directory>  Results directory (default: .tmp/benchmark-results)
   --reload              Warm caches, then profile a renderer reload
   --timeout <ms>        Editor and lint timeout (default: 120000)
   --headed              Show the Chromium window
+  --heap                Force GC and capture the ESLint evaluation-worker heap
 `

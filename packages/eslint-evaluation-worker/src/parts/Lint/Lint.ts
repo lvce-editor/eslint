@@ -1,9 +1,11 @@
 import type { ESLint, Linter } from 'eslint'
 import type { LoadedSuppressions } from '../ApplySuppressions/ApplySuppressions.ts'
 import type { EslintModule } from '../LoadEslint/LoadEslint.ts'
-import type { ModuleGraph } from '../ModuleGraph/ModuleGraph.ts'
+import type {
+  EvaluatedModuleGraph,
+  ModuleCompatibilityRuntime,
+} from '../ModuleRuntime/ModuleRuntime.ts'
 import * as ApplySuppressions from '../ApplySuppressions/ApplySuppressions.ts'
-import * as LoadModuleGraph from '../LoadModuleGraph/LoadModuleGraph.ts'
 import * as Path from '../Path/Path.ts'
 
 export type LintResult = {
@@ -47,11 +49,14 @@ type LinterConstructor = typeof Linter
 type LintMessage = Linter.LintMessage
 
 type ModernLintContext = {
+  readonly compatibilityRuntime?: ModuleCompatibilityRuntime
+  readonly config: any[]
   readonly engine: InstanceType<EslintConstructor>
   readonly type: 'modern'
 }
 
 type LegacyLintContext = {
+  readonly compatibilityRuntime?: ModuleCompatibilityRuntime
   readonly config: any[]
   readonly engine: InstanceType<LinterConstructor>
   readonly type: 'legacy'
@@ -164,6 +169,7 @@ const createContextFromLoadedConfig = (
   loadedConfig: any,
   baseDirectory: string,
   eslint: EslintModule,
+  compatibilityRuntime?: ModuleCompatibilityRuntime,
 ): LintContext => {
   const config = Array.isArray(loadedConfig) ? loadedConfig : [loadedConfig]
   if (
@@ -171,6 +177,8 @@ const createContextFromLoadedConfig = (
     getMajorVersion(eslint.ESLint) >= 9
   ) {
     return {
+      compatibilityRuntime,
+      config,
       engine: createModernEngine(eslint.ESLint, baseDirectory, config),
       type: 'modern',
     }
@@ -179,6 +187,7 @@ const createContextFromLoadedConfig = (
     throw new TypeError('Project ESLint module does not export Linter')
   }
   return {
+    compatibilityRuntime,
     config,
     engine: new eslint.Linter({
       configType: 'flat',
@@ -189,18 +198,21 @@ const createContextFromLoadedConfig = (
 }
 
 const createContext = (
-  graph: ModuleGraph | undefined,
+  graph: EvaluatedModuleGraph | undefined,
   baseDirectory: string,
   eslint: EslintModule,
 ): LintContext => {
-  const loadedConfig = graph
-    ? LoadModuleGraph.loadModuleGraph(graph)
-    : defaultConfig
-  return createContextFromLoadedConfig(loadedConfig, baseDirectory, eslint)
+  const loadedConfig = graph ? graph.exports : defaultConfig
+  return createContextFromLoadedConfig(
+    loadedConfig,
+    baseDirectory,
+    eslint,
+    graph?.compatibilityRuntime,
+  )
 }
 
 const getContextMap = (
-  graph: ModuleGraph | undefined,
+  graph: EvaluatedModuleGraph | undefined,
   baseDirectory: string,
 ): WeakMap<EslintModule, LintContext> => {
   const contexts = graph ? graphContexts : defaultContexts
@@ -214,7 +226,7 @@ const getContextMap = (
 }
 
 const getContext = (
-  graph: ModuleGraph | undefined,
+  graph: EvaluatedModuleGraph | undefined,
   baseDirectory: string,
   eslint: EslintModule,
 ): LintContext => {
@@ -241,6 +253,49 @@ const lintWithContext = async (
     return results[0]?.messages ?? []
   }
   return context.engine.verify(text, context.config, { filename: filePath })
+}
+
+const filterCspellRules = (config: readonly any[]): any[] => {
+  return config.map((entry) => {
+    if (!entry || typeof entry !== 'object' || !entry.rules) {
+      return entry
+    }
+    const rule = entry.rules['@cspell/spellchecker']
+    return {
+      ...entry,
+      rules: rule === undefined ? {} : { '@cspell/spellchecker': rule },
+    }
+  })
+}
+
+const compareLintMessages = (a: LintMessage, b: LintMessage): number => {
+  return (
+    a.line - b.line ||
+    a.column - b.column ||
+    String(a.ruleId).localeCompare(String(b.ruleId))
+  )
+}
+
+const lintWithCompatibility = async (
+  context: LintContext,
+  text: string,
+  filePath: string,
+  baseDirectory: string,
+  eslint: EslintModule,
+): Promise<readonly LintMessage[]> => {
+  const messages = await lintWithContext(context, text, filePath)
+  const runtime = context.compatibilityRuntime
+  if (!runtime?.hasPending()) {
+    return messages
+  }
+  await runtime.flush()
+  const cspellContext = createContextFromLoadedConfig(
+    filterCspellRules(context.config),
+    baseDirectory,
+    eslint,
+  )
+  const cspellMessages = await lintWithContext(cspellContext, text, filePath)
+  return [...messages, ...cspellMessages].toSorted(compareLintMessages)
 }
 
 const toLintResults = (
@@ -274,7 +329,7 @@ const toLintResults = (
 
 const getLintPaths = (
   filePath: string,
-  graph: ModuleGraph | undefined,
+  graph: EvaluatedModuleGraph | undefined,
 ): {
   readonly linterFilePath: string
   readonly nativeBaseDirectory: string
@@ -295,21 +350,27 @@ const getLintPaths = (
 export const lint = async (
   text: string,
   filePath: string,
-  graph: ModuleGraph | undefined,
+  graph: EvaluatedModuleGraph | undefined,
   eslint: EslintModule,
   loadedSuppressions?: LoadedSuppressions,
 ): Promise<LintResult[]> => {
   const { linterFilePath, nativeBaseDirectory, nativeLinterFilePath } =
     getLintPaths(filePath, graph)
   const context = getContext(graph, nativeBaseDirectory, eslint)
-  const messages = await lintWithContext(context, text, nativeLinterFilePath)
+  const messages = await lintWithCompatibility(
+    context,
+    text,
+    nativeLinterFilePath,
+    nativeBaseDirectory,
+    eslint,
+  )
   return toLintResults(messages, linterFilePath, loadedSuppressions)
 }
 
 export const lintWithStats = async (
   text: string,
   filePath: string,
-  graph: ModuleGraph | undefined,
+  graph: EvaluatedModuleGraph | undefined,
   eslint: EslintModule,
   loadedSuppressions?: LoadedSuppressions,
 ): Promise<LintPerformanceTrace> => {
@@ -318,14 +379,7 @@ export const lintWithStats = async (
   const configEvaluationStart = now()
   let context: LintContext
   try {
-    const loadedConfig = graph
-      ? LoadModuleGraph.loadModuleGraph(graph)
-      : defaultConfig
-    context = createContextFromLoadedConfig(
-      loadedConfig,
-      nativeBaseDirectory,
-      eslint,
-    )
+    context = createContext(graph, nativeBaseDirectory, eslint)
   } catch (error) {
     return {
       configEvaluation: {
@@ -342,7 +396,13 @@ export const lintWithStats = async (
   }
   const lintStart = now()
   try {
-    const messages = await lintWithContext(context, text, nativeLinterFilePath)
+    const messages = await lintWithCompatibility(
+      context,
+      text,
+      nativeLinterFilePath,
+      nativeBaseDirectory,
+      eslint,
+    )
     const diagnostics = toLintResults(
       messages,
       linterFilePath,

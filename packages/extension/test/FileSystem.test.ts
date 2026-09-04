@@ -10,6 +10,9 @@ const getFileHashes = jest.fn(
     uris.map(() => 'content-hash'),
 )
 const readFile = jest.fn(async (_uri: string) => 'content')
+const readFileAsBlob = jest.fn(
+  async (_uri: string) => new Blob([new Uint8Array([0, 1, 255])]),
+)
 const stat = jest.fn(async (_uri: string) => 7)
 const getText = jest.fn(
   async (_hash: string): Promise<string | undefined> => undefined,
@@ -26,6 +29,7 @@ beforeEach(() => {
     getFileHashes,
     readDirWithFileTypes,
     readFile,
+    readFileAsBlob,
     stat,
   }
   FileSystem.state.cache = {
@@ -62,6 +66,13 @@ test('readFile converts an absolute path to a file uri', async () => {
   expect(getFileHash).toHaveBeenCalledWith('file:///workspace/a%20b.js')
   expect(getText).toHaveBeenCalledWith('content-hash')
   expect(setText).toHaveBeenCalledWith('content-hash', 'content')
+})
+
+test('readFileAsBase64 preserves binary file contents', async () => {
+  await expect(
+    FileSystem.readFileAsBase64('/workspace/words.gz'),
+  ).resolves.toBe('AAH/')
+  expect(readFileAsBlob).toHaveBeenCalledWith('file:///workspace/words.gz')
 })
 
 test('readFile returns cached content without reading the file again', async () => {

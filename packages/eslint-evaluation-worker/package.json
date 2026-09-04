@@ -24,10 +24,13 @@
     }
   },
   "dependencies": {
-    "@lvce-editor/rpc": "^6.16.0"
+    "@lvce-editor/rpc": "^6.16.0",
+    "buffer": "^6.0.3",
+    "pako": "^2.1.0"
   },
   "devDependencies": {
     "@jest/globals": "^30.4.1",
+    "@types/pako": "^2.0.4",
     "eslint": "^10.8.1",
     "jest": "^30.4.2",
     "ts-jest": "^29.4.12"

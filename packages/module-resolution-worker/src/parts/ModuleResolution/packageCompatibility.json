@@ -1,0 +1,18 @@
+[
+  {
+    "additionalDependencies": {
+      "dist/spellCheckAST/worker.mjs": [
+        "./spellCheck.mjs",
+        "@cspell/cspell-bundled-dicts/cspell-default.config.js",
+        "@cspell/cspell-bundled-dicts/cspell-default.json"
+      ]
+    },
+    "assetPackage": "@cspell/cspell-bundled-dicts",
+    "assetPackageDependencyPattern": "@cspell/dict-*",
+    "majorVersions": [10],
+    "moduleSubstitutions": {
+      "synckit": "cspell-deferred-sync"
+    },
+    "package": "@cspell/eslint-plugin"
+  }
+]

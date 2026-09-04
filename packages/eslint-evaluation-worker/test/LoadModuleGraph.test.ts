@@ -2,6 +2,8 @@ import { expect, test } from '@jest/globals'
 import type { ModuleGraph } from '../src/parts/ModuleGraph/ModuleGraph.ts'
 import * as LoadModuleGraph from '../src/parts/LoadModuleGraph/LoadModuleGraph.ts'
 
+/* cspell:disable */
+
 const graph = (
   modules: Record<string, string>,
   resolutions: Record<string, string> = {},
@@ -19,6 +21,58 @@ test('loads a commonjs config', () => {
     }),
   )
   expect(value).toEqual([{ rules: {} }])
+})
+
+test('runs deferred cspell-compatible work without worker threads', async () => {
+  const loaded = LoadModuleGraph.createModuleRuntime().evaluate(
+    graph(
+      {
+        '/workspace/checker.js': `exports.check = async value => ({ errors: [], issues: [value] })`,
+        '/workspace/eslint.config.js': `const { createSyncFn } = require('synckit'); module.exports = createSyncFn(require.resolve('./worker.js'))`,
+        '/workspace/worker.js': `const { runAsWorker } = require('synckit'); runAsWorker(async value => require('./checker.js').check(value))`,
+      },
+      {
+        '/workspace/eslint.config.js\0./worker.js': '/workspace/worker.js',
+        '/workspace/eslint.config.js\0synckit': 'compat:cspell-deferred-sync',
+        '/workspace/worker.js\0./checker.js': '/workspace/checker.js',
+        '/workspace/worker.js\0synckit': 'compat:cspell-deferred-sync',
+      },
+    ),
+  )
+
+  expect(loaded.exports('mistkae')).toEqual({ errors: [], issues: [] })
+  expect(loaded.compatibilityRuntime.hasPending()).toBe(true)
+  await loaded.compatibilityRuntime.flush()
+  expect(loaded.exports('mistkae')).toEqual({
+    errors: [],
+    issues: ['mistkae'],
+  })
+  expect(loaded.compatibilityRuntime.hasPending()).toBe(false)
+})
+
+test('reads and decompresses binary virtual files', () => {
+  const value = LoadModuleGraph.loadModuleGraph({
+    ...graph({
+      '/workspace/eslint.config.js': `const fs = require('node:fs'); const zlib = require('node:zlib'); module.exports = zlib.gunzipSync(fs.readFileSync('/workspace/words.txt.gz')).toString('utf8')`,
+    }),
+    files: {
+      '/workspace/words.txt.gz': {
+        content: 'H4sIAAAAAAAAA8tIzcnJBwCGphA2BQAAAA==',
+        encoding: 'base64',
+      },
+    },
+  })
+  expect(value).toBe('hello')
+})
+
+test('resolves preloaded file urls with cache-busting fragments', () => {
+  const value = LoadModuleGraph.loadModuleGraph(
+    graph({
+      '/workspace/config.js': `module.exports = 'loaded'`,
+      '/workspace/eslint.config.js': `module.exports = require('file:///workspace/config.js#loader=1')`,
+    }),
+  )
+  expect(value).toBe('loaded')
 })
 
 test('unwraps a babel esm default export', () => {
@@ -326,12 +380,12 @@ test('supports packages that initialize a worker during module load', () => {
 })
 
 test('limits fs reads to preloaded virtual files', () => {
-  const value = LoadModuleGraph.loadModuleGraph(
-    graph({
-      '/workspace/data.json': 'safe',
+  const value = LoadModuleGraph.loadModuleGraph({
+    ...graph({
       '/workspace/eslint.config.js': `const fs = require('node:fs'); module.exports = fs.readFileSync('/workspace/data.json', 'utf8')`,
     }),
-  )
+    files: { '/workspace/data.json': 'safe' },
+  })
   expect(value).toBe('safe')
 })
 
@@ -348,12 +402,12 @@ test('exposes non-module workspace files with node buffer decoding', () => {
 })
 
 test('provides virtual fs stat and realpath helpers', () => {
-  const value = LoadModuleGraph.loadModuleGraph(
-    graph({
-      '/workspace/data.json': 'safe',
+  const value = LoadModuleGraph.loadModuleGraph({
+    ...graph({
       '/workspace/eslint.config.js': `const fs = require('fs'); module.exports = [fs.statSync('/workspace/data.json').isFile(), fs.statSync('/workspace').isDirectory(), fs.realpathSync.native('/workspace/../workspace')]`,
     }),
-  )
+    files: { '/workspace/data.json': 'safe' },
+  })
   expect(value).toEqual([true, true, '/workspace'])
 })
 
@@ -459,4 +513,113 @@ test('reuses a known bare package resolution for a dynamic require', () => {
     ),
   )
   expect(value).toBe('example')
+})
+
+test('reuses shared module identity across graphs in one runtime', () => {
+  const runtime = LoadModuleGraph.createModuleRuntime()
+  const sharedPath = '/workspace/node_modules/shared/index.js'
+  const sharedSource = `module.exports = { marker: true }`
+  const first = runtime.evaluate({
+    entry: '/workspace/first.js',
+    id: 'first',
+    modules: {
+      '/workspace/first.js': `module.exports = require('shared')`,
+      [sharedPath]: sharedSource,
+    },
+    resolutions: { '/workspace/first.js\0shared': sharedPath },
+  })
+  const second = runtime.evaluate({
+    entry: '/workspace/second.js',
+    id: 'second',
+    modules: {
+      '/workspace/second.js': `module.exports = require('shared')`,
+      [sharedPath]: sharedSource,
+    },
+    resolutions: { '/workspace/second.js\0shared': sharedPath },
+  })
+
+  expect(second.exports).toBe(first.exports)
+})
+
+test('discovers lazy modules through virtual directory listings', () => {
+  const runtime = LoadModuleGraph.createModuleRuntime()
+  const result = runtime.evaluate({
+    entry: '/workspace/eslint.config.js',
+    id: 'lazy-modules',
+    lazyModules: {
+      '/workspace/rules/first.js': `module.exports = 'first'`,
+      '/workspace/rules/second.json': `"second"`,
+    },
+    modules: {
+      '/workspace/eslint.config.js': `const fs = require('fs'); const path = require('path'); module.exports = fs.readdirSync('/workspace/rules').sort().map(file => require(path.join('/workspace/rules', file)))`,
+    },
+    resolutions: {},
+  })
+
+  expect(result.exports).toEqual(['first', 'second'])
+})
+
+test('does not expose executable sources through readFileSync', () => {
+  expect(() =>
+    LoadModuleGraph.loadModuleGraph(
+      graph({
+        '/workspace/eslint.config.js': `module.exports = require('fs').readFileSync('/workspace/rule.js', 'utf8')`,
+        '/workspace/rule.js': `module.exports = true`,
+      }),
+    ),
+  ).toThrow('Virtual file is not available: /workspace/rule.js')
+})
+
+test('rejects conflicting module sources in a shared runtime', () => {
+  const runtime = LoadModuleGraph.createModuleRuntime()
+  runtime.evaluate(
+    graph({
+      '/workspace/eslint.config.js': `module.exports = 'first'`,
+    }),
+  )
+
+  expect(() =>
+    runtime.evaluate(
+      graph({
+        '/workspace/eslint.config.js': `module.exports = 'second'`,
+      }),
+    ),
+  ).toThrow(LoadModuleGraph.ModuleRuntimeConflictError)
+})
+
+test('rejects conflicting resolutions in a shared runtime', () => {
+  const runtime = LoadModuleGraph.createModuleRuntime()
+  runtime.evaluate(
+    graph(
+      {
+        '/workspace/eslint.config.js': `module.exports = require('value')`,
+        '/workspace/one.js': `module.exports = 1`,
+      },
+      { '/workspace/eslint.config.js\0value': '/workspace/one.js' },
+    ),
+  )
+
+  expect(() =>
+    runtime.evaluate({
+      ...graph({
+        '/workspace/other.js': `module.exports = 2`,
+      }),
+      resolutions: {
+        '/workspace/eslint.config.js\0value': '/workspace/other.js',
+      },
+    }),
+  ).toThrow(LoadModuleGraph.ModuleRuntimeConflictError)
+})
+
+test('retains failed module sources for a later retry', () => {
+  const runtime = LoadModuleGraph.createModuleRuntime()
+  const retryGraph = graph({
+    '/workspace/eslint.config.js': `if (!global.__eslintRuntimeRetried) { global.__eslintRuntimeRetried = true; throw new Error('temporary') } module.exports = 'recovered'`,
+  })
+  try {
+    expect(() => runtime.evaluate(retryGraph)).toThrow('temporary')
+    expect(runtime.evaluate(retryGraph).exports).toBe('recovered')
+  } finally {
+    delete (globalThis as any).__eslintRuntimeRetried
+  }
 })

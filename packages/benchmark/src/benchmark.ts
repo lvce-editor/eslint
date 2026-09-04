@@ -5,6 +5,7 @@ import { chromium, type Browser, type CDPSession } from 'playwright'
 import type { BenchmarkOptions, RunningServer } from './types.ts'
 import { createBenchmarkTest } from './benchmarkTest.ts'
 import { startCpuProfile, stopCpuProfile } from './cpuProfile.ts'
+import { captureHeapSnapshot } from './heapSnapshot.ts'
 import { prepareRepository, resolveBenchmarkFile } from './repository.ts'
 import { startServer } from './server.ts'
 
@@ -53,7 +54,7 @@ export const runBenchmark = async (
     cdp = await browser.newBrowserCDPSession()
 
     server = await startServer({
-      extensionPath: join(root, 'packages', 'extension'),
+      extensionPath: options.extension || join(root, 'packages', 'extension'),
       serverPath: fileURLToPath(
         import.meta.resolve('@lvce-editor/server/bin/server.js'),
       ),
@@ -120,10 +121,21 @@ export const runBenchmark = async (
 
     const lintDurationMs = await stopCpuProfile(cdp, profilePath)
     profiling = false
+    const heapSummary = options.heap
+      ? await captureHeapSnapshot(
+          cdp,
+          join(output, 'heap.heapsnapshot'),
+          join(output, 'heap-summary.json'),
+        )
+      : undefined
     const metadata = {
       browserErrors,
       durationMs,
       file: options.file,
+      ...(heapSummary && {
+        heapSnapshot: 'heap.heapsnapshot',
+        heapSummary: 'heap-summary.json',
+      }),
       lintDurationMs,
       profile: 'cpu-profile.json',
       reload: options.reload,

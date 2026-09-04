@@ -1,20 +1,20 @@
-import { beforeEach, expect, test } from '@jest/globals'
+import { expect, test } from '@jest/globals'
 import type { ModuleGraph } from '../src/parts/ModuleGraph/ModuleGraph.ts'
 import * as LoadEslint from '../src/parts/LoadEslint/LoadEslint.ts'
+import * as LoadModuleGraph from '../src/parts/LoadModuleGraph/LoadModuleGraph.ts'
 
-const createGraph = (source: string, id = 'eslint-graph'): ModuleGraph => ({
-  entry: '/workspace/node_modules/eslint/index.js',
-  files: {},
-  id,
-  modules: {
-    '/workspace/node_modules/eslint/index.js': source,
-  },
-  resolutions: {},
-})
-
-beforeEach(() => {
-  LoadEslint.clearCache()
-})
+const createGraph = (source: string, id = 'eslint-graph') => {
+  const graph: ModuleGraph = {
+    entry: '/workspace/node_modules/eslint/index.js',
+    files: {},
+    id,
+    modules: {
+      '/workspace/node_modules/eslint/index.js': source,
+    },
+    resolutions: {},
+  }
+  return LoadModuleGraph.createModuleRuntime().evaluate(graph)
+}
 
 test('loads Linter from an eslint module graph', () => {
   const graph = createGraph(
@@ -34,14 +34,14 @@ test('rejects a project eslint package without Linter', () => {
   )
 })
 
-test('reuses an evaluated module graph after structured cloning', () => {
+test('returns the exports from an evaluated module graph', () => {
   const graph = createGraph(
     'class ProjectLinter {}; module.exports = { Linter: ProjectLinter }',
     'stable-graph-id',
   )
 
   const first = LoadEslint.loadEslint(graph)
-  const second = LoadEslint.loadEslint(structuredClone(graph))
+  const second = LoadEslint.loadEslint(graph)
 
   expect(second).toBe(first)
 })

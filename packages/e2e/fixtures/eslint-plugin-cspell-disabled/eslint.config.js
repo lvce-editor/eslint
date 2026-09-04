@@ -6,7 +6,7 @@ export default [
       '@cspell': cspell,
     },
     rules: {
-      '@cspell/spellchecker': 'off',
+      '@cspell/spellchecker': 'error',
       'no-debugger': 'error',
     },
   },
