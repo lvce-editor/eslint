@@ -1,6 +1,6 @@
 import * as CacheExpiration from '../CacheExpiration/CacheExpiration.ts'
 
-const CacheName = 'eslint-module-analysis-v1'
+const CacheName = 'eslint-module-analysis-v2'
 const CacheKeyPrefix = 'https://eslint-module-analysis-cache.invalid/'
 
 const pending = new Map<string, Promise<unknown>>()

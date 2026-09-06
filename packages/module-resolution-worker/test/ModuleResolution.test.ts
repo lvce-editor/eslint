@@ -1333,3 +1333,40 @@ test('keeps a stable graph id for cached results', async () => {
 
   expect(second.id).toBe(first.id)
 })
+
+test('preloads dependencies of invoked babel commonjs helpers', async () => {
+  setFiles({
+    '/workspace/eslint.config.js': `function _types() { const data = require('@babel/types'); _types = function () { return data }; return data } module.exports = _types().value`,
+    '/workspace/node_modules/@babel/types/index.js': `exports.value = true`,
+    '/workspace/node_modules/@babel/types/package.json': `{"main":"index.js"}`,
+  })
+  const graph = await LoadEslintConfig.loadEslintConfig(
+    '/workspace/eslint.config.js',
+  )
+  expect(graph.resolutions['/workspace/eslint.config.js\0@babel/types']).toBe(
+    '/workspace/node_modules/@babel/types/index.js',
+  )
+})
+
+test('follows helper calls from exported commonjs functions', async () => {
+  setFiles({
+    '/workspace/eslint.config.js': `function load() { return require('./dependency') } function setup() { return load() } exports.setup = setup`,
+    '/workspace/dependency.js': `module.exports = true`,
+  })
+  const graph = await LoadEslintConfig.loadEslintConfig(
+    '/workspace/eslint.config.js',
+  )
+  expect(graph.resolutions['/workspace/eslint.config.js\0./dependency']).toBe(
+    '/workspace/dependency.js',
+  )
+})
+
+test('handles recursive helper calls and optional dependencies', async () => {
+  setFiles({
+    '/workspace/eslint.config.js': `function load() { if (false) load(); return require('not-installed') } try { load() } catch {} module.exports = []`,
+  })
+  const graph = await LoadEslintConfig.loadEslintConfig(
+    '/workspace/eslint.config.js',
+  )
+  expect(graph.resolutions).toEqual({})
+})

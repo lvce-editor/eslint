@@ -887,6 +887,14 @@ const getDependencies = (
   ast: unknown,
   includeTypeOnlyImports = false,
 ): DependencyAnalysis => {
+  const { program } = ast as any
+  const functions = new Map<string, any>()
+  const programBody = program?.body ?? []
+  for (const statement of programBody) {
+    if (statement.type === 'FunctionDeclaration' && statement.id?.name) {
+      functions.set(statement.id.name, statement)
+    }
+  }
   const dependencies = new Map<string, boolean>()
   const fileSpecifiers = new Set<string>()
   const seen = new WeakSet<object>()
@@ -905,7 +913,11 @@ const getDependencies = (
       return
     }
     seen.add(value)
-    const invokedFunction = getInvokedFunction(value)
+    const invokedFunction =
+      getInvokedFunction(value) ??
+      (value.type === 'CallExpression' && value.callee?.type === 'Identifier'
+        ? functions.get(value.callee.name)
+        : undefined)
     if (invokedFunction) {
       visit(invokedFunction.body, optional)
       const arguments_ = value.arguments ?? []
@@ -1037,14 +1049,6 @@ const getDependencies = (
     }
   }
   visit(ast)
-  const { program } = ast as any
-  const functions = new Map<string, any>()
-  const programBody = program?.body ?? []
-  for (const statement of programBody) {
-    if (statement.type === 'FunctionDeclaration' && statement.id?.name) {
-      functions.set(statement.id.name, statement)
-    }
-  }
   for (const statement of programBody) {
     const exportedValue = getCommonJsExportedValue(statement)
     if (!exportedValue) {

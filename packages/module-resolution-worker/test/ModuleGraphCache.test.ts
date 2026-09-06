@@ -102,7 +102,7 @@ test('saves a compiled graph with portable uris', async () => {
       },
     ],
     revision: expect.any(String),
-    version: 4,
+    version: 5,
   })
   const compiledResponse = cacheEntries.get(
     'https://eslint-compiled-module-graph.invalid/module/file/workspace/eslint.config.js/file/workspace/src/file.ts',
