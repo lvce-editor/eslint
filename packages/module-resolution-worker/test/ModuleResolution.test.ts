@@ -1333,3 +1333,60 @@ test('keeps a stable graph id for cached results', async () => {
 
   expect(second.id).toBe(first.id)
 })
+
+test('preloads dependencies of invoked babel commonjs helpers', async () => {
+  setFiles({
+    '/workspace/eslint.config.js': `function _types() { const data = require('@babel/types'); _types = function () { return data }; return data } module.exports = _types().value`,
+    '/workspace/node_modules/@babel/types/index.js': `exports.value = true`,
+    '/workspace/node_modules/@babel/types/package.json': `{"main":"index.js"}`,
+  })
+  const graph = await LoadEslintConfig.loadEslintConfig(
+    '/workspace/eslint.config.js',
+  )
+  expect(graph.resolutions['/workspace/eslint.config.js\0@babel/types']).toBe(
+    '/workspace/node_modules/@babel/types/index.js',
+  )
+})
+
+test('follows helper calls from exported commonjs functions', async () => {
+  setFiles({
+    '/workspace/dependency.js': `module.exports = true`,
+    '/workspace/eslint.config.js': `function load() { return require('./dependency') } function setup() { return load() } exports.setup = setup`,
+  })
+  const graph = await LoadEslintConfig.loadEslintConfig(
+    '/workspace/eslint.config.js',
+  )
+  expect(graph.resolutions['/workspace/eslint.config.js\0./dependency']).toBe(
+    '/workspace/dependency.js',
+  )
+})
+
+test('handles recursive helper calls and optional dependencies', async () => {
+  setFiles({
+    '/workspace/eslint.config.js': `function load() { if (false) load(); return require('not-installed') } try { load() } catch {} module.exports = []`,
+  })
+  const graph = await LoadEslintConfig.loadEslintConfig(
+    '/workspace/eslint.config.js',
+  )
+  expect(graph.resolutions).toEqual({})
+})
+
+test.each(['jsx', 'tsx'])(
+  'preloads imports from a %s React document',
+  async (extension) => {
+    const path = `/workspace/App.${extension}`
+    setFiles({
+      '/workspace/eslint.config.js': `module.exports = []`,
+      '/workspace/value.js': `export const value = 'hello'`,
+      [path]:
+        "import { value } from './value.js'; export const App = () => <div>{value}</div>",
+    })
+    const graph = await LoadEslintConfig.loadEslintConfig(
+      '/workspace/eslint.config.js',
+      path,
+    )
+    expect(graph.files?.['/workspace/value.js']).toBe(
+      `export const value = 'hello'`,
+    )
+  },
+)

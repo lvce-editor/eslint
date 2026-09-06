@@ -6,7 +6,7 @@ const CacheName = 'eslint-config-files-cache'
 const CacheKeyPrefix = 'https://eslint-config-files-cache.invalid/'
 const CompiledCacheName = 'eslint-compiled-module-graph-v2'
 const CompiledCacheKeyPrefix = 'https://eslint-compiled-module-graph.invalid/'
-const CacheVersion = 4
+const CacheVersion = 5
 const CompiledCacheVersion = 2
 const maxConcurrentCacheReads = 64
 

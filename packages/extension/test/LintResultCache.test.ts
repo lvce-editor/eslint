@@ -39,7 +39,7 @@ const setGraph = async (
         uri,
       },
     ],
-    version: 4,
+    version: 5,
   }
   const revision = await ComputeTextHash.computeTextHash(
     JSON.stringify(revisionInput),

@@ -6,7 +6,7 @@ import * as FileSystem from '../FileSystem/FileSystem.ts'
 
 const GraphCacheName = 'eslint-config-files-cache'
 const GraphCacheKeyPrefix = 'https://eslint-config-files-cache.invalid/'
-const GraphCacheVersion = 4
+const GraphCacheVersion = 5
 const ResultCacheName = 'eslint-lint-result-v1'
 const ResultCacheKeyPrefix = 'https://eslint-lint-result.invalid/'
 const ResultCacheVersion = 1

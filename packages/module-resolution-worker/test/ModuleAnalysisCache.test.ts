@@ -49,7 +49,7 @@ test('stores computed analysis and reuses it from cache storage', async () => {
   ).resolves.toEqual(analysis)
 
   expect(compute).toHaveBeenCalledTimes(1)
-  expect(open).toHaveBeenCalledWith('eslint-module-analysis-v1')
+  expect(open).toHaveBeenCalledWith('eslint-module-analysis-v2')
   expect(put).toHaveBeenCalledTimes(1)
   expect(put.mock.calls[0][0]).toBe(
     'https://eslint-module-analysis-cache.invalid/module%3A.js%3Ahash',

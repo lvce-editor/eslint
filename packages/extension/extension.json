@@ -30,7 +30,9 @@
   "categories": [],
   "activation": [
     "onDiagnostic:javascript",
+    "onDiagnostic:javascriptreact",
     "onDiagnostic:typescript",
+    "onDiagnostic:typescriptreact",
     "onDiagnostic:yaml",
     "onDiagnostic:css",
     "onDiagnostic:json",
