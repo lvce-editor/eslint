@@ -1263,9 +1263,10 @@ const analyzeDocumentDependencies = async (
     const isTypeScript = ['.cts', '.mts', '.ts', '.tsx'].some((extension) =>
       path.endsWith(extension),
     )
-    const parserPlugins: any[] = isTypeScript
-      ? [['typescript', { isTSX: path.endsWith('.tsx') }]]
-      : []
+    const parserPlugins: any[] = [
+      ...(isTypeScript ? ['typescript'] : []),
+      ...(!isTypeScript || path.endsWith('.tsx') ? ['jsx'] : []),
+    ]
     const ast = packages.parser.parse(source, {
       plugins: parserPlugins,
       sourceType: 'unambiguous',

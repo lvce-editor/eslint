@@ -6,7 +6,9 @@ test('registers diagnostics for supported languages', () => {
 
   expect(providers.map(({ id, languageId }) => ({ id, languageId }))).toEqual([
     { id: 'eslint.javascript', languageId: 'javascript' },
+    { id: 'eslint.javascriptreact', languageId: 'javascriptreact' },
     { id: 'eslint.typescript', languageId: 'typescript' },
+    { id: 'eslint.typescriptreact', languageId: 'typescriptreact' },
     { id: 'eslint.yaml', languageId: 'yaml' },
     { id: 'eslint.css', languageId: 'css' },
     { id: 'eslint.json', languageId: 'json' },

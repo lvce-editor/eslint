@@ -1350,8 +1350,8 @@ test('preloads dependencies of invoked babel commonjs helpers', async () => {
 
 test('follows helper calls from exported commonjs functions', async () => {
   setFiles({
-    '/workspace/eslint.config.js': `function load() { return require('./dependency') } function setup() { return load() } exports.setup = setup`,
     '/workspace/dependency.js': `module.exports = true`,
+    '/workspace/eslint.config.js': `function load() { return require('./dependency') } function setup() { return load() } exports.setup = setup`,
   })
   const graph = await LoadEslintConfig.loadEslintConfig(
     '/workspace/eslint.config.js',
@@ -1370,3 +1370,23 @@ test('handles recursive helper calls and optional dependencies', async () => {
   )
   expect(graph.resolutions).toEqual({})
 })
+
+test.each(['jsx', 'tsx'])(
+  'preloads imports from a %s React document',
+  async (extension) => {
+    const path = `/workspace/App.${extension}`
+    setFiles({
+      '/workspace/eslint.config.js': `module.exports = []`,
+      '/workspace/value.js': `export const value = 'hello'`,
+      [path]:
+        "import { value } from './value.js'; export const App = () => <div>{value}</div>",
+    })
+    const graph = await LoadEslintConfig.loadEslintConfig(
+      '/workspace/eslint.config.js',
+      path,
+    )
+    expect(graph.files?.['/workspace/value.js']).toBe(
+      `export const value = 'hello'`,
+    )
+  },
+)
