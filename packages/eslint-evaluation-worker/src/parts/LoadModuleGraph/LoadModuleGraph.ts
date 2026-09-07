@@ -350,6 +350,13 @@ const isDeepStrictEqual = (
   ) {
     return false
   }
+  if (actual instanceof RegExp && expected instanceof RegExp) {
+    return (
+      actual.source === expected.source &&
+      actual.flags === expected.flags &&
+      actual.lastIndex === expected.lastIndex
+    )
+  }
   const seenExpected = seen.get(actual)
   if (seenExpected) {
     return seenExpected === expected
@@ -646,6 +653,11 @@ const createBuiltins = (
     EventEmitter,
   })
   const assertModule = Object.assign(assert, {
+    deepStrictEqual: (
+      actual: unknown,
+      expected: unknown,
+      message?: string,
+    ): void => assert(isDeepStrictEqual(actual, expected), message),
     equal: (actual: unknown, expected: unknown): void =>
       assert(actual == expected),
     ok: assert,

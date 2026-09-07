@@ -623,3 +623,39 @@ test('retains failed module sources for a later retry', () => {
     delete (globalThis as any).__eslintRuntimeRetried
   }
 })
+
+test('supports deep strict assertions used by cspell to reuse document validators', () => {
+  const value = LoadModuleGraph.loadModuleGraph(
+    graph({
+      '/workspace/eslint.config.js': `const assert = require('node:assert'); module.exports = assert.deepStrictEqual({ words: ['hello'], patterns: [/word/g] }, { patterns: [/word/g], words: ['hello'] })`,
+    }),
+  )
+  expect(value).toBeUndefined()
+})
+
+test('rejects different spellchecker settings in deep strict assertions', () => {
+  expect(() =>
+    LoadModuleGraph.loadModuleGraph(
+      graph({
+        '/workspace/eslint.config.js': `const assert = require('node:assert/strict'); assert.deepStrictEqual({ words: ['hello'] }, { words: ['world'] }, 'settings changed')`,
+      }),
+    ),
+  ).toThrow('settings changed')
+})
+
+test.each([
+  ['source', '/word/g', '/other/g'],
+  ['flags', '/word/g', '/word/i'],
+  ['last index', 'Object.assign(/word/g, { lastIndex: 1 })', '/word/g'],
+])(
+  'compares regular expression %s in spellchecker settings',
+  (_name, actual, expected) => {
+    expect(() =>
+      LoadModuleGraph.loadModuleGraph(
+        graph({
+          '/workspace/eslint.config.js': `const assert = require('node:assert'); assert.deepStrictEqual({ patterns: [${actual}] }, { patterns: [${expected}] }, 'patterns changed')`,
+        }),
+      ),
+    ).toThrow('patterns changed')
+  },
+)
