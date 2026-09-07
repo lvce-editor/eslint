@@ -21,6 +21,11 @@
       "project": ["**/*.{css,js,json,ts,yml}"],
       "ignoreDependencies": ["eslint"]
     },
+    "packages/e2e/fixtures/eslint-plugin-cspell-disabled": {
+      "entry": ["eslint.config.js", "identifiers.js", "test.js"],
+      "project": ["**/*.{js,json}"],
+      "ignoreDependencies": ["eslint"]
+    },
     "packages/e2e/fixtures/large-typescript-workspace": {
       "entry": [".eslint-plugin-local/*.ts", "eslint.config.js", "src/test.ts"],
       "project": ["**/*.{js,json,ts}"],
