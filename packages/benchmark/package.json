@@ -10,6 +10,6 @@
   "devDependencies": {
     "@lvce-editor/server": "0.100.14",
     "@types/node": "^26.0.0",
-    "playwright": "1.62.1"
+    "playwright": "1.63.0"
   }
 }
