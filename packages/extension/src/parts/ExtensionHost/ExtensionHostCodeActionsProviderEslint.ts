@@ -1,6 +1,7 @@
 import * as EslintEvaluationWorker from '../EslintEvaluationWorker/EslintEvaluationWorker.ts'
 import * as FindEslintConfig from '../FindEslintConfig/FindEslintConfig.ts'
 import * as GetCodeActionsFromLintResults from '../GetCodeActionsFromLintResults/GetCodeActionsFromLintResults.ts'
+import * as IgnoreHashes from '../IgnoreHashes/IgnoreHashes.ts'
 
 export interface TextDocument {
   readonly languageId: string
@@ -13,6 +14,9 @@ export const provideCodeActions = async (
   offset: number,
 ) => {
   try {
+    if (await IgnoreHashes.isIgnored(textDocument.text)) {
+      return []
+    }
     const filePath = textDocument.uri ?? 'file.js'
     const configPath = await FindEslintConfig.findEslintConfig(filePath)
     const lintResults = await EslintEvaluationWorker.lint(

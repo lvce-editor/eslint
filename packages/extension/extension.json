@@ -27,6 +27,14 @@
       "contentSecurityPolicy": ["default-src 'none'", "script-src 'self'"]
     }
   ],
+  "configuration": {
+    "eslint.ignoreHashes": {
+      "type": "array",
+      "default": [],
+      "items": { "type": "string" },
+      "description": "Skip linting exact file contents matching these lowercase SHA-256 hashes of UTF-8 text. Edited contents are linted normally."
+    }
+  },
   "categories": [],
   "activation": [
     "onDiagnostic:javascript",
