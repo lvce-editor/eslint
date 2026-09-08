@@ -31,8 +31,10 @@ export const test: Test = async ({
   await Panel.open('Problems')
   const message =
     'ESLint could not find "eslint/config". Project dependencies may not be installed. Run "npm ci" (or "npm install" if there is no package-lock.json) in the project folder.'
-  await expect(Locator('.Problem', { hasText: message })).toBeVisible()
-  await expect(
-    Locator('.Problem', { hasText: 'ESLint configuration error' }),
-  ).toHaveCount(0)
+  const dependencyProblem = Locator('.Problem', { hasText: message })
+  await expect(dependencyProblem).toBeVisible()
+  const configurationProblem = Locator('.Problem', {
+    hasText: 'ESLint configuration error',
+  })
+  await expect(configurationProblem).toHaveCount(0)
 }
