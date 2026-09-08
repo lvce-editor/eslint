@@ -1,4 +1,5 @@
 import * as EslintEvaluationWorker from '../EslintEvaluationWorker/EslintEvaluationWorker.ts'
+import * as FileContentCache from '../FileContentCache/FileContentCache.ts'
 import * as FileSystem from '../FileSystem/FileSystem.ts'
 import * as FindEslintConfig from '../FindEslintConfig/FindEslintConfig.ts'
 import * as LintResultCache from '../LintResultCache/LintResultCache.ts'
@@ -10,6 +11,7 @@ const CacheNamePrefix = 'eslint-'
 interface Dependencies {
   readonly clearConfigDiscoveryCache: () => void
   readonly clearEvaluationCache: () => Promise<void>
+  readonly clearFileContentCache: () => void
   readonly clearFileHashCache: () => void
   readonly clearLintResultCache: () => void
   readonly clearModuleResolutionCache: () => void
@@ -21,6 +23,7 @@ interface Dependencies {
 const defaultDependencies: Dependencies = {
   clearConfigDiscoveryCache: FindEslintConfig.clearCache,
   clearEvaluationCache: EslintEvaluationWorker.clearCache,
+  clearFileContentCache: FileContentCache.clearCache,
   clearFileHashCache: FileSystem.clearFileHashCache,
   clearLintResultCache: LintResultCache.clearCache,
   clearModuleResolutionCache: ModuleResolutionWorker.clearCache,
@@ -52,6 +55,7 @@ export const clearCacheWithDependencies = async (
     dependencies.clearEvaluationCache(),
     clearPersistentCaches(dependencies),
   ])
+  dependencies.clearFileContentCache()
 }
 
 export const clearCache = (): Promise<void> => {

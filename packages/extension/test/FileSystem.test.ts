@@ -1,4 +1,5 @@
 import { beforeEach, expect, jest, test } from '@jest/globals'
+import * as FileContentCache from '../src/parts/FileContentCache/FileContentCache.ts'
 import * as FileSystem from '../src/parts/FileSystem/FileSystem.ts'
 
 const readDirWithFileTypes = jest.fn(async (_uri: string) => [
@@ -194,4 +195,38 @@ test('preserves a virtual file system uri', async () => {
   expect(readFile).toHaveBeenCalledWith('memfs:///workspace/a.js')
   expect(getFileHash).not.toHaveBeenCalled()
   expect(getText).not.toHaveBeenCalled()
+})
+
+test('reads files without repeated warnings when persistent storage fails', async () => {
+  FileContentCache.clearCache()
+  FileSystem.state.cache = FileContentCache
+  const open = jest
+    .fn<CacheStorage['open']>()
+    .mockRejectedValue(new TypeError('Failed to fetch'))
+  const previousCaches = Object.getOwnPropertyDescriptor(globalThis, 'caches')
+  Object.defineProperty(globalThis, 'caches', {
+    configurable: true,
+    value: { open },
+  })
+  const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
+  try {
+    const files = Array.from(
+      { length: 20 },
+      (_, index) => `/workspace/file-${index}.js`,
+    )
+    await expect(Promise.all(files.map(FileSystem.readFile))).resolves.toEqual(
+      files.map(() => 'content'),
+    )
+    expect(readFile).toHaveBeenCalledTimes(files.length)
+    expect(open).toHaveBeenCalledTimes(1)
+    expect(warn).toHaveBeenCalledTimes(1)
+  } finally {
+    warn.mockRestore()
+    FileContentCache.clearCache()
+    if (previousCaches) {
+      Object.defineProperty(globalThis, 'caches', previousCaches)
+    } else {
+      delete (globalThis as { caches?: CacheStorage }).caches
+    }
+  }
 })

@@ -118,3 +118,21 @@ test('falls back when cache storage is unavailable', async () => {
 
   expect(compute).toHaveBeenCalledTimes(1)
 })
+
+test('recomputes analysis when reading the cached response body fails', async () => {
+  match.mockResolvedValueOnce(
+    new Response(
+      new ReadableStream({
+        start(controller) {
+          controller.error(new TypeError('Failed to fetch'))
+        },
+      }),
+    ),
+  )
+  const compute = jest.fn(async () => ({ source: 'transformed' }))
+
+  await expect(
+    ModuleAnalysisCache.getOrCompute('module:.js:hash', isAnalysis, compute),
+  ).resolves.toEqual({ source: 'transformed' })
+  expect(compute).toHaveBeenCalledTimes(1)
+})
