@@ -194,6 +194,26 @@ const getGraphSourceNodes = (
   return graphSources
 }
 
+const isTypeScriptCatalog = (value: string): boolean => {
+  if (
+    !value.trimStart().startsWith('{') ||
+    !value.includes('"ALL_COMPILER_OPTIONS_6917"')
+  ) {
+    return false
+  }
+  try {
+    const catalog: unknown = JSON.parse(value)
+    return (
+      typeof catalog === 'object' &&
+      catalog !== null &&
+      'ALL_COMPILER_OPTIONS_6917' in catalog &&
+      typeof catalog.ALL_COMPILER_OPTIONS_6917 === 'string'
+    )
+  } catch {
+    return false
+  }
+}
+
 export const summarizeHeapSnapshot = (snapshot: HeapSnapshot): HeapSummary => {
   const nodeFields = snapshot.snapshot.meta.node_fields
   const edgeFields = snapshot.snapshot.meta.edge_fields
@@ -250,7 +270,7 @@ export const summarizeHeapSnapshot = (snapshot: HeapSnapshot): HeapSummary => {
     ) {
       evaluatorScriptSource += shallowSize
     }
-    if (value.includes('"ALL_COMPILER_OPTIONS_6917"')) {
+    if (isTypeScriptCatalog(value)) {
       typeScriptCatalogs += shallowSize
     }
     if (shallowSize >= 256 * 1024) {
