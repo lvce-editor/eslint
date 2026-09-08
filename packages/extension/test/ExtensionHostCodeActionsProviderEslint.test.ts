@@ -10,7 +10,7 @@ test('ignored content does not start evaluation for code actions', async () => {
   EslintEvaluationWorker.state.rpcPromise = undefined
   expect(
     await CodeActionsProvider.provideCodeActions(
-      { text: 'hello', uri: '/workspace/file.js', languageId: 'javascript' },
+      { languageId: 'javascript', text: 'hello', uri: '/workspace/file.js' },
       0,
     ),
   ).toEqual([])

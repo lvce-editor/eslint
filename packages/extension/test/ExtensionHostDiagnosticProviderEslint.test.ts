@@ -105,9 +105,12 @@ test('skips unchanged content before config discovery and lints edits', async ()
   ]
   let reads = 0
   const readDir = FileSystem.state.api.readDirWithFileTypes
-  FileSystem.state.api.readDirWithFileTypes = async (uri: string) => {
-    reads++
-    return readDir(uri)
+  FileSystem.state.api = {
+    ...FileSystem.state.api,
+    readDirWithFileTypes: async (uri: string) => {
+      reads++
+      return readDir(uri)
+    },
   }
   expect(await DiagnosticProvider.provideDiagnostics(textDocument)).toEqual([])
   expect(LastTextDocument.get()).toBe(textDocument)
