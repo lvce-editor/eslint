@@ -30,6 +30,21 @@ config and ESLint graph revisions. Reloading an unchanged file can therefore
 restore diagnostics without rebuilding the evaluation engine; changes to any
 lint input fall back to normal evaluation.
 
+## Ignoring known content
+
+Set `"eslint.ignoreHashes": ["<sha256>"]` in editor preferences to skip diagnostics
+and code actions for exact, known file contents before discovering configs or
+starting the evaluation and module resolution workers. Hashes are lowercase
+SHA-256 hex digests of the UTF-8 editor text, including whitespace and line endings.
+The default is an empty list. Edits that change the hash receive normal linting;
+undoing back to ignored content clears diagnostics again. This also applies to
+`ESLint: Lint Document`; the explicit performance trace command still evaluates.
+
+These hashes explicitly suppress linting regardless of filename or config, so
+only include content you intend to ignore. Regenerate generated lists when the
+shipped source changes. Existing worker memory is not reclaimed by returning to
+ignored content after editing.
+
 ## Contributing
 
 ```sh

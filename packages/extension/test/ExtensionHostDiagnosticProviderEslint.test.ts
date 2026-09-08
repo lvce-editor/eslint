@@ -3,12 +3,14 @@ import * as EslintEvaluationWorker from '../src/parts/EslintEvaluationWorker/Esl
 import * as DiagnosticProvider from '../src/parts/ExtensionHost/ExtensionHostDiagnosticProviderEslint.ts'
 import * as FileSystem from '../src/parts/FileSystem/FileSystem.ts'
 import * as FindEslintConfig from '../src/parts/FindEslintConfig/FindEslintConfig.ts'
+import * as IgnoreHashes from '../src/parts/IgnoreHashes/IgnoreHashes.ts'
 import * as LastTextDocument from '../src/parts/LastTextDocument/LastTextDocument.ts'
 
 const toPath = (uri: string): string =>
   decodeURIComponent(new URL(uri).pathname)
 
 beforeEach(() => {
+  IgnoreHashes.state.getPreference = async () => undefined
   LastTextDocument.reset()
   FindEslintConfig.clearCache()
   EslintEvaluationWorker.state.rpcPromise = undefined
@@ -94,4 +96,31 @@ test('loads config for a file uri with a single slash', async () => {
       uri: 'file:/workspace/eslint.config.js',
     },
   ])
+})
+
+test('skips unchanged content before config discovery and lints edits', async () => {
+  const textDocument = { text: 'hello', uri: '/workspace/src/file.ts' }
+  IgnoreHashes.state.getPreference = async () => [
+    '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
+  ]
+  let reads = 0
+  const readDir = FileSystem.state.api.readDirWithFileTypes
+  FileSystem.state.api.readDirWithFileTypes = async (uri: string) => {
+    reads++
+    return readDir(uri)
+  }
+  expect(await DiagnosticProvider.provideDiagnostics(textDocument)).toEqual([])
+  expect(LastTextDocument.get()).toBe(textDocument)
+  expect(reads).toBe(0)
+  expect(EslintEvaluationWorker.state.rpcPromise).toBeUndefined()
+
+  expect(
+    await DiagnosticProvider.provideDiagnostics({
+      ...textDocument,
+      text: 'hello!',
+    }),
+  ).toHaveLength(1)
+  expect(reads).toBeGreaterThan(0)
+  expect(EslintEvaluationWorker.state.rpcPromise).toBeDefined()
+  expect(await DiagnosticProvider.provideDiagnostics(textDocument)).toEqual([])
 })
