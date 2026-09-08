@@ -1,6 +1,7 @@
 import type { Diagnostic } from '@lvce-editor/api'
 import * as EslintEvaluationWorker from '../EslintEvaluationWorker/EslintEvaluationWorker.ts'
 import * as FindEslintConfig from '../FindEslintConfig/FindEslintConfig.ts'
+import * as GetEslintErrorMessage from '../GetEslintErrorMessage/GetEslintErrorMessage.ts'
 import * as IgnoreHashes from '../IgnoreHashes/IgnoreHashes.ts'
 import * as LastTextDocument from '../LastTextDocument/LastTextDocument.ts'
 import * as LintResultCache from '../LintResultCache/LintResultCache.ts'
@@ -106,9 +107,10 @@ const provideDiagnosticsWithOptions = async (
         columnIndex,
         endColumnIndex: columnIndex,
         endRowIndex: rowIndex,
-        message: configPath
-          ? `ESLint configuration error: ${message}`
-          : `ESLint: ${message}`,
+        message: GetEslintErrorMessage.getEslintErrorMessage(
+          message,
+          !!configPath,
+        ),
         rowIndex,
         source: 'eslint',
         type: 'error',
