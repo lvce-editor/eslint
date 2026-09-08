@@ -2,6 +2,31 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { summarizeHeapSnapshot } from '../src/heapSnapshot.ts'
 
+await test('does not count TypeScript source as a diagnostic catalog', () => {
+  const strings = [
+    '',
+    '(function anonymous(global,process,clearImmediate,setImmediate,SharedArrayBuffer) { return diag(6917, "ALL_COMPILER_OPTIONS_6917", "ALL COMPILER OPTIONS") }',
+    '{ const key = "ALL_COMPILER_OPTIONS_6917"; }',
+    '{"source":"ALL_COMPILER_OPTIONS_6917"}',
+  ]
+  const summary = summarizeHeapSnapshot({
+    edges: [],
+    nodes: [0, 1, 300, 0, 0, 2, 100, 0, 0, 3, 80, 0],
+    snapshot: {
+      meta: {
+        edge_fields: ['type', 'name_or_index', 'to_node'],
+        node_fields: ['type', 'name', 'self_size', 'edge_count'],
+        node_types: [['string'], [], [], []],
+      },
+    },
+    strings,
+  })
+
+  assert.equal(summary.typeScriptCatalogs, 0)
+  assert.equal(summary.evaluatorScriptSource, 300)
+  assert.equal(summary.stringShallowSize, 480)
+})
+
 await test('summarizes string memory categories and duplicate scripts', () => {
   const largeSource = 'x'.repeat(300_000)
   const strings = [
