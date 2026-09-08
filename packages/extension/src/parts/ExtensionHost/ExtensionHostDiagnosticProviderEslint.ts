@@ -1,6 +1,7 @@
 import type { Diagnostic } from '@lvce-editor/api'
 import * as EslintEvaluationWorker from '../EslintEvaluationWorker/EslintEvaluationWorker.ts'
 import * as FindEslintConfig from '../FindEslintConfig/FindEslintConfig.ts'
+import * as IgnoreHashes from '../IgnoreHashes/IgnoreHashes.ts'
 import * as LastTextDocument from '../LastTextDocument/LastTextDocument.ts'
 import * as LintResultCache from '../LintResultCache/LintResultCache.ts'
 import * as LoadSuppressions from '../LoadSuppressions/LoadSuppressions.ts'
@@ -50,6 +51,9 @@ const provideDiagnosticsWithOptions = async (
   LastTextDocument.set(textDocument)
   let configPath: string | null = null
   try {
+    if (await IgnoreHashes.isIgnored(textDocument.text)) {
+      return []
+    }
     const { text } = textDocument
     const filePath = textDocument.uri ?? 'file.js'
     configPath = await FindEslintConfig.findEslintConfig(filePath)
