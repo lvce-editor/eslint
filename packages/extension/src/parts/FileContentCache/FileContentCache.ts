@@ -10,10 +10,10 @@ interface CacheState {
   disabled: boolean
 }
 
-let state: CacheState = { disabled: false }
+const state: { current: CacheState } = { current: { disabled: false } }
 
 export const clearCache = (): void => {
-  state = { disabled: false }
+  state.current = { disabled: false }
 }
 
 const getKey = (hash: string): string => {
@@ -41,7 +41,7 @@ const disableCache = (current: CacheState, error: unknown): void => {
 }
 
 export const getText = async (hash: string): Promise<string | undefined> => {
-  const current = state
+  const { current } = state
   try {
     const cache = await getCache(current)
     if (!cache || current.disabled) {
@@ -56,7 +56,7 @@ export const getText = async (hash: string): Promise<string | undefined> => {
 }
 
 export const setText = async (hash: string, content: string): Promise<void> => {
-  const current = state
+  const { current } = state
   try {
     const cache = await getCache(current)
     if (!cache || current.disabled) {

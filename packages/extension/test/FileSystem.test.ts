@@ -226,7 +226,7 @@ test('reads files without repeated warnings when persistent storage fails', asyn
     if (previousCaches) {
       Object.defineProperty(globalThis, 'caches', previousCaches)
     } else {
-      Reflect.deleteProperty(globalThis, 'caches')
+      delete (globalThis as { caches?: CacheStorage }).caches
     }
   }
 })
