@@ -12,7 +12,7 @@ const getCachedValue = async (key: string): Promise<unknown> => {
   try {
     const cache = await caches.open(CacheName)
     const response = await cache.match(getCacheKey(key))
-    return response?.json()
+    return await response?.json()
   } catch {
     return undefined
   }

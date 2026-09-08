@@ -4,6 +4,7 @@ import * as ClearCache from '../src/parts/ClearCache/ClearCache.ts'
 test('clears ESLint memory and persistent caches', async () => {
   const clearConfigDiscoveryCache = jest.fn<() => void>()
   const clearEvaluationCache = jest.fn(async () => {})
+  const clearFileContentCache = jest.fn<() => void>()
   const clearFileHashCache = jest.fn<() => void>()
   const clearLintResultCache = jest.fn<() => void>()
   const clearModuleResolutionCache = jest.fn<() => void>()
@@ -18,6 +19,7 @@ test('clears ESLint memory and persistent caches', async () => {
   await ClearCache.clearCacheWithDependencies({
     clearConfigDiscoveryCache,
     clearEvaluationCache,
+    clearFileContentCache,
     clearFileHashCache,
     clearLintResultCache,
     clearModuleResolutionCache,
@@ -28,6 +30,7 @@ test('clears ESLint memory and persistent caches', async () => {
 
   expect(clearConfigDiscoveryCache).toHaveBeenCalledTimes(1)
   expect(clearEvaluationCache).toHaveBeenCalledTimes(1)
+  expect(clearFileContentCache).toHaveBeenCalledTimes(1)
   expect(clearFileHashCache).toHaveBeenCalledTimes(1)
   expect(clearLintResultCache).toHaveBeenCalledTimes(1)
   expect(clearModuleResolutionCache).toHaveBeenCalledTimes(1)
