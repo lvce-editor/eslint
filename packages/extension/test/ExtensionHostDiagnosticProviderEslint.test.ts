@@ -127,3 +127,59 @@ test('skips unchanged content before config discovery and lints edits', async ()
   expect(EslintEvaluationWorker.state.rpcPromise).toBeDefined()
   expect(await DiagnosticProvider.provideDiagnostics(textDocument)).toEqual([])
 })
+
+test.each([
+  [
+    "Cannot resolve module 'eslint/config' from /workspace/eslint.config.js",
+    'eslint/config',
+  ],
+  [
+    "Cannot resolve module '@eslint/js' from /workspace/eslint.config.js",
+    '@eslint/js',
+  ],
+  [
+    'Cannot find ESLint in project node_modules for /workspace/src/file.ts',
+    'eslint',
+  ],
+])(
+  'explains how to install missing dependencies: %s',
+  async (errorMessage, dependency) => {
+    EslintEvaluationWorker.state.createRpc = async () => ({
+      invoke: async () => {
+        throw new Error(errorMessage)
+      },
+    })
+
+    const diagnostics = await DiagnosticProvider.provideDiagnostics({
+      text: 'const value = 1',
+      uri: '/workspace/src/file.ts',
+    })
+
+    expect(diagnostics).toHaveLength(1)
+    expect(diagnostics[0]).toMatchObject({
+      message: `ESLint could not find "${dependency}". Project dependencies may not be installed. Run "npm ci" (or "npm install" if there is no package-lock.json) in the project folder.`,
+      source: 'eslint',
+      type: 'error',
+      uri: '/workspace/eslint.config.js',
+    })
+  },
+)
+
+test.each([
+  './rules.js',
+  '/shared/rules.js',
+  'node:http',
+  'https://example.com/rules.js',
+])('preserves configuration errors for %s', async (specifier) => {
+  const message = `Cannot resolve module '${specifier}' from /workspace/eslint.config.js`
+  EslintEvaluationWorker.state.createRpc = async () => ({
+    invoke: async () => {
+      throw new Error(message)
+    },
+  })
+  const diagnostics = await DiagnosticProvider.provideDiagnostics({
+    text: 'const value = 1',
+    uri: '/workspace/src/file.ts',
+  })
+  expect(diagnostics[0].message).toBe(`ESLint configuration error: ${message}`)
+})
