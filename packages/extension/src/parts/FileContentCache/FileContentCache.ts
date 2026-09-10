@@ -1,7 +1,7 @@
-import * as CacheExpiration from '../CacheExpiration/CacheExpiration.ts'
+import * as CacheResponse from '../CacheResponse/CacheResponse.ts'
 import * as Logger from '../Logger/Logger.ts'
 
-const CacheName = 'eslint-file-content-v1'
+const CacheName = 'eslint-file-content-v2'
 const CacheKeyPrefix = 'https://eslint-file-cache.invalid/'
 const ContentType = 'application/javascript'
 
@@ -48,7 +48,7 @@ export const getText = async (hash: string): Promise<string | undefined> => {
       return undefined
     }
     const response = await cache.match(getKey(hash))
-    return await response?.text()
+    return response ? await CacheResponse.readText(response) : undefined
   } catch (error) {
     disableCache(current, error)
     return undefined
@@ -62,14 +62,7 @@ export const setText = async (hash: string, content: string): Promise<void> => {
     if (!cache || current.disabled) {
       return
     }
-    const contentLength = new TextEncoder().encode(content).byteLength
-    const response = new Response(content, {
-      headers: {
-        'Content-Length': String(contentLength),
-        'Content-Type': ContentType,
-        Expires: CacheExpiration.getExpirationDate(),
-      },
-    })
+    const response = await CacheResponse.create(content, ContentType)
     await cache.put(getKey(hash), response)
   } catch (error) {
     disableCache(current, error)

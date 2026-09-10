@@ -1,6 +1,6 @@
-import * as CacheExpiration from '../CacheExpiration/CacheExpiration.ts'
+import * as CacheResponse from '../CacheResponse/CacheResponse.ts'
 
-const CacheName = 'eslint-module-analysis-v2'
+const CacheName = 'eslint-module-analysis-v3'
 const CacheKeyPrefix = 'https://eslint-module-analysis-cache.invalid/'
 
 const pending = new Map<string, Promise<unknown>>()
@@ -12,7 +12,7 @@ const getCachedValue = async (key: string): Promise<unknown> => {
   try {
     const cache = await caches.open(CacheName)
     const response = await cache.match(getCacheKey(key))
-    return await response?.json()
+    return response ? await CacheResponse.readJson(response) : undefined
   } catch {
     return undefined
   }
@@ -21,17 +21,10 @@ const getCachedValue = async (key: string): Promise<unknown> => {
 const setCachedValue = async (key: string, value: unknown): Promise<void> => {
   try {
     const content = JSON.stringify(value)
-    const contentLength = new TextEncoder().encode(content).byteLength
     const cache = await caches.open(CacheName)
     await cache.put(
       getCacheKey(key),
-      new Response(content, {
-        headers: {
-          'Content-Length': String(contentLength),
-          'Content-Type': 'application/json',
-          Expires: CacheExpiration.getExpirationDate(),
-        },
-      }),
+      await CacheResponse.create(content, 'application/json'),
     )
   } catch {
     // Persistent caching is an optimization; analysis remains the fallback.
