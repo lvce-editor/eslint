@@ -1395,8 +1395,8 @@ test.each(['jsx', 'tsx'])(
 test('reuses config dependencies when opening another TypeScript file', async () => {
   setFiles({
     '/workspace/eslint.config.js': `import plugin from 'plugin'; export default [plugin]`,
-    '/workspace/node_modules/plugin/package.json': '{"main":"index.js"}',
     '/workspace/node_modules/plugin/index.js': 'export default {}',
+    '/workspace/node_modules/plugin/package.json': '{"main":"index.js"}',
     '/workspace/src/first.ts': 'export const first = 1',
     '/workspace/src/second.ts': 'export const second = 2',
   })
@@ -1434,9 +1434,9 @@ test('restores shared config dependencies in a fresh resolver and invalidates th
   }
   setFiles({
     '/restart-workspace/eslint.config.js': `import plugin from 'plugin'; export default [plugin]`,
+    '/restart-workspace/node_modules/plugin/index.js': 'export default {}',
     '/restart-workspace/node_modules/plugin/package.json':
       '{"main":"index.js"}',
-    '/restart-workspace/node_modules/plugin/index.js': 'export default {}',
     '/restart-workspace/src/first.ts': 'export const first = 1',
     '/restart-workspace/src/second.ts': 'export const second = 2',
   })
@@ -1512,12 +1512,12 @@ test('restores shared config dependencies in a fresh resolver and invalidates th
 test('keeps TypeScript projects separate when reusing config dependencies', async () => {
   setFiles({
     '/projects/eslint.config.js': 'export default []',
+    '/projects/first/main.ts': 'export const first = 1',
     '/projects/first/tsconfig.json': '{"files":["types.ts"]}',
     '/projects/first/types.ts': 'export type First = string',
-    '/projects/first/main.ts': 'export const first = 1',
+    '/projects/second/main.ts': 'export const second = 2',
     '/projects/second/tsconfig.json': '{"files":["types.ts"]}',
     '/projects/second/types.ts': 'export type Second = number',
-    '/projects/second/main.ts': 'export const second = 2',
   })
   const first = await LoadEslintConfig.loadEslintConfig(
     '/projects/eslint.config.js',

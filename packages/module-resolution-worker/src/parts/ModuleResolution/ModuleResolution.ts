@@ -1394,8 +1394,7 @@ const loadModule = async (
     ...Object.values(modules),
   ].reduce(
     (total, source) =>
-      total +
-      (typeof source === 'string' ? source.length : source.content.length),
+      total + (typeof source === 'string' ? source : source.content).length,
     0,
   )
   const getResolutionRoot = (path: string): string | undefined =>
