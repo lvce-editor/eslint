@@ -22,7 +22,7 @@ export const activate = async (): Promise<void> => {
   }
   state.isActivated = true
   await activateExtensionApi()
-  await RemoveLegacyCaches.removeLegacyCaches()
+  // API message ports snapshot the registry, so register before further awaits.
   HandleFileChanges.register()
   registerCommand({
     execute: ClearCache.clearCache,
@@ -42,6 +42,7 @@ export const activate = async (): Promise<void> => {
   for (const provider of GetDiagnosticProviders.getDiagnosticProviders()) {
     registerDiagnosticProvider(provider)
   }
+  await RemoveLegacyCaches.removeLegacyCaches()
 }
 
 export const deactivate = (): void => {}
