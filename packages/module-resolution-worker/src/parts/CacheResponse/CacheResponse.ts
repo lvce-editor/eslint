@@ -30,7 +30,7 @@ export const create = async (
   })
 }
 
-export const readText = async (response: Response): Promise<string> => {
+const readText = async (response: Response): Promise<string> => {
   if (response.headers.get(encodingHeader) === 'gzip' && response.body) {
     return new Response(
       response.body.pipeThrough(new DecompressionStream('gzip')),
