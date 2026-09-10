@@ -99,6 +99,9 @@ export const recordConfigGraph = (
   const entryUri = FileSystem.toUri(normalize(path))
   const fileUri = filePath ? FileSystem.toUri(normalize(filePath)) : ''
   record(`module:${entryUri}:${fileUri}`, graph)
+  if (filePath) {
+    record(`config-dependencies:${entryUri}`, graph)
+  }
 }
 
 export const recordEslintGraph = (

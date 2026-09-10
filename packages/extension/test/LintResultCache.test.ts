@@ -53,6 +53,11 @@ const setGraph = async (
 const setProjectGraphs = async (): Promise<void> => {
   await Promise.all([
     setGraph(
+      'config-dependencies/file/workspace/eslint.config.js',
+      'file:///workspace/eslint.config.js',
+      'file:///workspace/eslint.config.js',
+    ),
+    setGraph(
       'module/file/workspace/eslint.config.js/file/workspace/src/file.ts',
       'file:///workspace/eslint.config.js',
       'file:///workspace/eslint.config.js',
@@ -109,7 +114,7 @@ test('restores an unchanged lint result without revalidating warm graph revision
       '/workspace/eslint.config.js',
     ),
   ).resolves.toEqual(results)
-  expect(getFileHashes).toHaveBeenCalledTimes(2)
+  expect(getFileHashes).toHaveBeenCalledTimes(3)
   expect(open).toHaveBeenCalledWith('eslint-lint-result-v1')
   const response = cacheEntries.get(
     'https://eslint-lint-result.invalid/%2Fworkspace%2Fsrc%2Ffile.ts',
@@ -214,4 +219,30 @@ test('retries a missing graph revision after the graph is populated', async () =
       '/workspace/eslint.config.js',
     ),
   ).resolves.toEqual([])
+})
+
+test('does not reuse diagnostics when a shared config dependency changes', async () => {
+  hashes.set('file:///workspace/plugin.js', 'plugin-before')
+  await setProjectGraphs()
+  await setGraph(
+    'config-dependencies/file/workspace/eslint.config.js',
+    'file:///workspace/eslint.config.js',
+    'file:///workspace/plugin.js',
+  )
+  await LintResultCache.save(
+    'var value = 1',
+    '/workspace/src/file.ts',
+    '/workspace/eslint.config.js',
+    undefined,
+    [],
+  )
+  hashes.set('file:///workspace/plugin.js', 'plugin-after')
+  LintResultCache.clearRevisionCache()
+  await expect(
+    LintResultCache.restore(
+      'var value = 1',
+      '/workspace/src/file.ts',
+      '/workspace/eslint.config.js',
+    ),
+  ).resolves.toBeUndefined()
 })

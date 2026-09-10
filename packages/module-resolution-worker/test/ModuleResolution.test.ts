@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-implied-eval, sonarjs/code-eval -- transformed project modules execute in the interop regression test */
 import { beforeEach, expect, jest, test } from '@jest/globals'
+import * as ComputeTextHash from '../src/parts/ComputeTextHash/ComputeTextHash.ts'
 import * as FileSystem from '../src/parts/FileSystem/FileSystem.ts'
 import * as LoadEslintConfig from '../src/parts/ModuleResolution/ModuleResolution.ts'
 
@@ -1390,3 +1391,148 @@ test.each(['jsx', 'tsx'])(
     )
   },
 )
+
+test('reuses config dependencies when opening another TypeScript file', async () => {
+  setFiles({
+    '/workspace/eslint.config.js': `import plugin from 'plugin'; export default [plugin]`,
+    '/workspace/node_modules/plugin/package.json': '{"main":"index.js"}',
+    '/workspace/node_modules/plugin/index.js': 'export default {}',
+    '/workspace/src/first.ts': 'export const first = 1',
+    '/workspace/src/second.ts': 'export const second = 2',
+  })
+  const first = await LoadEslintConfig.loadEslintConfig(
+    '/workspace/eslint.config.js',
+    '/workspace/src/first.ts',
+  )
+  const result = await FileSystem.captureFileReads(() =>
+    LoadEslintConfig.loadEslintConfig(
+      '/workspace/eslint.config.js',
+      '/workspace/src/second.ts',
+    ),
+  )
+  expect(result.error).toBeUndefined()
+  expect(
+    result.reads.filter((read) => read.path.includes('/node_modules/')),
+  ).toEqual([])
+  expect(result.result?.modules).toEqual(first.modules)
+  expect(result.result?.files['/workspace/src/second.ts']).toBe(
+    'export const second = 2',
+  )
+  expect(result.result?.files['/workspace/src/first.ts']).toBeUndefined()
+  expect(first.files['/workspace/src/second.ts']).toBeUndefined()
+})
+
+test('restores shared config dependencies in a fresh resolver and invalidates them', async () => {
+  FileSystem.state.api = {
+    ...FileSystem.state.api,
+    getFileHashes: async (uris) =>
+      Promise.all(
+        uris.map(async (uri) =>
+          ComputeTextHash.computeTextHash(await readFile(uri)),
+        ),
+      ),
+  }
+  setFiles({
+    '/restart-workspace/eslint.config.js': `import plugin from 'plugin'; export default [plugin]`,
+    '/restart-workspace/node_modules/plugin/package.json':
+      '{"main":"index.js"}',
+    '/restart-workspace/node_modules/plugin/index.js': 'export default {}',
+    '/restart-workspace/src/first.ts': 'export const first = 1',
+    '/restart-workspace/src/second.ts': 'export const second = 2',
+  })
+  const first = await LoadEslintConfig.loadEslintConfig(
+    '/restart-workspace/eslint.config.js',
+    '/restart-workspace/src/first.ts',
+  )
+  jest.resetModules()
+  const freshFileSystem = await import('../src/parts/FileSystem/FileSystem.ts')
+  const freshResolver =
+    await import('../src/parts/ModuleResolution/ModuleResolution.ts')
+  freshFileSystem.state.api = {
+    ...FileSystem.state.api,
+    getFileHashes: async (uris) =>
+      Promise.all(
+        uris.map(async (uri) =>
+          ComputeTextHash.computeTextHash(await readFile(uri)),
+        ),
+      ),
+  }
+  const restored = await freshFileSystem.captureFileReads(() =>
+    freshResolver.loadEslintConfig(
+      '/restart-workspace/eslint.config.js',
+      '/restart-workspace/src/second.ts',
+    ),
+  )
+  expect(restored.error).toBeUndefined()
+  expect(
+    restored.reads.filter((read) => read.path.includes('/node_modules/')),
+  ).toEqual([])
+  expect(restored.result?.modules).toEqual(first.modules)
+  expect(
+    restored.result?.files['/restart-workspace/src/first.ts'],
+  ).toBeUndefined()
+  expect(restored.result?.files['/restart-workspace/src/second.ts']).toBe(
+    'export const second = 2',
+  )
+  jest.resetModules()
+  const reopenedFileSystem =
+    await import('../src/parts/FileSystem/FileSystem.ts')
+  const reopenedResolver =
+    await import('../src/parts/ModuleResolution/ModuleResolution.ts')
+  reopenedFileSystem.state.api = freshFileSystem.state.api
+  const reopened = await reopenedFileSystem.captureFileReads(() =>
+    reopenedResolver.loadEslintConfig(
+      '/restart-workspace/eslint.config.js',
+      '/restart-workspace/src/second.ts',
+    ),
+  )
+  expect(reopened.error).toBeUndefined()
+  expect(
+    reopened.reads.filter((read) => read.path.includes('/node_modules/')),
+  ).toEqual([])
+  expect(reopened.result?.modules).toEqual(first.modules)
+  expect(reopened.result?.files['/restart-workspace/src/second.ts']).toBe(
+    'export const second = 2',
+  )
+  state.files['/restart-workspace/node_modules/plugin/index.js'] =
+    'export default { rules: {} }'
+  await freshResolver.invalidateCacheKeys([
+    'module:file:///restart-workspace/eslint.config.js:file:///restart-workspace/src/second.ts',
+    'config-dependencies:file:///restart-workspace/eslint.config.js',
+  ])
+  const updated = await freshResolver.loadEslintConfig(
+    '/restart-workspace/eslint.config.js',
+    '/restart-workspace/src/second.ts',
+  )
+  expect(
+    updated.modules['/restart-workspace/node_modules/plugin/index.js'],
+  ).not.toBe(first.modules['/restart-workspace/node_modules/plugin/index.js'])
+})
+
+test('keeps TypeScript projects separate when reusing config dependencies', async () => {
+  setFiles({
+    '/projects/eslint.config.js': 'export default []',
+    '/projects/first/tsconfig.json': '{"files":["types.ts"]}',
+    '/projects/first/types.ts': 'export type First = string',
+    '/projects/first/main.ts': 'export const first = 1',
+    '/projects/second/tsconfig.json': '{"files":["types.ts"]}',
+    '/projects/second/types.ts': 'export type Second = number',
+    '/projects/second/main.ts': 'export const second = 2',
+  })
+  const first = await LoadEslintConfig.loadEslintConfig(
+    '/projects/eslint.config.js',
+    '/projects/first/main.ts',
+  )
+  const second = await LoadEslintConfig.loadEslintConfig(
+    '/projects/eslint.config.js',
+    '/projects/second/main.ts',
+  )
+  expect(first.files['/projects/first/types.ts']).toBe(
+    'export type First = string',
+  )
+  expect(second.files['/projects/second/types.ts']).toBe(
+    'export type Second = number',
+  )
+  expect(second.files['/projects/first/tsconfig.json']).toBeUndefined()
+  expect(second.files['/projects/first/types.ts']).toBeUndefined()
+})
