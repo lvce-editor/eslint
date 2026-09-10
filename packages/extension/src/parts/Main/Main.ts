@@ -9,6 +9,7 @@ import * as GetCodeActionProviders from '../GetCodeActionProviders/GetCodeAction
 import * as GetDiagnosticProviders from '../GetDiagnosticProviders/GetDiagnosticProviders.ts'
 import * as HandleFileChanges from '../HandleFileChanges/HandleFileChanges.ts'
 import * as LintDocument from '../LintDocument/LintDocument.ts'
+import * as RemoveLegacyCaches from '../RemoveLegacyCaches/RemoveLegacyCaches.ts'
 import * as ShowPerformanceTrace from '../ShowPerformanceTrace/ShowPerformanceTrace.ts'
 
 const state = {
@@ -21,6 +22,7 @@ export const activate = async (): Promise<void> => {
   }
   state.isActivated = true
   await activateExtensionApi()
+  await RemoveLegacyCaches.removeLegacyCaches()
   HandleFileChanges.register()
   registerCommand({
     execute: ClearCache.clearCache,

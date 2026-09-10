@@ -11,7 +11,7 @@ test('clears ESLint memory and persistent caches', async () => {
   const clearSuppressionsCache = jest.fn<() => void>()
   const deleteCache = jest.fn(async () => true)
   const getCacheNames = jest.fn(async () => [
-    'eslint-file-content-v1',
+    'eslint-file-content-v2',
     'other-extension-cache',
     'eslint-lint-result-v1',
   ])
@@ -36,7 +36,7 @@ test('clears ESLint memory and persistent caches', async () => {
   expect(clearModuleResolutionCache).toHaveBeenCalledTimes(1)
   expect(clearSuppressionsCache).toHaveBeenCalledTimes(1)
   expect(deleteCache.mock.calls).toEqual([
-    ['eslint-file-content-v1'],
+    ['eslint-file-content-v2'],
     ['eslint-lint-result-v1'],
   ])
 })

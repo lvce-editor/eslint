@@ -67,7 +67,7 @@ test('saves a compiled graph with portable uris', async () => {
     'file:///workspace/lazy.js',
     'file:///workspace/data.json',
   ])
-  expect(open).toHaveBeenCalledWith('eslint-config-files-cache')
+  expect(open).toHaveBeenCalledWith('eslint-config-files-cache-v2')
   const response = cacheEntries.get(
     'https://eslint-config-files-cache.invalid/module/file/workspace/eslint.config.js/file/workspace/src/file.ts',
   )
@@ -314,4 +314,28 @@ test('does not restore content that does not match its content hash', async () =
   await expect(
     ModuleGraphCache.restore('module:file:///workspace/eslint.config.js'),
   ).resolves.toBeUndefined()
+})
+
+test('stores large compiled graphs compactly and restores their content', async () => {
+  const compiled = 'module.exports = "repeated module content 🦄";\n'.repeat(
+    20_000,
+  )
+  const key = 'module:file:///workspace/eslint.config.js:'
+  await ModuleGraphCache.save(key, {
+    entry: '/workspace/eslint.config.js',
+    files: {},
+    lazyModules: {},
+    modules: { '/workspace/eslint.config.js': compiled },
+    moduleSources: { '/workspace/eslint.config.js': 'module.exports = []' },
+    resolutions: {},
+  })
+  let storedBytes = 0
+  for (const response of cacheEntries.values()) {
+    storedBytes += (await response.clone().arrayBuffer()).byteLength
+  }
+  expect(storedBytes).toBeLessThan(
+    new TextEncoder().encode(compiled).byteLength / 4,
+  )
+  const restored = await ModuleGraphCache.restore(key)
+  expect(restored?.modules['/workspace/eslint.config.js']).toBe(compiled)
 })

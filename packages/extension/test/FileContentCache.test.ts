@@ -19,7 +19,7 @@ test('gets text by content hash', async () => {
   match.mockResolvedValueOnce(new Response('content'))
 
   await expect(FileContentCache.getText('sample-hash')).resolves.toBe('content')
-  expect(open).toHaveBeenCalledWith('eslint-file-content-v1')
+  expect(open).toHaveBeenCalledWith('eslint-file-content-v2')
   expect(match).toHaveBeenCalledWith(
     'https://eslint-file-cache.invalid/sample-hash',
   )
@@ -34,7 +34,7 @@ test('returns undefined when content is not cached', async () => {
 test('stores text by content hash', async () => {
   await FileContentCache.setText('sample-hash', 'content 🦄')
 
-  expect(open).toHaveBeenCalledWith('eslint-file-content-v1')
+  expect(open).toHaveBeenCalledWith('eslint-file-content-v2')
   expect(put).toHaveBeenCalledTimes(1)
   const [key, response] = put.mock.calls[0]
   expect(key).toBe('https://eslint-file-cache.invalid/sample-hash')
@@ -152,4 +152,17 @@ test('an old failed read does not disable a newly cleared cache', async () => {
   } finally {
     warn.mockRestore()
   }
+})
+
+test('compresses large file content and restores the original unicode text', async () => {
+  const content = 'const example = "repeated source 🦄";\n'.repeat(10_000)
+  await FileContentCache.setText('large-file', content)
+  const response = put.mock.calls[0][1]
+  const storedBytes = (await response.clone().arrayBuffer()).byteLength
+  expect(storedBytes).toBeLessThan(
+    new TextEncoder().encode(content).byteLength / 4,
+  )
+  expect(response.headers.get('Content-Length')).toBe(String(storedBytes))
+  match.mockResolvedValueOnce(response)
+  await expect(FileContentCache.getText('large-file')).resolves.toBe(content)
 })
