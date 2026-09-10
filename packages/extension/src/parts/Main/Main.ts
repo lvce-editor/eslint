@@ -9,18 +9,15 @@ import * as GetCodeActionProviders from '../GetCodeActionProviders/GetCodeAction
 import * as GetDiagnosticProviders from '../GetDiagnosticProviders/GetDiagnosticProviders.ts'
 import * as HandleFileChanges from '../HandleFileChanges/HandleFileChanges.ts'
 import * as LintDocument from '../LintDocument/LintDocument.ts'
+import * as RemoveLegacyCaches from '../RemoveLegacyCaches/RemoveLegacyCaches.ts'
 import * as ShowPerformanceTrace from '../ShowPerformanceTrace/ShowPerformanceTrace.ts'
 
 const state = {
   isActivated: false,
 }
 
-export const activate = async (): Promise<void> => {
-  if (state.isActivated) {
-    return
-  }
-  state.isActivated = true
-  await activateExtensionApi()
+const registerProviders = (): void => {
+  // API message ports snapshot the registry, so register before further awaits.
   HandleFileChanges.register()
   registerCommand({
     execute: ClearCache.clearCache,
@@ -40,6 +37,28 @@ export const activate = async (): Promise<void> => {
   for (const provider of GetDiagnosticProviders.getDiagnosticProviders()) {
     registerDiagnosticProvider(provider)
   }
+}
+
+export const activateWithDependencies = async (
+  initializeApi: () => Promise<void>,
+  register: () => void,
+  cleanup: () => Promise<void>,
+): Promise<void> => {
+  await initializeApi()
+  register()
+  await cleanup()
+}
+
+export const activate = async (): Promise<void> => {
+  if (state.isActivated) {
+    return
+  }
+  state.isActivated = true
+  await activateWithDependencies(
+    activateExtensionApi,
+    registerProviders,
+    RemoveLegacyCaches.removeLegacyCaches,
+  )
 }
 
 export const deactivate = (): void => {}

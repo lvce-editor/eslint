@@ -49,7 +49,7 @@ test('stores computed analysis and reuses it from cache storage', async () => {
   ).resolves.toEqual(analysis)
 
   expect(compute).toHaveBeenCalledTimes(1)
-  expect(open).toHaveBeenCalledWith('eslint-module-analysis-v2')
+  expect(open).toHaveBeenCalledWith('eslint-module-analysis-v3')
   expect(put).toHaveBeenCalledTimes(1)
   expect(put.mock.calls[0][0]).toBe(
     'https://eslint-module-analysis-cache.invalid/module%3A.js%3Ahash',
@@ -134,5 +134,20 @@ test('recomputes analysis when reading the cached response body fails', async ()
   await expect(
     ModuleAnalysisCache.getOrCompute('module:.js:hash', isAnalysis, compute),
   ).resolves.toEqual({ source: 'transformed' })
+  expect(compute).toHaveBeenCalledTimes(1)
+})
+
+test('compresses large analyses and reuses them without recomputing', async () => {
+  const analysis = {
+    source: 'const example = "repeated analysis 🦄";\n'.repeat(10_000),
+  }
+  const compute = jest.fn(async () => analysis)
+  await ModuleAnalysisCache.getOrCompute('large-analysis', isAnalysis, compute)
+  const response = put.mock.calls[0][1]
+  const storedContent = await response.clone().arrayBuffer()
+  expect(storedContent.byteLength).toBeLessThan(analysis.source.length / 4)
+  await expect(
+    ModuleAnalysisCache.getOrCompute('large-analysis', isAnalysis, compute),
+  ).resolves.toEqual(analysis)
   expect(compute).toHaveBeenCalledTimes(1)
 })

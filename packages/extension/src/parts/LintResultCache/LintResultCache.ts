@@ -1,10 +1,11 @@
 import type { LintResult } from '../EslintEvaluationWorker/EslintEvaluationWorker.ts'
 import type { LoadedSuppressions } from '../LoadSuppressions/LoadSuppressions.ts'
 import * as CacheExpiration from '../CacheExpiration/CacheExpiration.ts'
+import * as CacheResponse from '../CacheResponse/CacheResponse.ts'
 import * as ComputeTextHash from '../ComputeTextHash/ComputeTextHash.ts'
 import * as FileSystem from '../FileSystem/FileSystem.ts'
 
-const GraphCacheName = 'eslint-config-files-cache'
+const GraphCacheName = 'eslint-config-files-cache-v2'
 const GraphCacheKeyPrefix = 'https://eslint-config-files-cache.invalid/'
 const GraphCacheVersion = 5
 const ResultCacheName = 'eslint-lint-result-v1'
@@ -159,7 +160,7 @@ const loadGraphRevision = async (
     if (!response) {
       return undefined
     }
-    const value: unknown = await response.json()
+    const value: unknown = await CacheResponse.readJson(response)
     if (!isCachedModuleGraph(value)) {
       return undefined
     }
@@ -288,7 +289,7 @@ export const restore = async (
     if (!response) {
       return undefined
     }
-    const value: unknown = await response.json()
+    const value: unknown = await CacheResponse.readJson(response)
     return isCachedLintResult(value) && value.fingerprint === fingerprint
       ? value.results
       : undefined

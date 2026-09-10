@@ -1,10 +1,10 @@
-import * as CacheExpiration from '../CacheExpiration/CacheExpiration.ts'
+import * as CacheResponse from '../CacheResponse/CacheResponse.ts'
 import * as ComputeTextHash from '../ComputeTextHash/ComputeTextHash.ts'
 import * as FileSystem from '../FileSystem/FileSystem.ts'
 
-const CacheName = 'eslint-config-files-cache'
+const CacheName = 'eslint-config-files-cache-v2'
 const CacheKeyPrefix = 'https://eslint-config-files-cache.invalid/'
-const CompiledCacheName = 'eslint-compiled-module-graph-v2'
+const CompiledCacheName = 'eslint-compiled-module-graph-v3'
 const CompiledCacheKeyPrefix = 'https://eslint-compiled-module-graph.invalid/'
 const CacheVersion = 5
 const CompiledCacheVersion = 2
@@ -166,7 +166,7 @@ const getCachedGraph = async (
   if (!response) {
     return undefined
   }
-  const value: unknown = await response.json()
+  const value: unknown = await CacheResponse.readJson(response)
   return isCachedModuleGraph(value) ? value : undefined
 }
 
@@ -178,7 +178,7 @@ const getCompiledGraph = async (
   if (!response) {
     return undefined
   }
-  const value: unknown = await response.json()
+  const value: unknown = await CacheResponse.readJson(response)
   return isCompiledModuleGraph(value) ? value : undefined
 }
 
@@ -189,14 +189,7 @@ const setJson = async (
 ): Promise<void> => {
   const cache = await caches.open(cacheName)
   const content = JSON.stringify(value)
-  const contentLength = new TextEncoder().encode(content).byteLength
-  const response = new Response(content, {
-    headers: {
-      'Content-Length': String(contentLength),
-      'Content-Type': 'application/json',
-      Expires: CacheExpiration.getExpirationDate(),
-    },
-  })
+  const response = await CacheResponse.create(content, 'application/json')
   await cache.put(key, response)
 }
 
