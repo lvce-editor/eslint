@@ -26,12 +26,12 @@ export const test: Test = async ({
   await Editor.openSourceActions()
 
   const action = Locator('.SourceActionItem', {
-    hasText: 'Disable css/no-important for this line',
+    hasText: 'Disable for this line: css/no-important',
   })
   await expect(action).toBeVisible()
   await Command.execute(
     'EditorSourceAction.selectItem',
-    'Disable css/no-important for this line',
+    'Disable for this line: css/no-important',
   )
   await Editor.shouldHaveText(
     '.example {\n  /* eslint-disable-next-line css/no-important */\n  color: red !important;\n}',

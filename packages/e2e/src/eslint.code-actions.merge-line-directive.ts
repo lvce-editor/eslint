@@ -27,12 +27,12 @@ export const test: Test = async ({
   await Editor.openSourceActions()
 
   const action = Locator('.SourceActionItem', {
-    hasText: 'Disable no-console for this line',
+    hasText: 'Disable for this line: no-console',
   })
   await expect(action).toBeVisible()
   await Command.execute(
     'EditorSourceAction.selectItem',
-    'Disable no-console for this line',
+    'Disable for this line: no-console',
   )
   await Editor.shouldHaveText(
     "// eslint-disable-next-line no-debugger, no-console\ndebugger; console.log('test')",
