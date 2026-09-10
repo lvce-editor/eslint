@@ -26,12 +26,12 @@ export const test: Test = async ({
   await Editor.openSourceActions()
 
   const action = Locator('.SourceActionItem', {
-    hasText: 'Disable no-undef for the entire file',
+    hasText: 'Disable for the entire file: no-undef',
   })
   await expect(action).toBeVisible()
   await Command.execute(
     'EditorSourceAction.selectItem',
-    'Disable no-undef for the entire file',
+    'Disable for the entire file: no-undef',
   )
   await Editor.shouldHaveText(`/* eslint-disable no-undef */\n${content}`)
 }

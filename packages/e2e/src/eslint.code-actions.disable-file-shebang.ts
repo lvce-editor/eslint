@@ -26,12 +26,12 @@ export const test: Test = async ({
   await Editor.openSourceActions()
 
   const action = Locator('.SourceActionItem', {
-    hasText: 'Disable no-console for the entire file',
+    hasText: 'Disable for the entire file: no-console',
   })
   await expect(action).toBeVisible()
   await Command.execute(
     'EditorSourceAction.selectItem',
-    'Disable no-console for the entire file',
+    'Disable for the entire file: no-console',
   )
   await Editor.shouldHaveText(
     "#!/usr/bin/env node\n/* eslint-disable no-console */\nconsole.log('test')",

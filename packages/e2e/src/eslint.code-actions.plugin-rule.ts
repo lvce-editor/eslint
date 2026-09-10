@@ -27,12 +27,12 @@ export const test: Test = async ({
   await Editor.openSourceActions()
 
   const action = Locator('.SourceActionItem', {
-    hasText: 'Disable unicorn/no-for-each for this line',
+    hasText: 'Disable for this line: unicorn/no-for-each',
   })
   await expect(action).toBeVisible()
   await Command.execute(
     'EditorSourceAction.selectItem',
-    'Disable unicorn/no-for-each for this line',
+    'Disable for this line: unicorn/no-for-each',
   )
   await Editor.shouldHaveText(
     'const values = [1]\n\n// eslint-disable-next-line unicorn/no-for-each\nvalues.forEach((value) => console.log(value))',

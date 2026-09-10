@@ -53,7 +53,7 @@ test('returns fix and disable actions for a fixable problem', () => {
         },
       ],
       kind: 'quickfix',
-      name: 'Disable quotes for this line',
+      name: 'Disable for this line: quotes',
     },
     {
       edits: [
@@ -64,7 +64,7 @@ test('returns fix and disable actions for a fixable problem', () => {
         },
       ],
       kind: 'quickfix',
-      name: 'Disable quotes for the entire file',
+      name: 'Disable for the entire file: quotes',
     },
   ])
 })
@@ -90,7 +90,7 @@ test('returns disable actions for a non-fixable problem', () => {
         },
       ],
       kind: 'quickfix',
-      name: 'Disable no-console for this line',
+      name: 'Disable for this line: no-console',
     },
     {
       edits: [
@@ -101,7 +101,7 @@ test('returns disable actions for a non-fixable problem', () => {
         },
       ],
       kind: 'quickfix',
-      name: 'Disable no-console for the entire file',
+      name: 'Disable for the entire file: no-console',
     },
   ])
 })
@@ -142,7 +142,7 @@ test('preserves indentation for a line directive', () => {
       },
     ],
     kind: 'quickfix',
-    name: 'Disable no-console for this line',
+    name: 'Disable for this line: no-console',
   })
 })
 
@@ -167,7 +167,7 @@ test('merges with an existing line disable-next-line directive', () => {
       },
     ],
     kind: 'quickfix',
-    name: 'Disable no-console for this line',
+    name: 'Disable for this line: no-console',
   })
 })
 
@@ -192,7 +192,7 @@ test('merges before the closing tag of an existing block directive', () => {
       },
     ],
     kind: 'quickfix',
-    name: 'Disable no-console for this line',
+    name: 'Disable for this line: no-console',
   })
 })
 
@@ -216,7 +216,7 @@ test('inserts a file directive after a shebang', () => {
       },
     ],
     kind: 'quickfix',
-    name: 'Disable no-console for the entire file',
+    name: 'Disable for the entire file: no-console',
   })
 })
 
@@ -318,4 +318,18 @@ test('deduplicates actions for the same rule', () => {
   })
 
   expect(getActions(text, [first, second], 5)).toHaveLength(2)
+})
+
+test('keeps disable scopes distinguishable before a long rule name', () => {
+  const ruleId = '@typescript-eslint/prefer-readonly-parameter-types'
+  const actions = getActions('const value = "test"', [createResult({ ruleId })])
+
+  expect(actions.map((action) => action.name)).toEqual([
+    `Disable for this line: ${ruleId}`,
+    `Disable for the entire file: ${ruleId}`,
+  ])
+  expect(actions[0].edits[0].inserted).toBe(
+    `// eslint-disable-next-line ${ruleId}\n`,
+  )
+  expect(actions[1].edits[0].inserted).toBe(`/* eslint-disable ${ruleId} */\n`)
 })

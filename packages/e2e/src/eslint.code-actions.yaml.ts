@@ -26,12 +26,12 @@ export const test: Test = async ({
   await Editor.openSourceActions()
 
   const action = Locator('.SourceActionItem', {
-    hasText: 'Disable yml/no-empty-document for this line',
+    hasText: 'Disable for this line: yml/no-empty-document',
   })
   await expect(action).toBeVisible()
   await Command.execute(
     'EditorSourceAction.selectItem',
-    'Disable yml/no-empty-document for this line',
+    'Disable for this line: yml/no-empty-document',
   )
   await Editor.shouldHaveText(
     '# eslint-disable-next-line yml/no-empty-document\n---',
