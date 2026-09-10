@@ -235,13 +235,13 @@ export const getCodeActionsFromLintResults = (
       addAction(
         actions,
         names,
-        `Disable ${ruleId} for this line`,
+        `Disable for this line: ${ruleId}`,
         getDisableLineEdit(text, result.line, ruleId, languageId),
       )
       addAction(
         actions,
         names,
-        `Disable ${ruleId} for the entire file`,
+        `Disable for the entire file: ${ruleId}`,
         getDisableFileEdit(text, ruleId, languageId),
       )
     }

@@ -30,12 +30,12 @@ export const test: Test = async ({
   })
   await expect(fixAction).toBeVisible()
   const disableAction = Locator('.SourceActionItem', {
-    hasText: 'Disable quotes for this line',
+    hasText: 'Disable for this line: quotes',
   })
   await expect(disableAction).toBeVisible()
   await Command.execute(
     'EditorSourceAction.selectItem',
-    'Disable quotes for this line',
+    'Disable for this line: quotes',
   )
   await Editor.shouldHaveText(`// eslint-disable-next-line quotes\n${content}`)
 }
