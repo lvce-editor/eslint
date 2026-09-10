@@ -16,12 +16,7 @@ const state = {
   isActivated: false,
 }
 
-export const activate = async (): Promise<void> => {
-  if (state.isActivated) {
-    return
-  }
-  state.isActivated = true
-  await activateExtensionApi()
+const registerProviders = (): void => {
   // API message ports snapshot the registry, so register before further awaits.
   HandleFileChanges.register()
   registerCommand({
@@ -42,7 +37,28 @@ export const activate = async (): Promise<void> => {
   for (const provider of GetDiagnosticProviders.getDiagnosticProviders()) {
     registerDiagnosticProvider(provider)
   }
-  await RemoveLegacyCaches.removeLegacyCaches()
+}
+
+export const activateWithDependencies = async (
+  initializeApi: () => Promise<void>,
+  register: () => void,
+  cleanup: () => Promise<void>,
+): Promise<void> => {
+  await initializeApi()
+  register()
+  await cleanup()
+}
+
+export const activate = async (): Promise<void> => {
+  if (state.isActivated) {
+    return
+  }
+  state.isActivated = true
+  await activateWithDependencies(
+    activateExtensionApi,
+    registerProviders,
+    RemoveLegacyCaches.removeLegacyCaches,
+  )
 }
 
 export const deactivate = (): void => {}
