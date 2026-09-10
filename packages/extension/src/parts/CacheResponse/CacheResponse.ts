@@ -25,7 +25,7 @@ export const create = async (
       'Content-Length': String(body.byteLength),
       'Content-Type': contentType,
       Expires: CacheExpiration.getExpirationDate(),
-      ...(compressed ? { [encodingHeader]: 'gzip' } : {}),
+      ...(compressed && { [encodingHeader]: 'gzip' }),
     },
   })
 }

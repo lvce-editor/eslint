@@ -331,7 +331,8 @@ test('stores large compiled graphs compactly and restores their content', async 
   })
   let storedBytes = 0
   for (const response of cacheEntries.values()) {
-    storedBytes += (await response.clone().arrayBuffer()).byteLength
+    const storedContent = await response.clone().arrayBuffer()
+    storedBytes += storedContent.byteLength
   }
   expect(storedBytes).toBeLessThan(
     new TextEncoder().encode(compiled).byteLength / 4,

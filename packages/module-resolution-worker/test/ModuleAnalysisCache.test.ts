@@ -144,9 +144,8 @@ test('compresses large analyses and reuses them without recomputing', async () =
   const compute = jest.fn(async () => analysis)
   await ModuleAnalysisCache.getOrCompute('large-analysis', isAnalysis, compute)
   const response = put.mock.calls[0][1]
-  expect((await response.clone().arrayBuffer()).byteLength).toBeLessThan(
-    analysis.source.length / 4,
-  )
+  const storedContent = await response.clone().arrayBuffer()
+  expect(storedContent.byteLength).toBeLessThan(analysis.source.length / 4)
   await expect(
     ModuleAnalysisCache.getOrCompute('large-analysis', isAnalysis, compute),
   ).resolves.toEqual(analysis)

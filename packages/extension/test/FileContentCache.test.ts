@@ -158,7 +158,8 @@ test('compresses large file content and restores the original unicode text', asy
   const content = 'const example = "repeated source 🦄";\n'.repeat(10_000)
   await FileContentCache.setText('large-file', content)
   const response = put.mock.calls[0][1]
-  const storedBytes = (await response.clone().arrayBuffer()).byteLength
+  const storedContent = await response.clone().arrayBuffer()
+  const storedBytes = storedContent.byteLength
   expect(storedBytes).toBeLessThan(
     new TextEncoder().encode(content).byteLength / 4,
   )
