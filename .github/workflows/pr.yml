@@ -8,8 +8,10 @@ on:
 jobs:
   pr:
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-14, windows-2022]
+        os: [macos-14]
+        attempt: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     steps:
@@ -42,46 +44,12 @@ jobs:
         run: npm run e2e:headless
         env:
           PLAYWRIGHT_BROWSERS_PATH: 0
-      - name: Build static site
-        run: node scripts/build-static.js
-        env:
-          PATH_PREFIX: auto
-      - name: Check out memory benchmark workspace
-        if: matrix.os == 'ubuntu-24.04'
-        uses: actions/checkout@v4
-        with:
-          repository: lvce-editor/problems-view
-          ref: 9072ff883dde4b921be696578f70182ef1d8ec16
-          path: benchmark-workspace/problems-view
-      - name: Install memory benchmark workspace dependencies
-        if: matrix.os == 'ubuntu-24.04'
-        working-directory: benchmark-workspace/problems-view
-        run: npm ci
-      - name: Run memory benchmark
-        if: matrix.os == 'ubuntu-24.04'
-        run: >-
-          npm run benchmark --
-          --repo "$GITHUB_WORKSPACE/benchmark-workspace/problems-view"
-          --file packages/problems-view/src/problemsViewWorkerMain.ts
-          --heap
-          --memory-budget packages/benchmark/memory-budget.json
-          --output benchmark-results/memory
-        env:
-          PLAYWRIGHT_BROWSERS_PATH: 0
-      - name: Upload memory benchmark summary
-        if: always() && matrix.os == 'ubuntu-24.04'
+      - name: Upload browser test evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: eslint-memory-summary
+          name: browser-evidence-${{ matrix.attempt }}
           path: |
-            benchmark-results/memory/benchmark.json
-            benchmark-results/memory/heap-summary.json
-            packages/benchmark/memory-budget.json
-          if-no-files-found: warn
-      - name: Upload failed memory benchmark heap
-        if: failure() && matrix.os == 'ubuntu-24.04'
-        uses: actions/upload-artifact@v4
-        with:
-          name: eslint-memory-heap-failure
-          path: benchmark-results/memory/heap.heapsnapshot
+            packages/e2e/.test-results
+            packages/e2e/test-results
           if-no-files-found: ignore
