@@ -31,6 +31,11 @@
       "project": ["**/*.{js,json,ts}"],
       "ignoreDependencies": ["eslint"]
     },
+    "packages/e2e/fixtures/typescript-eslint": {
+      "entry": ["eslint.config.js", "test.ts", "second.ts"],
+      "project": ["**/*.{js,json,ts}"],
+      "ignoreDependencies": ["eslint"]
+    },
     "packages/eslint-evaluation-worker": {
       "entry": ["src/eslintEvaluationWorkerMain.ts", "test/**/*.test.ts"],
       "project": ["src/**/*.ts", "test/**/*.ts"]

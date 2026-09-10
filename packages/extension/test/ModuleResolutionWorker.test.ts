@@ -160,6 +160,7 @@ test('defers persistent invalidation until the next resolution', async () => {
       'ModuleResolution.invalidateCacheKeys',
       [
         'module:file:///workspace/eslint.config.js:file:///workspace/src/file.js',
+        'config-dependencies:file:///workspace/eslint.config.js',
       ],
     ],
     [
@@ -179,6 +180,7 @@ test('defers persistent invalidation until the next resolution', async () => {
     }),
   ).toEqual([
     'module:file:///workspace/eslint.config.js:file:///workspace/src/file.js',
+    'config-dependencies:file:///workspace/eslint.config.js',
   ])
   expect(ModuleResolutionWorker.state.rpcPromise).toBeUndefined()
 })

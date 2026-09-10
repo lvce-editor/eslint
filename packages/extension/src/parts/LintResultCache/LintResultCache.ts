@@ -211,6 +211,7 @@ const getGraphCacheKeys = (
   const keys = [`commonjs-project:${FileSystem.toUri(eslintPath)}`]
   if (configPath) {
     keys.unshift(
+      `config-dependencies:${FileSystem.toUri(normalize(configPath))}`,
       `module:${FileSystem.toUri(normalize(configPath))}:${FileSystem.toUri(normalizedFilePath)}`,
     )
   }

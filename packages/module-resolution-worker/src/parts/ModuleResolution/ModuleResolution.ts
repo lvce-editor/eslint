@@ -1322,6 +1322,7 @@ const loadModule = async (
   shouldRestore = true,
   resolutionRoot?: string,
   bypassCache = false,
+  dependenciesOnly = false,
 ): Promise<ModuleGraph> => {
   const entry = normalize(modulePath)
   const cacheKey =
@@ -1334,26 +1335,68 @@ const loadModule = async (
       return cached.graph
     }
   }
+  const dependencyGraph =
+    virtualFilePath && !scanCommonJs
+      ? await loadModule(
+          modulePath,
+          false,
+          undefined,
+          `config-dependencies:${FileSystem.toUri(entry)}`,
+          true,
+          resolutionRoot,
+          bypassCache,
+          true,
+        )
+      : undefined
   if (shouldRestore && !bypassCache) {
     const restored = await restoreModuleGraph(cacheKey, entry)
     if (restored) {
-      return restored
+      const graph = dependencyGraph
+        ? {
+            ...restored,
+            files: { ...dependencyGraph.files, ...restored.files },
+            lazyModules: {
+              ...dependencyGraph.lazyModules,
+              ...restored.lazyModules,
+            },
+            modules: { ...dependencyGraph.modules, ...restored.modules },
+            resolutions: {
+              ...dependencyGraph.resolutions,
+              ...restored.resolutions,
+            },
+          }
+        : restored
+      const entrySource = await FileSystem.readFile(entry)
+      cache.set(cacheKey, { entrySource, graph })
+      return graph
     }
   }
   const entrySource = await FileSystem.readFile(entry)
   clearResolutionCaches()
-  const files: Record<string, VirtualFile> = {}
-  const lazyModules: Record<string, string> = {}
-  const modules: Record<string, string> = {}
+  const files: Record<string, VirtualFile> = { ...dependencyGraph?.files }
+  const lazyModules: Record<string, string> = {
+    ...dependencyGraph?.lazyModules,
+  }
+  const modules: Record<string, string> = { ...dependencyGraph?.modules }
   const moduleSources: Record<string, string> = {}
-  const resolutions: Record<string, string> = {}
+  const resolutions: Record<string, string> = {
+    ...dependencyGraph?.resolutions,
+  }
   const preloadedDependencies: Array<{
     path: string
     specifier: string
   }> = []
   const pendingVisits = new Map<string, Promise<void>>()
   const matchedCompatibility = new Map<string, MatchedCompatibility>()
-  let totalBytes = 0
+  let totalBytes = [
+    ...Object.values(files),
+    ...Object.values(lazyModules),
+    ...Object.values(modules),
+  ].reduce(
+    (total, source) =>
+      total + (typeof source === 'string' ? source : source.content).length,
+    0,
+  )
   const getResolutionRoot = (path: string): string | undefined =>
     resolutionRoot && isWithinDirectory(resolutionRoot, normalize(path))
       ? resolutionRoot
@@ -1823,7 +1866,7 @@ const loadModule = async (
     const normalizedVirtualFilePath = normalize(virtualFilePath)
     await preloadFile(normalizedVirtualFilePath)
     await preloadDocumentDependencies(normalizedVirtualFilePath)
-  } else {
+  } else if (!dependenciesOnly) {
     await preloadVirtualFiles(
       virtualFileDirectory,
       ignoredWorkspaceDirectories,
@@ -1831,7 +1874,10 @@ const loadModule = async (
     )
   }
   const typeScriptConfigPath = join(virtualFileDirectory, 'tsconfig.json')
-  if (await isFile(typeScriptConfigPath, resolutionRoot)) {
+  if (
+    !dependenciesOnly &&
+    (await isFile(typeScriptConfigPath, resolutionRoot))
+  ) {
     await preloadTypeScriptConfig(typeScriptConfigPath, virtualFileDirectory)
   }
   for (const { path, specifier } of preloadedDependencies) {
@@ -1904,13 +1950,28 @@ const loadModule = async (
   }
   if (!bypassCache) {
     cache.set(cacheKey, { entrySource, graph })
+    const withoutSharedEntries = <T>(
+      values: Readonly<Record<string, T>>,
+      shared: Readonly<Record<string, T>> = {},
+    ): Record<string, T> =>
+      Object.fromEntries(
+        Object.entries(values).filter(
+          ([path]) => path === entry || !Object.hasOwn(shared, path),
+        ),
+      )
     await ModuleGraphCache.save(cacheKey, {
       entry,
-      files,
-      lazyModules,
-      modules,
-      moduleSources,
-      resolutions,
+      files: withoutSharedEntries(files, dependencyGraph?.files),
+      lazyModules: withoutSharedEntries(
+        lazyModules,
+        dependencyGraph?.lazyModules,
+      ),
+      modules: withoutSharedEntries(modules, dependencyGraph?.modules),
+      moduleSources: { ...moduleSources, [entry]: entrySource },
+      resolutions: withoutSharedEntries(
+        resolutions,
+        dependencyGraph?.resolutions,
+      ),
     })
   }
   return graph
