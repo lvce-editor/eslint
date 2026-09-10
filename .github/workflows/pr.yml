@@ -11,7 +11,29 @@ jobs:
       fail-fast: false
       matrix:
         os: [macos-14]
-        attempt: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+        attempt:
+          [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+          ]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     steps:
@@ -41,7 +63,8 @@ jobs:
         env:
           PLAYWRIGHT_BROWSERS_PATH: 0
       - name: Run headless test
-        run: npm run e2e:headless
+        run: npm run e2e:headless 2>&1 | tee browser-tests.log
+        shell: bash
         env:
           PLAYWRIGHT_BROWSERS_PATH: 0
       - name: Upload browser test evidence
@@ -50,6 +73,7 @@ jobs:
         with:
           name: browser-evidence-${{ matrix.attempt }}
           path: |
+            browser-tests.log
             packages/e2e/.test-results
             packages/e2e/test-results
           if-no-files-found: ignore
