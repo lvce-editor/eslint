@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-implied-eval, sonarjs/code-eval -- transformed project modules execute in the interop regression test */
 import { beforeEach, expect, jest, test } from '@jest/globals'
-import * as ComputeTextHash from '../src/parts/ComputeTextHash/ComputeTextHash.ts'
 import * as CacheResponse from '../src/parts/CacheResponse/CacheResponse.ts'
+import * as ComputeTextHash from '../src/parts/ComputeTextHash/ComputeTextHash.ts'
 import * as FileSystem from '../src/parts/FileSystem/FileSystem.ts'
 import * as LoadEslintConfig from '../src/parts/ModuleResolution/ModuleResolution.ts'
 
