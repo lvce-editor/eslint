@@ -4,7 +4,6 @@ import * as Logger from '../Logger/Logger.ts'
 
 const CacheName = 'eslint-file-content-v2'
 const CacheKeyPrefix = 'https://eslint-file-cache.invalid/'
-const ContentType = 'application/javascript'
 
 interface CacheState {
   cachePromise?: Promise<Cache>
@@ -59,14 +58,18 @@ export const getText = async (hash: string): Promise<string | undefined> => {
   }
 }
 
-export const setText = async (hash: string, content: string): Promise<void> => {
+export const setText = async (
+  hash: string,
+  content: string,
+  contentType = 'application/javascript',
+): Promise<void> => {
   const { current } = state
   try {
     const cache = await getCache(current)
     if (!cache || current.disabled) {
       return
     }
-    const response = await CacheResponse.create(content, ContentType)
+    const response = await CacheResponse.create(content, contentType)
     await cache.put(getKey(hash), response)
   } catch (error) {
     disableCache(current, error)

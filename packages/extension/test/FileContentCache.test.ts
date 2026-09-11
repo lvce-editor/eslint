@@ -207,3 +207,13 @@ test.each(['open', 'match', 'body'])(
     }
   },
 )
+
+test('stores JSON content with its MIME type', async () => {
+  const content = '{"name":"example"}'
+  await FileContentCache.setText('json-hash', content, 'application/json')
+
+  const [key, response] = put.mock.calls[0]
+  expect(key).toBe('https://eslint-file-cache.invalid/json-hash')
+  expect(response.headers.get('Content-Type')).toBe('application/json')
+  await expect(response.text()).resolves.toBe(content)
+})

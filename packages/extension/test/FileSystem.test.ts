@@ -19,7 +19,11 @@ const getText = jest.fn(
   async (_hash: string): Promise<string | undefined> => undefined,
 )
 const setText = jest.fn(
-  async (_hash: string, _content: string): Promise<void> => {},
+  async (
+    _hash: string,
+    _content: string,
+    _contentType: string,
+  ): Promise<void> => {},
 )
 const computeTextHash = jest.fn(async (_content: string) => 'content-hash')
 
@@ -66,7 +70,11 @@ test('readFile converts an absolute path to a file uri', async () => {
   expect(readFile).toHaveBeenCalledWith('file:///workspace/a%20b.js')
   expect(getFileHash).toHaveBeenCalledWith('file:///workspace/a%20b.js')
   expect(getText).toHaveBeenCalledWith('content-hash')
-  expect(setText).toHaveBeenCalledWith('content-hash', 'content')
+  expect(setText).toHaveBeenCalledWith(
+    'content-hash',
+    'content',
+    'application/javascript',
+  )
 })
 
 test('readFileAsBase64 preserves binary file contents', async () => {
@@ -127,7 +135,11 @@ test('readFile ignores a cache entry whose content does not match its hash', asy
   )
 
   expect(readFile).toHaveBeenCalledWith('file:///workspace/file.js')
-  expect(setText).toHaveBeenCalledWith('content-hash', 'content')
+  expect(setText).toHaveBeenCalledWith(
+    'content-hash',
+    'content',
+    'application/javascript',
+  )
 })
 
 test('readFile does not cache content when the file changes between hashing and reading', async () => {
@@ -229,4 +241,17 @@ test('reads files without repeated warnings when persistent storage fails', asyn
       delete (globalThis as { caches?: CacheStorage }).caches
     }
   }
+})
+
+test.each([
+  '/workspace/package.json',
+  'file:///workspace/config.JSON?version=1#config',
+])('caches %s with the JSON MIME type', async (path) => {
+  await FileSystem.readFile(path)
+
+  expect(setText).toHaveBeenCalledWith(
+    'content-hash',
+    'content',
+    'application/json',
+  )
 })
