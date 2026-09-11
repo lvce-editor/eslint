@@ -19,7 +19,11 @@ const getText = jest.fn(
   async (_hash: string): Promise<string | undefined> => undefined,
 )
 const setText = jest.fn(
-  async (_hash: string, _content: string): Promise<void> => {},
+  async (
+    _hash: string,
+    _content: string,
+    _contentType: string,
+  ): Promise<void> => {},
 )
 const computeTextHash = jest.fn(async (_content: string) => 'content-hash')
 
