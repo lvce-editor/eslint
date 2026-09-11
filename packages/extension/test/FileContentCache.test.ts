@@ -1,4 +1,5 @@
 import { beforeEach, expect, jest, test } from '@jest/globals'
+import { VError } from '@lvce-editor/verror'
 import * as FileContentCache from '../src/parts/FileContentCache/FileContentCache.ts'
 
 const match = jest.fn<Cache['match']>()
@@ -167,3 +168,42 @@ test('compresses large file content and restores the original unicode text', asy
   match.mockResolvedValueOnce(response)
   await expect(FileContentCache.getText('large-file')).resolves.toBe(content)
 })
+
+test.each(['open', 'match', 'body'])(
+  'adds cache entry context when %s fails',
+  async (operation) => {
+    const error = new TypeError('Failed to fetch')
+    if (operation === 'open') {
+      open.mockRejectedValueOnce(error)
+    } else if (operation === 'match') {
+      match.mockRejectedValueOnce(error)
+    } else {
+      match.mockResolvedValueOnce(
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.error(error)
+            },
+          }),
+        ),
+      )
+    }
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      await expect(
+        FileContentCache.getText('sample-hash'),
+      ).resolves.toBeUndefined()
+      expect(warn).toHaveBeenCalledTimes(1)
+      const diagnostic = warn.mock.calls[0][1]
+      expect(diagnostic).toBeInstanceOf(VError)
+      expect(diagnostic.message).toBe(
+        'Failed to read ESLint file cache entry sample-hash: TypeError: Failed to fetch',
+      )
+      expect(diagnostic.stack).toContain(
+        error.stack!.split('\n').slice(1).join('\n'),
+      )
+    } finally {
+      warn.mockRestore()
+    }
+  },
+)

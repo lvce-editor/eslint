@@ -1,3 +1,4 @@
+import { VError } from '@lvce-editor/verror'
 import * as CacheResponse from '../CacheResponse/CacheResponse.ts'
 import * as Logger from '../Logger/Logger.ts'
 
@@ -50,7 +51,10 @@ export const getText = async (hash: string): Promise<string | undefined> => {
     const response = await cache.match(getKey(hash))
     return response ? await CacheResponse.readText(response) : undefined
   } catch (error) {
-    disableCache(current, error)
+    disableCache(
+      current,
+      new VError(error, `Failed to read ESLint file cache entry ${hash}`),
+    )
     return undefined
   }
 }
