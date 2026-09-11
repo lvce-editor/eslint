@@ -21,7 +21,11 @@ interface FileSystemApi {
 
 interface TextCache {
   readonly getText: (hash: string) => Promise<string | undefined>
-  readonly setText: (hash: string, content: string) => Promise<void>
+  readonly setText: (
+    hash: string,
+    content: string,
+    contentType: string,
+  ) => Promise<void>
 }
 
 export const state: {
@@ -116,13 +120,17 @@ const getCachedContent = async (hash: string): Promise<string | undefined> => {
 }
 
 const cacheContent = async (
+  uri: string,
   expectedHash: string,
   content: string,
 ): Promise<void> => {
   try {
     const contentHash = await state.computeTextHash(content)
     if (contentHash === expectedHash) {
-      await state.cache.setText(expectedHash, content)
+      const contentType = new URL(uri).pathname.toLowerCase().endsWith('.json')
+        ? 'application/json'
+        : 'application/javascript'
+      await state.cache.setText(expectedHash, content, contentType)
     }
   } catch (error) {
     Logger.warn(
@@ -145,7 +153,7 @@ const readFileCached = async (uri: string): Promise<string> => {
     return cachedContent
   }
   const content = await state.api.readFile(uri)
-  await cacheContent(hash, content)
+  await cacheContent(uri, hash, content)
   return content
 }
 
