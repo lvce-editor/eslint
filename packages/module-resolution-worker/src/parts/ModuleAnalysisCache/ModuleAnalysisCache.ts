@@ -1,6 +1,6 @@
 import * as CacheResponse from '../CacheResponse/CacheResponse.ts'
 
-const CacheName = 'eslint-module-analysis-v3'
+const CacheName = 'eslint-module-analysis-v4'
 const CacheKeyPrefix = 'https://eslint-module-analysis-cache.invalid/'
 
 const pending = new Map<string, Promise<unknown>>()

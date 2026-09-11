@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-implied-eval, sonarjs/code-eval -- transformed project modules execute in the interop regression test */
 import { beforeEach, expect, jest, test } from '@jest/globals'
 import * as ComputeTextHash from '../src/parts/ComputeTextHash/ComputeTextHash.ts'
+import * as CacheResponse from '../src/parts/CacheResponse/CacheResponse.ts'
 import * as FileSystem from '../src/parts/FileSystem/FileSystem.ts'
 import * as LoadEslintConfig from '../src/parts/ModuleResolution/ModuleResolution.ts'
 
@@ -234,6 +235,39 @@ test('reuses cached module analysis across projects with path-specific import me
     /\/module%3A\.js%3A[\da-f]{64}$/,
   )
 })
+
+test.each([
+  ['.cjs', 'module.exports = []'],
+  ['.js', 'module.exports = []'],
+  ['.json', '[]'],
+])(
+  'omits unchanged %s source from cached analysis',
+  async (extension, source) => {
+    const firstPath = `/first-project/eslint.config${extension}`
+    const secondPath = `/second-project/eslint.config${extension}`
+    setFiles({ [firstPath]: source, [secondPath]: source })
+
+    const first = await LoadEslintConfig.loadEslintConfig(firstPath)
+    const second = await LoadEslintConfig.loadEslintConfig(secondPath)
+
+    expect(first.modules[first.entry]).toBe(source)
+    expect(second.modules[second.entry]).toBe(source)
+    const analysisPuts = put.mock.calls.filter(([key]) =>
+      getRequestKey(key).startsWith(
+        'https://eslint-module-analysis-cache.invalid/',
+      ),
+    )
+    expect(analysisPuts).toHaveLength(1)
+    const cached = await CacheResponse.readJson(analysisPuts[0][1].clone())
+    expect(cached).not.toHaveProperty('source')
+    expect(cached).toHaveProperty('substituteImportMeta', false)
+
+    const changedSource = source.replace('[]', '[{}]')
+    setFiles({ [firstPath]: changedSource, [secondPath]: source })
+    const changed = await LoadEslintConfig.loadEslintConfig(firstPath)
+    expect(changed.modules[changed.entry]).toBe(changedSource)
+  },
+)
 
 test('transforms a typescript config dependency to commonjs', async () => {
   setFiles({

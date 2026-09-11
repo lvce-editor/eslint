@@ -741,10 +741,11 @@ type DependencyAnalysis = {
   readonly usesReaddirSync: boolean
 }
 
-type PortableModuleAnalysis = DependencyAnalysis & {
-  readonly source: string
-  readonly substituteImportMeta: boolean
-}
+type PortableModuleAnalysis = DependencyAnalysis &
+  (
+    | { readonly source?: never; readonly substituteImportMeta: false }
+    | { readonly source: string; readonly substituteImportMeta: true }
+  )
 
 const isDependency = (value: unknown): value is Dependency => {
   if (!value || typeof value !== 'object') {
@@ -783,8 +784,10 @@ const isPortableModuleAnalysis = (
   }
   const candidate = value as Partial<PortableModuleAnalysis>
   return (
-    typeof candidate.source === 'string' &&
-    typeof candidate.substituteImportMeta === 'boolean'
+    typeof candidate.substituteImportMeta === 'boolean' &&
+    (candidate.substituteImportMeta
+      ? typeof candidate.source === 'string'
+      : candidate.source === undefined)
   )
 }
 
@@ -1157,7 +1160,6 @@ const transpileUncached = (
     return {
       dependencies: [],
       fileSpecifiers: [],
-      source,
       substituteImportMeta: false,
       usesGlobSync: false,
       usesLazyLoadingRuleMap: false,
@@ -1180,7 +1182,6 @@ const transpileUncached = (
         }),
       ),
       fileSpecifiers: [],
-      source,
       substituteImportMeta: false,
       usesGlobSync: false,
       usesLazyLoadingRuleMap: lazyRuleMapIndex !== -1,
@@ -1198,7 +1199,7 @@ const transpileUncached = (
   })
   const analysis = getDependencies(ast)
   if (ast.program.sourceType !== 'module') {
-    return { ...analysis, source, substituteImportMeta: false }
+    return { ...analysis, substituteImportMeta: false }
   }
   const extension = getFileExtension(path)
   const result = transform(source, {
@@ -1250,7 +1251,7 @@ const transpile = async (
     ...analysis,
     source: shouldSubstituteImportMeta
       ? substituteImportMeta(path, portable.source)
-      : portable.source,
+      : source,
   }
 }
 
