@@ -1,3 +1,4 @@
+import type { Disposable } from '@lvce-editor/api'
 import {
   executeCommand,
   type FileChanges,
@@ -76,6 +77,6 @@ const handleFileChanges = async (
   )
 }
 
-export const register = (): void => {
-  registerFileChangeHandler(handleFileChanges)
+export const register = (): Disposable => {
+  return registerFileChangeHandler(handleFileChanges)
 }

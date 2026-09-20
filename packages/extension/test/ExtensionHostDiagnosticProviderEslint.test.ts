@@ -15,6 +15,7 @@ beforeEach(() => {
   FindEslintConfig.clearCache()
   EslintEvaluationWorker.state.rpcPromise = undefined
   EslintEvaluationWorker.state.createRpc = async () => ({
+    dispose: async () => {},
     invoke: async () => {
       throw new SyntaxError('Unexpected token (2:0)')
     },
@@ -145,6 +146,7 @@ test.each([
   'explains how to install missing dependencies: %s',
   async (errorMessage, dependency) => {
     EslintEvaluationWorker.state.createRpc = async () => ({
+      dispose: async () => {},
       invoke: async () => {
         throw new Error(errorMessage)
       },
@@ -173,6 +175,7 @@ test.each([
 ])('preserves configuration errors for %s', async (specifier) => {
   const message = `Cannot resolve module '${specifier}' from /workspace/eslint.config.js`
   EslintEvaluationWorker.state.createRpc = async () => ({
+    dispose: async () => {},
     invoke: async () => {
       throw new Error(message)
     },

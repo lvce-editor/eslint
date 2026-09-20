@@ -42,6 +42,7 @@ export interface EslintPerformanceTrace {
 }
 
 export interface Rpc {
+  readonly dispose: () => Promise<void>
   readonly invoke: (
     method: string,
     ...params: readonly unknown[]
@@ -57,17 +58,22 @@ type CreateRpc = (options: CreateRpcOptions) => Promise<Rpc>
 
 export const state: {
   createRpc: CreateRpc
+  disposePromise: Promise<void> | undefined
   rpcPromise: Promise<Rpc> | undefined
 } = {
   createRpc,
+  disposePromise: undefined,
   rpcPromise: undefined,
 }
 
 const getRpc = (): Promise<Rpc> => {
-  state.rpcPromise ||= state.createRpc({
-    commandMap,
-    id: 'builtin.eslint.evaluation-worker',
-  })
+  state.rpcPromise ||= (async () => {
+    await state.disposePromise
+    return state.createRpc({
+      commandMap,
+      id: 'builtin.eslint.evaluation-worker',
+    })
+  })()
   return state.rpcPromise
 }
 
@@ -81,6 +87,32 @@ const invoke = async <T>(
 
 export const clearCache = (): Promise<void> => {
   return invoke('EslintEvaluation.clearCache')
+}
+
+export const dispose = async (): Promise<void> => {
+  const { disposePromise: previousDispose, rpcPromise } = state
+  if (!rpcPromise) {
+    await previousDispose
+    return
+  }
+  state.rpcPromise = undefined
+  const disposePromise = (async (): Promise<void> => {
+    await previousDispose
+    const { dispose: disposeRpc, invoke: invokeRpc } = await rpcPromise
+    try {
+      await invokeRpc('Worker.dispose')
+    } finally {
+      await disposeRpc()
+    }
+  })()
+  state.disposePromise = disposePromise
+  try {
+    await disposePromise
+  } finally {
+    if (state.disposePromise === disposePromise) {
+      state.disposePromise = undefined
+    }
+  }
 }
 
 export function lint(
