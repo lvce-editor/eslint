@@ -1,3 +1,4 @@
+import type { Disposable } from '@lvce-editor/api'
 import {
   activate as activateExtensionApi,
   registerCodeActionsProvider,
@@ -5,6 +6,7 @@ import {
   registerDiagnosticProvider,
 } from '@lvce-editor/api'
 import * as ClearCache from '../ClearCache/ClearCache.ts'
+import * as EslintEvaluationWorker from '../EslintEvaluationWorker/EslintEvaluationWorker.ts'
 import * as GetCodeActionProviders from '../GetCodeActionProviders/GetCodeActionProviders.ts'
 import * as GetDiagnosticProviders from '../GetDiagnosticProviders/GetDiagnosticProviders.ts'
 import * as HandleFileChanges from '../HandleFileChanges/HandleFileChanges.ts'
@@ -13,12 +15,13 @@ import * as RemoveLegacyCaches from '../RemoveLegacyCaches/RemoveLegacyCaches.ts
 import * as ShowPerformanceTrace from '../ShowPerformanceTrace/ShowPerformanceTrace.ts'
 
 const state = {
+  fileChangeHandler: undefined as Disposable | undefined,
   isActivated: false,
 }
 
 const registerProviders = (): void => {
   // API message ports snapshot the registry, so register before further awaits.
-  HandleFileChanges.register()
+  state.fileChangeHandler = HandleFileChanges.register()
   registerCommand({
     execute: ClearCache.clearCache,
     id: 'eslint.clearCache',
@@ -61,4 +64,9 @@ export const activate = async (): Promise<void> => {
   )
 }
 
-export const deactivate = (): void => {}
+export const deactivate = async (): Promise<void> => {
+  state.isActivated = false
+  state.fileChangeHandler?.dispose()
+  state.fileChangeHandler = undefined
+  await EslintEvaluationWorker.dispose()
+}

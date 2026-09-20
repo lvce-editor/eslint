@@ -5,6 +5,7 @@ import * as ModuleResolutionWorker from '../src/parts/ModuleResolutionWorker/Mod
 
 beforeEach(() => {
   EslintEvaluationWorker.state.rpcPromise = undefined
+  EslintEvaluationWorker.state.disposePromise = undefined
   ModuleResolutionWorker.state.activeSessions = 0
   ModuleResolutionWorker.state.disposePromise = undefined
   ModuleResolutionWorker.state.invalidatedCacheKeys.clear()
@@ -19,6 +20,7 @@ test('runs linting in the eslint evaluation worker', async () => {
     const workerOptions = options as { id: string }
     workerId = workerOptions.id
     return {
+      dispose: async () => {},
       invoke: async (method, ...params) => {
         invocations.push([method, ...params])
         return []
@@ -48,6 +50,7 @@ test('runs linting in the eslint evaluation worker', async () => {
 test('clears evaluated module caches in the evaluation worker', async () => {
   const invocations: unknown[] = []
   EslintEvaluationWorker.state.createRpc = async () => ({
+    dispose: async () => {},
     invoke: async (method, ...params) => {
       invocations.push([method, ...params])
     },
@@ -58,9 +61,40 @@ test('clears evaluated module caches in the evaluation worker', async () => {
   expect(invocations).toEqual([['EslintEvaluation.clearCache']])
 })
 
+test('disposes the evaluation worker', async () => {
+  const invocations: unknown[] = []
+  const dispose = jest.fn<() => Promise<void>>(async () => {})
+  EslintEvaluationWorker.state.createRpc = async () => ({
+    dispose,
+    invoke: async (method, ...params) => {
+      invocations.push([method, ...params])
+    },
+  })
+
+  await EslintEvaluationWorker.clearCache()
+  await EslintEvaluationWorker.dispose()
+
+  expect(invocations).toEqual([
+    ['EslintEvaluation.clearCache'],
+    ['Worker.dispose'],
+  ])
+  expect(dispose).toHaveBeenCalledTimes(1)
+  expect(EslintEvaluationWorker.state.rpcPromise).toBeUndefined()
+})
+
+test('does not create a worker when disposing before first use', async () => {
+  const createRpc = jest.fn(EslintEvaluationWorker.state.createRpc)
+  EslintEvaluationWorker.state.createRpc = createRpc
+
+  await EslintEvaluationWorker.dispose()
+
+  expect(createRpc).not.toHaveBeenCalled()
+})
+
 test('requests fresh performance stats from the evaluation worker', async () => {
   const invocations: unknown[] = []
   EslintEvaluationWorker.state.createRpc = async () => ({
+    dispose: async () => {},
     invoke: async (method, ...params) => {
       invocations.push([method, ...params])
       return {}
@@ -101,6 +135,7 @@ test('disposes the module resolution worker after linting', async () => {
     invoke: async () => graph,
   })
   EslintEvaluationWorker.state.createRpc = async () => ({
+    dispose: async () => {},
     invoke: async () => {
       await ModuleResolutionWorker.loadEslintConfig(
         'file:///workspace/eslint.config.js',
@@ -133,6 +168,7 @@ test('disposes the module resolution worker when linting fails', async () => {
     invoke: async () => graph,
   })
   EslintEvaluationWorker.state.createRpc = async () => ({
+    dispose: async () => {},
     invoke: async () => {
       await ModuleResolutionWorker.loadEslintConfig(
         'file:///workspace/eslint.config.js',
