@@ -3,7 +3,10 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "scripts": {},
+  "scripts": {
+    "test": "echo test",
+    "build": "echo build"
+  },
   "devDependencies": {
     "eslint": "10.8.0",
     "eslint-plugin-package-json": "1.5.0"

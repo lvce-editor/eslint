@@ -69,6 +69,44 @@ test('returns fix and disable actions for a fixable problem', () => {
   ])
 })
 
+test('returns only fix actions for a fixable JSON problem', () => {
+  const text = '{\n  "value": "test"\n}'
+  const results = [
+    createResult({
+      column: 3,
+      endColumn: 10,
+      endLine: 2,
+      fix: {
+        range: [12, 18],
+        text: '"fixed"',
+      },
+      line: 2,
+      ruleId: 'json/example',
+    }),
+  ]
+
+  expect(getActions(text, results, 5, 'json')).toEqual([
+    {
+      edits: [{ endOffset: 18, inserted: '"fixed"', startOffset: 12 }],
+      kind: 'quickfix',
+      name: "Fix 'json/example' problem",
+    },
+  ])
+})
+
+test('does not return disable actions for a non-fixable JSON problem', () => {
+  const text = '{\n  "value": "test"\n}'
+  const result = createResult({
+    column: 3,
+    endColumn: 10,
+    endLine: 2,
+    line: 2,
+    ruleId: 'json/example',
+  })
+
+  expect(getActions(text, [result], 5, 'json')).toEqual([])
+})
+
 test('returns disable actions for a non-fixable problem', () => {
   const text = "console.log('test')"
   const results = [
