@@ -19,7 +19,10 @@ export interface CodeAction {
   readonly name: string
 }
 
-const getCommentConfig = (languageId: string): CommentConfig => {
+const getCommentConfig = (languageId: string): CommentConfig | undefined => {
+  if (languageId === 'json') {
+    return undefined
+  }
   if (languageId === 'yaml') {
     return {
       blockEnd: '',
@@ -28,7 +31,7 @@ const getCommentConfig = (languageId: string): CommentConfig => {
       useBlockForLine: false,
     }
   }
-  if (languageId === 'css' || languageId === 'json') {
+  if (languageId === 'css') {
     return {
       blockEnd: '*/',
       blockStart: '/*',
@@ -126,9 +129,8 @@ const getDisableLineEdit = (
   text: string,
   line: number,
   ruleId: string,
-  languageId: string,
+  config: CommentConfig,
 ): Edit => {
-  const config = getCommentConfig(languageId)
   const lineStart = getLineStart(text, line)
   if (line > 1) {
     const previousLineStart = getLineStart(text, line - 1)
@@ -163,9 +165,8 @@ const getDisableLineEdit = (
 const getDisableFileEdit = (
   text: string,
   ruleId: string,
-  languageId: string,
+  config: CommentConfig,
 ): Edit => {
-  const config = getCommentConfig(languageId)
   const directive = formatBlockDirective(config, `eslint-disable ${ruleId}`)
   const eol = getEol(text)
   // eslint-disable-next-line e18e/prefer-string-fromcharcode
@@ -214,6 +215,7 @@ export const getCodeActionsFromLintResults = (
 ): readonly CodeAction[] => {
   const actions: CodeAction[] = []
   const names = new Set<string>()
+  const commentConfig = getCommentConfig(languageId)
   for (const result of results) {
     const { fix, ruleId } = result
     if (!resultContainsOffset(text, result, offset)) {
@@ -231,18 +233,18 @@ export const getCodeActionsFromLintResults = (
         },
       )
     }
-    if (ruleId) {
+    if (ruleId && commentConfig) {
       addAction(
         actions,
         names,
         `Disable for this line: ${ruleId}`,
-        getDisableLineEdit(text, result.line, ruleId, languageId),
+        getDisableLineEdit(text, result.line, ruleId, commentConfig),
       )
       addAction(
         actions,
         names,
         `Disable for the entire file: ${ruleId}`,
-        getDisableFileEdit(text, ruleId, languageId),
+        getDisableFileEdit(text, ruleId, commentConfig),
       )
     }
   }

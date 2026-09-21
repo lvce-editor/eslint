@@ -1,13 +1,15 @@
 import type { Test } from '@lvce-editor/test-with-playwright'
 
+// cspell:ignore lifecycles
 export const name = 'eslint.plugin-package-json'
 
 export const test: Test = async ({
+  Command,
   Editor,
   expect,
+  FileSystem,
   Locator,
   Main,
-  Panel,
   Settings,
   Workspace,
 }) => {
@@ -24,23 +26,38 @@ export const test: Test = async ({
 
   await Editor.shouldHaveDiagnostics([
     {
-      columnIndex: 2,
-      endColumnIndex: 15,
-      endRowIndex: 5,
-      message: "The field 'scripts' does nothing and can be removed.",
+      columnIndex: 13,
+      endColumnIndex: 3,
+      endRowIndex: 8,
+      message:
+        "Entries in 'scripts' are not in lexicographical order and grouped by lifecycles",
       rowIndex: 5,
-      source: 'package-json/no-empty-fields',
+      source: 'package-json/sort-collections',
       type: 'error',
     },
   ])
   const diagnostic = Locator('.Diagnostic.DiagnosticError')
   await expect(diagnostic).toBeVisible()
 
-  await Panel.open('Problems')
-  const problems = Locator('.Problem')
-  await expect(problems).toHaveCount(2)
-  const problem = problems.nth(1)
-  await expect(problem).toHaveText(
-    "The field 'scripts' does nothing and can be removed.package-json/no-empty-fields [Ln 6, Col 3]",
+  await Editor.setCursor(5, 14)
+  await Editor.openSourceActions()
+  const fixAction = Locator('.SourceActionItem', {
+    hasText: "Fix 'package-json/sort-collections' problem",
+  })
+  await expect(fixAction).toBeVisible()
+  const disableLineAction = Locator('.SourceActionItem', {
+    hasText: 'Disable for this line: package-json/sort-collections',
+  })
+  await expect(disableLineAction).toHaveCount(0)
+  const disableFileAction = Locator('.SourceActionItem', {
+    hasText: 'Disable for the entire file: package-json/sort-collections',
+  })
+  await expect(disableFileAction).toHaveCount(0)
+  await Command.execute(
+    'EditorSourceAction.selectItem',
+    "Fix 'package-json/sort-collections' problem",
   )
+  const text = await FileSystem.readFile(uri)
+  JSON.parse(text)
+  await Editor.shouldHaveDiagnostics([])
 }

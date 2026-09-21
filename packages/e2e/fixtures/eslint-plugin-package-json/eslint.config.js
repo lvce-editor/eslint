@@ -8,7 +8,7 @@ export default [
       'package-json': packageJson,
     },
     rules: {
-      'package-json/no-empty-fields': 'error',
+      'package-json/sort-collections': 'error',
     },
   },
 ]
