@@ -35,7 +35,7 @@
       "description": "Skip linting exact file contents matching these lowercase SHA-256 hashes of UTF-8 text. Edited contents are linted normally."
     }
   },
-  "categories": [],
+  "categories": ["Linter"],
   "activation": [
     "onDiagnostic:javascript",
     "onDiagnostic:javascriptreact",
