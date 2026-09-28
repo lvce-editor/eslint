@@ -49,6 +49,10 @@ export const test: Test = async ({
     trace.error?.stage !== 'configEvaluation' ||
     !trace.error?.details?.message?.includes('broken config') ||
     trace.configResolution.fileReadCount < 1 ||
+    trace.configResolution.files.some(
+      (file: { uri: string; path?: string }) =>
+        !file.uri.startsWith('file://') || 'path' in file,
+    ) ||
     trace.configEvaluation.durationMs < 0
   ) {
     throw new Error(`Unexpected config error trace: ${JSON.stringify(trace)}`)

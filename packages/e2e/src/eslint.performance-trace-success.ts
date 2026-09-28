@@ -60,10 +60,12 @@ export const test: Test = async ({
       (directory: string) => !directory.startsWith('file://'),
     ) ||
     trace.configResolution.files.some(
-      (file: { path: string }) => !file.path.startsWith('file://'),
+      (file: { uri: string; path?: string }) =>
+        !file.uri.startsWith('file://') || 'path' in file,
     ) ||
     trace.eslintResolution.files.some(
-      (file: { path: string }) => !file.path.startsWith('file://'),
+      (file: { uri: string; path?: string }) =>
+        !file.uri.startsWith('file://') || 'path' in file,
     )
   ) {
     throw new Error(`Unexpected trace metadata: ${JSON.stringify(trace)}`)

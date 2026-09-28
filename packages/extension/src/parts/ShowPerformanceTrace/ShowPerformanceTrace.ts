@@ -21,9 +21,15 @@ interface ErrorDetails {
   readonly stack?: string
 }
 
-type ResolutionStats = NonNullable<
-  EslintEvaluationWorker.EslintPerformanceTrace['configResolution']
+type ResolutionFile = Omit<
+  ModuleResolutionWorker.ResolutionStats['files'][number],
+  'path'
 > & {
+  readonly uri: string
+}
+
+type ResolutionStats = Omit<ModuleResolutionWorker.ResolutionStats, 'files'> & {
+  readonly files: readonly ResolutionFile[]
   readonly totalContentSize: string
 }
 
@@ -167,13 +173,15 @@ const defaultDependencies: Dependencies = {
 const now = (): number => performance.now()
 
 const addTotalContentSize = (
-  stats: NonNullable<
-    EslintEvaluationWorker.EslintPerformanceTrace['configResolution']
-  >,
+  stats: ModuleResolutionWorker.ResolutionStats,
 ): ResolutionStats => {
   const { uniqueFileCount, ...rest } = stats
   return {
     ...rest,
+    files: stats.files.map(({ path, ...file }) => ({
+      ...file,
+      uri: FileSystem.toUri(path),
+    })),
     totalContentSize: prettyBytes(stats.totalContentLength),
     uniqueFileCount,
   }
@@ -230,28 +238,6 @@ const toTraceConfigDiscovery = (
   ...trace,
   configPath: trace.configPath ? FileSystem.toUri(trace.configPath) : null,
   directories: trace.directories.map(FileSystem.toUri),
-})
-
-const toTraceResolutionStats = (
-  stats: ModuleResolutionWorker.ResolutionStats,
-): ModuleResolutionWorker.ResolutionStats => ({
-  ...stats,
-  files: stats.files.map((file) => ({
-    ...file,
-    path: FileSystem.toUri(file.path),
-  })),
-})
-
-const toTraceWorkerTrace = (
-  trace: EslintEvaluationWorker.EslintPerformanceTrace,
-): EslintEvaluationWorker.EslintPerformanceTrace => ({
-  ...trace,
-  ...(trace.configResolution && {
-    configResolution: toTraceResolutionStats(trace.configResolution),
-  }),
-  ...(trace.eslintResolution && {
-    eslintResolution: toTraceResolutionStats(trace.eslintResolution),
-  }),
 })
 
 export const showPerformanceTraceWithDependencies = async (
@@ -377,12 +363,11 @@ export const showPerformanceTraceWithDependencies = async (
     }
     return openTraceAndReturn(trace, dependencies)
   }
-  const traceWorkerTrace = toTraceWorkerTrace(workerTrace)
   trace = {
     ...baseTrace,
     configDiscovery: traceConfigDiscovery,
     configPath: configUri,
-    ...addReadableSizes(traceWorkerTrace),
+    ...addReadableSizes(workerTrace),
     suppressions,
     totalDurationMs: now() - startTime,
   }
