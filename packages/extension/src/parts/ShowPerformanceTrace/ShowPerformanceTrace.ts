@@ -28,10 +28,7 @@ type ResolutionFile = Omit<
   readonly uri: string
 }
 
-type ResolutionStats = Omit<
-  ModuleResolutionWorker.ResolutionStats,
-  'files'
-> & {
+type ResolutionStats = Omit<ModuleResolutionWorker.ResolutionStats, 'files'> & {
   readonly files: readonly ResolutionFile[]
   readonly totalContentSize: string
 }
