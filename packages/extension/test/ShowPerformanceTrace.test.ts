@@ -114,12 +114,14 @@ test('resolves the active document and opens a successful performance trace', as
   expect(trace.configResolution?.files[0].durationMs).toBeCloseTo(1.235)
   expect(trace.configResolution?.totalContentSize).toBe('20 B')
   expect(trace.eslintResolution?.totalContentSize).toBe('20 B')
-  expect(trace.configResolution?.files[0].path).toBe(
+  expect(trace.configResolution?.files[0].uri).toBe(
     'file:///workspace/eslint.config.js',
   )
-  expect(trace.eslintResolution?.files[0].path).toBe(
+  expect('path' in trace.configResolution!.files[0]).toBe(false)
+  expect(trace.eslintResolution?.files[0].uri).toBe(
     'file:///workspace/eslint.config.js',
   )
+  expect('path' in trace.eslintResolution!.files[0]).toBe(false)
   expect(trace.lint?.durationMs).toBe(5)
   expect(openTrace).toHaveBeenCalledWith(trace)
 })
@@ -162,12 +164,14 @@ test('preserves file system provider schemes in performance trace uris', async (
   expect(trace.configDiscovery?.directories).toEqual(
     providerConfigDiscovery.directories,
   )
-  expect(trace.configResolution?.files[0].path).toBe(
+  expect(trace.configResolution?.files[0].uri).toBe(
     providerResolutionStats.files[0].path,
   )
-  expect(trace.eslintResolution?.files[0].path).toBe(
+  expect('path' in trace.configResolution!.files[0]).toBe(false)
+  expect(trace.eslintResolution?.files[0].uri).toBe(
     providerResolutionStats.files[0].path,
   )
+  expect('path' in trace.eslintResolution!.files[0]).toBe(false)
 })
 
 test('opens a trace error when no config is found', async () => {
@@ -235,6 +239,10 @@ test('preserves config evaluation errors in the opened trace', async () => {
     },
     stage: 'configEvaluation',
   })
+  expect(trace.configResolution?.files[0].uri).toBe(
+    'file:///workspace/eslint.config.js',
+  )
+  expect('path' in trace.configResolution!.files[0]).toBe(false)
   expect(openTrace).toHaveBeenCalledWith(trace)
 })
 
