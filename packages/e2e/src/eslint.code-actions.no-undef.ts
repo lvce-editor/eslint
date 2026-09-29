@@ -20,7 +20,7 @@ export const test: Test = async ({
   )
   const uri = `${workspacePath}/no-undef.js`
   await FileSystem.writeFile(uri, content)
-  await Workspace.setPath(workspacePath)
+  await Workspace.setUri(workspacePath)
   await Main.openUri(uri)
   await Editor.setCursor(0, 3)
   await Editor.openSourceActions()

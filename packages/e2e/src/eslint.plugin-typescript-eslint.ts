@@ -18,7 +18,7 @@ export const test: Test = async ({
     ),
   )
   const uri = `${workspacePath}/test.ts`
-  await Workspace.setPath(workspacePath)
+  await Workspace.setUri(workspacePath)
   await Settings.update({ 'editor.diagnostics': true })
   await Main.openUri(uri)
 

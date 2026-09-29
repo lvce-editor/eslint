@@ -28,7 +28,7 @@ export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
   const text =
     'const object = { get value() { const unused = 1; return 2 } }; object.value'
   await FileSystem.writeFile(uri, text)
-  await Workspace.setPath(tmpDir)
+  await Workspace.setUri(tmpDir)
   await Main.openUri(uri)
 
   const diagnostics = (await Command.executeExtensionCommand('eslint.lint', {

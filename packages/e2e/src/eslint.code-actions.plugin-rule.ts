@@ -21,7 +21,7 @@ export const test: Test = async ({
   )
   const uri = `${workspacePath}/code-action-plugin-rule.js`
   await FileSystem.writeFile(uri, content)
-  await Workspace.setPath(workspacePath)
+  await Workspace.setUri(workspacePath)
   await Main.openUri(uri)
   await Editor.setCursor(2, 10)
   await Editor.openSourceActions()

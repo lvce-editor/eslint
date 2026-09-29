@@ -20,7 +20,7 @@ export const test: Test = async ({
   )
   const uri = `${workspacePath}/disable-line-indented.js`
   await FileSystem.writeFile(uri, content)
-  await Workspace.setPath(workspacePath)
+  await Workspace.setUri(workspacePath)
   await Main.openUri(uri)
   await Editor.setCursor(1, 7)
   await Editor.openSourceActions()

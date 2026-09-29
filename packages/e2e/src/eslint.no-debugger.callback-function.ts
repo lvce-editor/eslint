@@ -27,7 +27,7 @@ export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
   const uri = `${tmpDir}/test.js`
   const text = '[1].map(function map(value) { debugger; return value })'
   await FileSystem.writeFile(uri, text)
-  await Workspace.setPath(tmpDir)
+  await Workspace.setUri(tmpDir)
   await Main.openUri(uri)
 
   const diagnostics = (await Command.executeExtensionCommand('eslint.lint', {

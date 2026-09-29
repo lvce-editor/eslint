@@ -20,7 +20,7 @@ export const test: Test = async ({
     ).pathname.replace(/^\/remote/, ''),
   )
   const uri = `${workspacePath}/package.json`
-  await Workspace.setPath(workspacePath)
+  await Workspace.setUri(workspacePath)
   await Settings.update({ 'editor.diagnostics': true })
   await Main.openUri(uri)
 

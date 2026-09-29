@@ -33,7 +33,7 @@ export const test: Test = async ({
     },
     { content: 'debugger', uri: `${tmpDir}/test.js` },
   ])
-  await Workspace.setPath(tmpDir)
+  await Workspace.setUri(tmpDir)
   const uri = `${tmpDir}/test.js`
   await Main.openUri(uri)
 

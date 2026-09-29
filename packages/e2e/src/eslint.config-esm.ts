@@ -31,7 +31,7 @@ export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
     },
     { content: 'if (value == null) {}', uri: `${tmpDir}/test.js` },
   ])
-  await Workspace.setPath(tmpDir)
+  await Workspace.setUri(tmpDir)
   await Main.openUri(`${tmpDir}/test.js`)
 
   const uri = `${tmpDir}/test.js`

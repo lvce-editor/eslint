@@ -23,7 +23,7 @@ export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
     },
   ])
   await FileSystem.writeFile(`${tmpDir}/test.js`, 'debugger')
-  await Workspace.setPath(tmpDir)
+  await Workspace.setUri(tmpDir)
   await Main.openUri(`${tmpDir}/test.js`)
 
   const uri = `${tmpDir}/test.js`

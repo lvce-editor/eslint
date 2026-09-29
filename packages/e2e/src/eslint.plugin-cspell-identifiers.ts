@@ -10,7 +10,7 @@ export const test: Test = async ({ Command, FileSystem, Workspace }) => {
     ).pathname.replace(/^\/remote/, ''),
   )
   const uri = `${workspacePath}/identifiers.js`
-  await Workspace.setPath(workspacePath)
+  await Workspace.setUri(workspacePath)
   const text = await FileSystem.readFile(uri)
   await Command.executeExtensionCommand('eslint.lint', {
     text: `// comment\n${text}`,

@@ -26,7 +26,7 @@ export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
   ])
   const uri = `${tmpDir}/test.js`
   await FileSystem.writeFile(uri, 'const values = [...missing]; values')
-  await Workspace.setPath(tmpDir)
+  await Workspace.setUri(tmpDir)
   await Main.openUri(uri)
 
   const text = await FileSystem.readFile(uri)

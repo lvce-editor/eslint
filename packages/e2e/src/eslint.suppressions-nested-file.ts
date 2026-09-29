@@ -38,7 +38,7 @@ export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
       uri,
     },
   ])
-  await Workspace.setPath(tmpDir)
+  await Workspace.setUri(tmpDir)
   await Main.openUri(uri)
 
   const diagnostics = (await Command.executeExtensionCommand('eslint.lint', {

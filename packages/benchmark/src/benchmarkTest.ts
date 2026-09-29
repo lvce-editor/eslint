@@ -13,7 +13,7 @@ export const createBenchmarkTest = async (
 export const test = async ({ Command, FileSystem, Main, Workspace }) => {
   const workspace = ${JSON.stringify(workspace)}
   const uri = ${JSON.stringify(uri)}
-  await Workspace.setPath(workspace)
+  await Workspace.setUri(workspace)
   await Main.openUri(uri)
   const text = await FileSystem.readFile(uri)
   performance.mark('eslint-benchmark-lint-start')

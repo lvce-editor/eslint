@@ -10,7 +10,7 @@ export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
     ).pathname.replace(/^\/remote/, ''),
   )
   const uri = `${workspacePath}/test.js`
-  await Workspace.setPath(workspacePath)
+  await Workspace.setUri(workspacePath)
   await Main.openUri(uri)
 
   const text = await FileSystem.readFile(uri)

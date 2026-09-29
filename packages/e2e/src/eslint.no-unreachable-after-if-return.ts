@@ -29,7 +29,7 @@ export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
     uri,
     'function run() { if (true) { return } return; 1 }\nrun()',
   )
-  await Workspace.setPath(tmpDir)
+  await Workspace.setUri(tmpDir)
   await Main.openUri(uri)
 
   const text = await FileSystem.readFile(uri)

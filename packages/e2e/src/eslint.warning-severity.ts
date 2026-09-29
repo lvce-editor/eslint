@@ -40,7 +40,7 @@ export const test: Test = async ({
       uri,
     },
   ])
-  await Workspace.setPath(tmpDir)
+  await Workspace.setUri(tmpDir)
   await Settings.update({ 'editor.diagnostics': true })
   await Main.openUri(uri)
 
@@ -63,6 +63,8 @@ export const test: Test = async ({
 
   await Panel.open('Problems')
   const problems = Locator('.Viewlet.Problems')
-  await expect(problems.locator('.ProblemsWarningIcon')).toBeVisible()
-  await expect(problems.locator('.ProblemsErrorIcon')).toHaveCount(0)
+  const warningIcon = problems.locator('.ProblemsWarningIcon')
+  const errorIcon = problems.locator('.ProblemsErrorIcon')
+  await expect(warningIcon).toBeVisible()
+  await expect(errorIcon).toHaveCount(0)
 }

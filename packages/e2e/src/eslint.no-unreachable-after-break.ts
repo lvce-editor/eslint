@@ -34,7 +34,7 @@ export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
   ])
   const uri = `${tmpDir}/test.js`
   await FileSystem.writeFile(uri, 'while (true) { break; 1 }')
-  await Workspace.setPath(tmpDir)
+  await Workspace.setUri(tmpDir)
   await Main.openUri(uri)
 
   const text = await FileSystem.readFile(uri)

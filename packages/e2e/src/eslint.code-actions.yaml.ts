@@ -20,7 +20,7 @@ export const test: Test = async ({
   )
   const uri = `${workspacePath}/code-action.yml`
   await FileSystem.writeFile(uri, content)
-  await Workspace.setPath(workspacePath)
+  await Workspace.setUri(workspacePath)
   await Main.openUri(uri)
   await Editor.setCursor(0, 1)
   await Editor.openSourceActions()

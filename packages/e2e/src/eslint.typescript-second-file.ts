@@ -9,7 +9,7 @@ export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
       '',
     ),
   )
-  await Workspace.setPath(workspacePath)
+  await Workspace.setUri(workspacePath)
   for (const file of ['test.ts', 'second.ts']) {
     const uri = `${workspacePath}/${file}`
     await Main.openUri(uri)

@@ -41,7 +41,7 @@ export const test: Test = async ({
       uri: `${tmpDir}/test.yml`,
     },
   ])
-  await Workspace.setPath(tmpDir)
+  await Workspace.setUri(tmpDir)
   const uri = `${tmpDir}/test.yml`
   await Main.openUri(uri)
 

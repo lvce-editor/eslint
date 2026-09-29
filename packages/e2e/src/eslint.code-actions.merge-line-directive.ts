@@ -21,7 +21,7 @@ export const test: Test = async ({
   )
   const uri = `${workspacePath}/merge-line-directive.js`
   await FileSystem.writeFile(uri, content)
-  await Workspace.setPath(workspacePath)
+  await Workspace.setUri(workspacePath)
   await Main.openUri(uri)
   await Editor.setCursor(1, 15)
   await Editor.openSourceActions()

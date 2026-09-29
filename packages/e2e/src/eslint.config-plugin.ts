@@ -39,7 +39,7 @@ export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
     { content: `{"main":"index.js"}`, uri: `${pluginDir}/package.json` },
     { content: 'const foo = 1', uri: `${tmpDir}/test.js` },
   ])
-  await Workspace.setPath(tmpDir)
+  await Workspace.setUri(tmpDir)
   await Main.openUri(`${tmpDir}/test.js`)
 
   const uri = `${tmpDir}/test.js`

@@ -55,7 +55,7 @@ export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
     },
     { content: `export const value = 1`, uri: importedUri },
   ])
-  await Workspace.setPath(tmpDir)
+  await Workspace.setUri(tmpDir)
   await Main.openUri(mainUri)
 
   expectNoDiagnostics(await lint(Command, FileSystem, mainUri))

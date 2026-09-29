@@ -23,7 +23,7 @@ export const test: Test = async ({
     },
     { content: 'const value = 1', uri: `${tmpDir}/test.js` },
   ])
-  await Workspace.setPath(tmpDir)
+  await Workspace.setUri(tmpDir)
   await Settings.update({ 'editor.diagnostics': true })
   await Main.openUri(`${tmpDir}/test.js`)
 
