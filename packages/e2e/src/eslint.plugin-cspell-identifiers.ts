@@ -2,7 +2,7 @@ import type { Test } from '@lvce-editor/test-with-playwright'
 
 export const name = 'eslint.plugin-cspell-identifiers'
 
-export const test: Test = async ({ Command, FileSystem, Workspace }) => {
+export const test: Test = async ({ Command, FileSystem }) => {
   const workspacePath = decodeURIComponent(
     new URL(
       '../fixtures/eslint-plugin-cspell-disabled',
@@ -10,7 +10,7 @@ export const test: Test = async ({ Command, FileSystem, Workspace }) => {
     ).pathname.replace(/^\/remote/, ''),
   )
   const uri = `${workspacePath}/identifiers.js`
-  await Workspace.setPath(workspacePath)
+  await Command.execute('Workspace.setUri', workspacePath)
   const text = await FileSystem.readFile(uri)
   await Command.executeExtensionCommand('eslint.lint', {
     text: `// comment\n${text}`,

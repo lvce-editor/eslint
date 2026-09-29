@@ -3,13 +3,13 @@ import type { Test } from '@lvce-editor/test-with-playwright'
 export const name = 'eslint.plugin-typescript-eslint'
 
 export const test: Test = async ({
+  Command,
   Editor,
   expect,
   Locator,
   Main,
   Panel,
   Settings,
-  Workspace,
 }) => {
   const workspacePath = decodeURIComponent(
     new URL('../fixtures/typescript-eslint', import.meta.url).pathname.replace(
@@ -18,7 +18,7 @@ export const test: Test = async ({
     ),
   )
   const uri = `${workspacePath}/test.ts`
-  await Workspace.setPath(workspacePath)
+  await Command.execute('Workspace.setUri', workspacePath)
   await Settings.update({ 'editor.diagnostics': true })
   await Main.openUri(uri)
 

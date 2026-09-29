@@ -4,7 +4,7 @@ export const name = 'eslint.no-unreachable.if-else-return'
 
 const expectedDiagnostics = [{ source: 'no-unreachable', type: 'error' }]
 
-export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
+export const test: Test = async ({ Command, FileSystem, Main }) => {
   const tmpDir = await FileSystem.getTmpDir({ scheme: 'file' })
   const eslintDirectory = `${tmpDir}/node_modules/eslint`
   const eslintEntry = decodeURIComponent(
@@ -28,7 +28,7 @@ export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
   const text =
     'function run(value) { if (value) { return 1 } else { return 2 } 3 } run(true)'
   await FileSystem.writeFile(uri, text)
-  await Workspace.setPath(tmpDir)
+  await Command.execute('Workspace.setUri', tmpDir)
   await Main.openUri(uri)
 
   const diagnostics = (await Command.executeExtensionCommand('eslint.lint', {

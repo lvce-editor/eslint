@@ -2,14 +2,14 @@ import type { Test } from '@lvce-editor/test-with-playwright'
 
 export const name = 'eslint.typescript-second-file'
 
-export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
+export const test: Test = async ({ Command, FileSystem, Main }) => {
   const workspacePath = decodeURIComponent(
     new URL('../fixtures/typescript-eslint', import.meta.url).pathname.replace(
       /^\/remote/,
       '',
     ),
   )
-  await Workspace.setPath(workspacePath)
+  await Command.execute('Workspace.setUri', workspacePath)
   for (const file of ['test.ts', 'second.ts']) {
     const uri = `${workspacePath}/${file}`
     await Main.openUri(uri)

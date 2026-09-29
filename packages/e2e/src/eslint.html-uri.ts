@@ -2,7 +2,7 @@ import type { Test } from '@lvce-editor/test-with-playwright'
 
 export const name = 'eslint.html-uri'
 
-export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
+export const test: Test = async ({ Command, FileSystem, Main }) => {
   const workspaceName = `eslint-opfs-${Date.now()}`
   const workspaceUri = `html:///${workspaceName}`
   const opfsRoot = await FileSystem.getOpfsRoot()
@@ -36,7 +36,7 @@ export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
   const uri = `${workspaceUri}/test.js`
   const text = 'debugger'
   await FileSystem.writeFile(uri, text)
-  await Workspace.setPath(workspaceUri)
+  await Command.execute('Workspace.setUri', workspaceUri)
   await Main.openUri(uri)
 
   const diagnostics = (await Command.executeExtensionCommand('eslint.lint', {

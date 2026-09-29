@@ -2,17 +2,11 @@ import type { Test } from '@lvce-editor/test-with-playwright'
 
 export const name = 'eslint.performance-trace-config-not-found'
 
-export const test: Test = async ({
-  Command,
-  Editor,
-  FileSystem,
-  Main,
-  Workspace,
-}) => {
+export const test: Test = async ({ Command, Editor, FileSystem, Main }) => {
   const tmpDir = await FileSystem.getTmpDir({ scheme: 'file' })
   const uri = `${tmpDir}/test.js`
   await FileSystem.writeFile(uri, 'debugger')
-  await Workspace.setPath(tmpDir)
+  await Command.execute('Workspace.setUri', tmpDir)
   await Main.openUri(uri)
 
   const trace = (await Command.executeExtensionCommand(

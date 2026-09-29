@@ -4,7 +4,7 @@ export const name = 'eslint.suppressions-warning'
 
 const expectedDiagnostics = [{ source: 'no-unused-vars', type: 'warning' }]
 
-export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
+export const test: Test = async ({ Command, FileSystem, Main }) => {
   const tmpDir = await FileSystem.getTmpDir({ scheme: 'file' })
   const eslintDirectory = `${tmpDir}/node_modules/eslint`
   const eslintEntry = decodeURIComponent(
@@ -36,7 +36,7 @@ export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
       uri,
     },
   ])
-  await Workspace.setPath(tmpDir)
+  await Command.execute('Workspace.setUri', tmpDir)
   await Main.openUri(uri)
 
   const diagnostics = (await Command.executeExtensionCommand('eslint.lint', {

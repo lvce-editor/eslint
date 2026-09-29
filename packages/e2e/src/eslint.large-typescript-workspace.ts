@@ -2,7 +2,7 @@ import type { Test } from '@lvce-editor/test-with-playwright'
 
 export const name = 'eslint.large-typescript-workspace'
 
-export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
+export const test: Test = async ({ Command, FileSystem, Main }) => {
   const workspacePath = decodeURIComponent(
     new URL(
       '../fixtures/large-typescript-workspace',
@@ -10,7 +10,7 @@ export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
     ).pathname.replace(/^\/remote/, ''),
   )
   const uri = `${workspacePath}/src/test.ts`
-  await Workspace.setPath(workspacePath)
+  await Command.execute('Workspace.setUri', workspacePath)
   await Main.openUri(uri)
 
   const text = await FileSystem.readFile(uri)

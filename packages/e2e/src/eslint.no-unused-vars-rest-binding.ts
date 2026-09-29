@@ -4,7 +4,7 @@ export const name = 'eslint.no-unused-vars-rest-binding'
 
 const expectedDiagnostics = [{ source: 'no-unused-vars', type: 'warning' }]
 
-export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
+export const test: Test = async ({ Command, FileSystem, Main }) => {
   const tmpDir = await FileSystem.getTmpDir({ scheme: 'file' })
   const eslintDirectory = `${tmpDir}/node_modules/eslint`
   const eslintEntry = decodeURIComponent(
@@ -29,7 +29,7 @@ export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
     uri,
     'const { used, ...unused } = { used: 1 }; used',
   )
-  await Workspace.setPath(tmpDir)
+  await Command.execute('Workspace.setUri', tmpDir)
   await Main.openUri(uri)
 
   const text = await FileSystem.readFile(uri)

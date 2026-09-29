@@ -5,13 +5,7 @@ export const name = 'eslint.validate-yaml'
 // TODO enable when e2e memfs config URIs can be loaded by the extension file API
 export const skip = 1
 
-export const test: Test = async ({
-  Command,
-  Editor,
-  FileSystem,
-  Main,
-  Workspace,
-}) => {
+export const test: Test = async ({ Command, Editor, FileSystem, Main }) => {
   const tmpDir = await FileSystem.getTmpDir({ scheme: 'file' })
   const eslintDirectory = `${tmpDir}/node_modules/eslint`
   const eslintEntry = decodeURIComponent(
@@ -41,7 +35,7 @@ export const test: Test = async ({
       uri: `${tmpDir}/test.yml`,
     },
   ])
-  await Workspace.setPath(tmpDir)
+  await Command.execute('Workspace.setUri', tmpDir)
   const uri = `${tmpDir}/test.yml`
   await Main.openUri(uri)
 

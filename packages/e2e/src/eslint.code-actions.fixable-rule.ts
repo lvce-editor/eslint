@@ -9,7 +9,6 @@ export const test: Test = async ({
   FileSystem,
   Locator,
   Main,
-  Workspace,
 }) => {
   const content = 'const value = "test"\nconsole.log(value)'
   const workspacePath = decodeURIComponent(
@@ -20,7 +19,7 @@ export const test: Test = async ({
   )
   const uri = `${workspacePath}/fixable-rule.js`
   await FileSystem.writeFile(uri, content)
-  await Workspace.setPath(workspacePath)
+  await Command.execute('Workspace.setUri', workspacePath)
   await Main.openUri(uri)
   await Editor.setCursor(0, 15)
   await Editor.openSourceActions()

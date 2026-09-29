@@ -4,13 +4,7 @@ export const skip = 1
 
 export const name = 'eslint.lint-active-document'
 
-export const test: Test = async ({
-  Command,
-  Editor,
-  FileSystem,
-  Main,
-  Workspace,
-}) => {
+export const test: Test = async ({ Command, Editor, FileSystem, Main }) => {
   const tmpDir = await FileSystem.getTmpDir({ scheme: 'file' })
   const eslintDirectory = `${tmpDir}/node_modules/eslint`
   const eslintEntry = decodeURIComponent(
@@ -31,7 +25,7 @@ export const test: Test = async ({
     },
   ])
   await FileSystem.writeFile(`${tmpDir}/test.js`, 'debugger')
-  await Workspace.setPath(tmpDir)
+  await Command.execute('Workspace.setUri', tmpDir)
   await Main.openUri(`${tmpDir}/test.js`)
 
   await Command.executeExtensionCommand('eslint.lint')
