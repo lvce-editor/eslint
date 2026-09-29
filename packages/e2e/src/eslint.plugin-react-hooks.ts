@@ -3,13 +3,13 @@ import type { Test } from '@lvce-editor/test-with-playwright'
 export const name = 'eslint.plugin-react-hooks'
 
 export const test: Test = async ({
+  Command,
   Editor,
   expect,
   Locator,
   Main,
   Panel,
   Settings,
-  Workspace,
 }) => {
   const workspacePath = decodeURIComponent(
     new URL(
@@ -17,7 +17,7 @@ export const test: Test = async ({
       import.meta.url,
     ).pathname.replace(/^\/remote/, ''),
   )
-  await Workspace.setUri(workspacePath)
+  await Command.execute('Workspace.setUri', workspacePath)
   await Settings.update({ 'editor.diagnostics': true })
   await Main.openUri(`${workspacePath}/App.tsx`)
 

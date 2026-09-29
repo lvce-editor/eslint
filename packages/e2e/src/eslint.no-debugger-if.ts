@@ -4,7 +4,7 @@ export const name = 'eslint.no-debugger-if'
 
 const expectedDiagnostics = [{ source: 'no-debugger', type: 'error' }]
 
-export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
+export const test: Test = async ({ Command, FileSystem, Main }) => {
   const tmpDir = await FileSystem.getTmpDir({ scheme: 'file' })
   const eslintDirectory = `${tmpDir}/node_modules/eslint`
   const eslintEntry = decodeURIComponent(
@@ -26,7 +26,7 @@ export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
   ])
   const uri = `${tmpDir}/test.js`
   await FileSystem.writeFile(uri, 'if (true) { debugger }')
-  await Workspace.setUri(tmpDir)
+  await Command.execute('Workspace.setUri', tmpDir)
   await Main.openUri(uri)
 
   const text = await FileSystem.readFile(uri)

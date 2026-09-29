@@ -9,7 +9,6 @@ export const test: Test = async ({
   FileSystem,
   Locator,
   Main,
-  Workspace,
 }) => {
   const content =
     'const values = [1]\n\nvalues.forEach((value) => console.log(value))'
@@ -21,7 +20,7 @@ export const test: Test = async ({
   )
   const uri = `${workspacePath}/code-action-plugin-rule.js`
   await FileSystem.writeFile(uri, content)
-  await Workspace.setUri(workspacePath)
+  await Command.execute('Workspace.setUri', workspacePath)
   await Main.openUri(uri)
   await Editor.setCursor(2, 10)
   await Editor.openSourceActions()

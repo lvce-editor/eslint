@@ -9,7 +9,6 @@ export const test: Test = async ({
   FileSystem,
   Locator,
   Main,
-  Workspace,
 }) => {
   const content =
     "// eslint-disable-next-line no-debugger\ndebugger; console.log('test')"
@@ -21,7 +20,7 @@ export const test: Test = async ({
   )
   const uri = `${workspacePath}/merge-line-directive.js`
   await FileSystem.writeFile(uri, content)
-  await Workspace.setUri(workspacePath)
+  await Command.execute('Workspace.setUri', workspacePath)
   await Main.openUri(uri)
   await Editor.setCursor(1, 15)
   await Editor.openSourceActions()

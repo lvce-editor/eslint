@@ -10,7 +10,6 @@ export const test: Test = async ({
   Locator,
   Main,
   Settings,
-  Workspace,
 }) => {
   const tmpDir = await FileSystem.getTmpDir({ scheme: 'file' })
   const eslintDirectory = `${tmpDir}/node_modules/eslint`
@@ -36,7 +35,7 @@ export const test: Test = async ({
     },
     { content: 'debugger', uri: `${tmpDir}/test.js` },
   ])
-  await Workspace.setUri(tmpDir)
+  await Command.execute('Workspace.setUri', tmpDir)
   await Settings.update({ 'editor.diagnostics': true })
   const uri = `${tmpDir}/test.js`
   await Main.openUri(uri)

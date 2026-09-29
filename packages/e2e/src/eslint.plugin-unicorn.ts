@@ -3,13 +3,13 @@ import type { Test } from '@lvce-editor/test-with-playwright'
 export const name = 'eslint.plugin-unicorn'
 
 export const test: Test = async ({
+  Command,
   Editor,
   expect,
   Locator,
   Main,
   Panel,
   Settings,
-  Workspace,
 }) => {
   const workspacePath = decodeURIComponent(
     new URL(
@@ -18,7 +18,7 @@ export const test: Test = async ({
     ).pathname.replace(/^\/remote/, ''),
   )
   const uri = `${workspacePath}/test.js`
-  await Workspace.setUri(workspacePath)
+  await Command.execute('Workspace.setUri', workspacePath)
   await Settings.update({ 'editor.diagnostics': true })
   await Main.openUri(uri)
 

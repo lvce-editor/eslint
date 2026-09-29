@@ -3,13 +3,13 @@ import type { Test } from '@lvce-editor/test-with-playwright'
 export const name = 'eslint.missing-node-modules-config-import'
 
 export const test: Test = async ({
+  Command,
   expect,
   FileSystem,
   Locator,
   Main,
   Panel,
   Settings,
-  Workspace,
 }) => {
   const tmpDir = await FileSystem.getTmpDir({ scheme: 'file' })
   await FileSystem.writeFiles([
@@ -24,7 +24,7 @@ export const test: Test = async ({
     },
     { content: 'const value = 1', uri: `${tmpDir}/test.js` },
   ])
-  await Workspace.setUri(tmpDir)
+  await Command.execute('Workspace.setUri', tmpDir)
   await Settings.update({ 'editor.diagnostics': true })
   await Main.openUri(`${tmpDir}/test.js`)
 

@@ -2,13 +2,7 @@ import type { Test } from '@lvce-editor/test-with-playwright'
 
 export const name = 'eslint.performance-trace-success'
 
-export const test: Test = async ({
-  Command,
-  Editor,
-  FileSystem,
-  Main,
-  Workspace,
-}) => {
+export const test: Test = async ({ Command, Editor, FileSystem, Main }) => {
   const tmpDir = await FileSystem.getTmpDir({ scheme: 'file' })
   const eslintDirectory = `${tmpDir}/node_modules/eslint`
   const eslintEntry = decodeURIComponent(
@@ -33,7 +27,7 @@ export const test: Test = async ({
     },
     { content: 'debugger', uri: `${tmpDir}/test.js` },
   ])
-  await Workspace.setUri(tmpDir)
+  await Command.execute('Workspace.setUri', tmpDir)
   const uri = `${tmpDir}/test.js`
   await Main.openUri(uri)
 

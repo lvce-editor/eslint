@@ -3,6 +3,7 @@ import type { Test } from '@lvce-editor/test-with-playwright'
 export const name = 'eslint.warning-severity'
 
 export const test: Test = async ({
+  Command,
   Editor,
   expect,
   FileSystem,
@@ -10,7 +11,6 @@ export const test: Test = async ({
   Main,
   Panel,
   Settings,
-  Workspace,
 }) => {
   const tmpDir = await FileSystem.getTmpDir({ scheme: 'file' })
   const eslintDirectory = `${tmpDir}/node_modules/eslint`
@@ -40,7 +40,7 @@ export const test: Test = async ({
       uri,
     },
   ])
-  await Workspace.setUri(tmpDir)
+  await Command.execute('Workspace.setUri', tmpDir)
   await Settings.update({ 'editor.diagnostics': true })
   await Main.openUri(uri)
 

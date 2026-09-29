@@ -24,7 +24,7 @@ const expectNoDiagnostics = (diagnostics: readonly Diagnostic[]): void => {
   }
 }
 
-export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
+export const test: Test = async ({ Command, FileSystem, Main }) => {
   const tmpDir = await FileSystem.getTmpDir({ scheme: 'file' })
   const eslintDirectory = `${tmpDir}/node_modules/eslint`
   const eslintEntry = decodeURIComponent(
@@ -55,7 +55,7 @@ export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
     },
     { content: `export const value = 1`, uri: importedUri },
   ])
-  await Workspace.setUri(tmpDir)
+  await Command.execute('Workspace.setUri', tmpDir)
   await Main.openUri(mainUri)
 
   expectNoDiagnostics(await lint(Command, FileSystem, mainUri))

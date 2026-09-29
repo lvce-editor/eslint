@@ -4,7 +4,7 @@ export const name = 'eslint.no-debugger-class-method'
 
 const expectedDiagnostics = [{ source: 'no-debugger', type: 'error' }]
 
-export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
+export const test: Test = async ({ Command, FileSystem, Main }) => {
   const tmpDir = await FileSystem.getTmpDir({ scheme: 'file' })
   const eslintDirectory = `${tmpDir}/node_modules/eslint`
   const eslintEntry = decodeURIComponent(
@@ -29,7 +29,7 @@ export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
     uri,
     'class Example { run() { debugger } }\nnew Example().run()',
   )
-  await Workspace.setUri(tmpDir)
+  await Command.execute('Workspace.setUri', tmpDir)
   await Main.openUri(uri)
 
   const text = await FileSystem.readFile(uri)

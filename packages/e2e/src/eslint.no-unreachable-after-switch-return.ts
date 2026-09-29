@@ -4,7 +4,7 @@ export const name = 'eslint.no-unreachable-after-switch-return'
 
 const expectedDiagnostics = [{ source: 'no-unreachable', type: 'error' }]
 
-export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
+export const test: Test = async ({ Command, FileSystem, Main }) => {
   const tmpDir = await FileSystem.getTmpDir({ scheme: 'file' })
   const eslintDirectory = `${tmpDir}/node_modules/eslint`
   const eslintEntry = decodeURIComponent(
@@ -29,7 +29,7 @@ export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
     uri,
     'function run(value) { switch (value) { case 1: return } return; 1 }\nrun(1)',
   )
-  await Workspace.setUri(tmpDir)
+  await Command.execute('Workspace.setUri', tmpDir)
   await Main.openUri(uri)
 
   const text = await FileSystem.readFile(uri)

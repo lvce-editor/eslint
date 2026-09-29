@@ -9,7 +9,6 @@ export const test: Test = async ({
   FileSystem,
   Locator,
   Main,
-  Workspace,
 }) => {
   const content = "console.log('test')"
   const workspacePath = decodeURIComponent(
@@ -20,7 +19,7 @@ export const test: Test = async ({
   )
   const uri = `${workspacePath}/disable-line.js`
   await FileSystem.writeFile(uri, content)
-  await Workspace.setUri(workspacePath)
+  await Command.execute('Workspace.setUri', workspacePath)
   await Main.openUri(uri)
   await Editor.setCursor(0, 5)
   await Editor.openSourceActions()

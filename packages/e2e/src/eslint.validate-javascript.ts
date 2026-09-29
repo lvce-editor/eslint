@@ -2,7 +2,7 @@ import type { Test } from '@lvce-editor/test-with-playwright'
 
 export const name = 'eslint.validate-javascript'
 
-export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
+export const test: Test = async ({ Command, FileSystem, Main }) => {
   const tmpDir = await FileSystem.getTmpDir({ scheme: 'file' })
   const eslintDirectory = `${tmpDir}/node_modules/eslint`
   const eslintEntry = decodeURIComponent(
@@ -23,7 +23,7 @@ export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
     },
   ])
   await FileSystem.writeFile(`${tmpDir}/test.js`, 'debugger')
-  await Workspace.setUri(tmpDir)
+  await Command.execute('Workspace.setUri', tmpDir)
   await Main.openUri(`${tmpDir}/test.js`)
 
   const uri = `${tmpDir}/test.js`

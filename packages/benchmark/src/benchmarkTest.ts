@@ -10,10 +10,10 @@ export const createBenchmarkTest = async (
   await mkdir(sourceDirectory, { recursive: true })
   const source = `export const name = 'eslint.benchmark'
 
-export const test = async ({ Command, FileSystem, Main, Workspace }) => {
+export const test = async ({ Command, FileSystem, Main }) => {
   const workspace = ${JSON.stringify(workspace)}
   const uri = ${JSON.stringify(uri)}
-  await Workspace.setUri(workspace)
+  await Command.execute('Workspace.setUri', workspace)
   await Main.openUri(uri)
   const text = await FileSystem.readFile(uri)
   performance.mark('eslint-benchmark-lint-start')

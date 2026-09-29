@@ -4,7 +4,7 @@ export const name = 'eslint.config-plugin'
 
 export const skip = 1
 
-export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
+export const test: Test = async ({ Command, FileSystem, Main }) => {
   const tmpDir = await FileSystem.getTmpDir({ scheme: 'file' })
   const eslintDirectory = `${tmpDir}/node_modules/eslint`
   const eslintEntry = decodeURIComponent(
@@ -39,7 +39,7 @@ export const test: Test = async ({ Command, FileSystem, Main, Workspace }) => {
     { content: `{"main":"index.js"}`, uri: `${pluginDir}/package.json` },
     { content: 'const foo = 1', uri: `${tmpDir}/test.js` },
   ])
-  await Workspace.setUri(tmpDir)
+  await Command.execute('Workspace.setUri', tmpDir)
   await Main.openUri(`${tmpDir}/test.js`)
 
   const uri = `${tmpDir}/test.js`
