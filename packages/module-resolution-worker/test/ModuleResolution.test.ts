@@ -149,6 +149,24 @@ test('transforms an esm default export to commonjs', async () => {
   expect(graph.modules[graph.entry]).toContain('exports.default')
 })
 
+test('loads ESLint config from a remote ssh URI with its host preserved', async () => {
+  setFiles({
+    '/workspace/eslint.config.js': `export default [{ rules: {} }]`,
+  })
+  const readFileSpy = jest.spyOn(FileSystem.state.api, 'readFile')
+
+  const graph = await LoadEslintConfig.loadEslintConfig(
+    'remote-ssh://example.com/workspace/eslint.config.js',
+  )
+
+  expect(graph.entry).toBe(
+    'remote-ssh://example.com/workspace/eslint.config.js',
+  )
+  expect(readFileSpy).toHaveBeenCalledWith(
+    'remote-ssh://example.com/workspace/eslint.config.js',
+  )
+})
+
 test('captures fresh config resolution stats', async () => {
   setFiles({
     '/workspace/eslint.config.js': `export default [{ rules: {} }]`,
