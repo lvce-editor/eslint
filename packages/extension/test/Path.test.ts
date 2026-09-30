@@ -12,7 +12,7 @@ test('normalizes remote ssh uri paths without changing the authority', () => {
     Path.normalize(
       'remote-ssh://user@example.com:2222/work%20tree/src/../file.js',
     ),
-  ).toBe('remote-ssh://user@example.com:2222/work/file.js')
+  ).toBe('remote-ssh://user@example.com:2222/work%20tree/file.js')
   expect(Path.normalize('remote-ssh://example.com/../../file.js')).toBe(
     'remote-ssh://example.com/file.js',
   )
