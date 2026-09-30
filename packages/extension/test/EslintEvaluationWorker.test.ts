@@ -47,6 +47,45 @@ test('runs linting in the eslint evaluation worker', async () => {
   ])
 })
 
+test('reuses one worker for concurrent lint requests', async () => {
+  const createRpc = jest.fn(async () => ({
+    dispose: async () => {},
+    invoke: async () => [],
+  }))
+  EslintEvaluationWorker.state.createRpc = createRpc
+
+  await Promise.all([
+    EslintEvaluationWorker.lint('const first = 1', '/workspace/first.js'),
+    EslintEvaluationWorker.lint('const second = 2', '/workspace/second.js'),
+  ])
+
+  expect(createRpc).toHaveBeenCalledTimes(1)
+})
+
+test('retries worker creation after initialization fails', async () => {
+  let attempts = 0
+  const createRpc = jest.fn(async () => {
+    attempts++
+    if (attempts === 1) {
+      throw new Error('worker startup failed')
+    }
+    return {
+      dispose: async () => {},
+      invoke: async () => [],
+    }
+  })
+  EslintEvaluationWorker.state.createRpc = createRpc
+
+  await expect(
+    EslintEvaluationWorker.lint('const value = 1', '/workspace/file.js'),
+  ).rejects.toThrow('worker startup failed')
+  await expect(
+    EslintEvaluationWorker.lint('const value = 1', '/workspace/file.js'),
+  ).resolves.toEqual([])
+
+  expect(createRpc).toHaveBeenCalledTimes(2)
+})
+
 test('clears evaluated module caches in the evaluation worker', async () => {
   const invocations: unknown[] = []
   EslintEvaluationWorker.state.createRpc = async () => ({
