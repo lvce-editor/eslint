@@ -67,14 +67,23 @@ export const state: {
 }
 
 const getRpc = (): Promise<Rpc> => {
-  state.rpcPromise ||= (async () => {
+  if (state.rpcPromise) {
+    return state.rpcPromise
+  }
+  const rpcPromise = (async () => {
     await state.disposePromise
     return state.createRpc({
       commandMap,
       id: 'builtin.eslint.evaluation-worker',
     })
   })()
-  return state.rpcPromise
+  state.rpcPromise = rpcPromise
+  void rpcPromise.catch(() => {
+    if (state.rpcPromise === rpcPromise) {
+      state.rpcPromise = undefined
+    }
+  })
+  return rpcPromise
 }
 
 const invoke = async <T>(
