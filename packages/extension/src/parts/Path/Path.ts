@@ -1,21 +1,30 @@
+const splitAuthority = (
+  prefix: string,
+  remainder: string,
+): [string, string] => {
+  const separator = remainder.indexOf('/')
+  if (!prefix || separator === 0) {
+    return ['', remainder]
+  }
+  if (separator === -1) {
+    return [remainder, '']
+  }
+  return [remainder.slice(0, separator), remainder.slice(separator)]
+}
+
 export const normalize = (path: string): string => {
   const normalizedSlashes = path.replaceAll('\\', '/')
   const match = /^([a-z][a-z\d+.-]*:\/\/)(.*)$/i.exec(normalizedSlashes)
   const prefix = match?.[1] ?? ''
   const remainder = match?.[2] ?? normalizedSlashes
-  const authorityMatch =
-    prefix && !remainder.startsWith('/')
-      ? /^([^/]+)(.*)$/.exec(remainder)
-      : null
-  const authority = authorityMatch?.[1] ?? ''
-  const pathValue = authorityMatch ? authorityMatch[2] : remainder
+  const [authority, pathValue] = splitAuthority(prefix, remainder)
   const parts: string[] = []
   for (const part of pathValue.split('/')) {
     if (!part || part === '.') {
       continue
     }
     if (part === '..') {
-      if (parts.length) {
+      if (parts.length > 0) {
         parts.pop()
       }
     } else {
