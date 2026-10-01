@@ -674,3 +674,26 @@ test('preserves remote module URLs through node url and path shims', () => {
   })
   expect(value).toEqual([entry, entry, { remote: true }])
 })
+
+test('exposes remote files to native-path consumers without sharing hosts', () => {
+  const runtime = LoadModuleGraph.createModuleRuntime()
+  const source = `const fs = require('node:fs'); const path = require('node:path'); module.exports = [process.cwd(), path.resolve('tsconfig.json'), fs.existsSync('/workspace/tsconfig.json'), fs.readFileSync('/workspace/tsconfig.json', 'utf8'), fs.readdirSync('/workspace'), fs.statSync('/workspace/tsconfig.json').isFile()]`
+  for (const host of ['first', 'second']) {
+    const entry = `remote-ssh://${host}/workspace/eslint.config.js`
+    const result = runtime.evaluate({
+      entry,
+      files: { [`remote-ssh://${host}/workspace/tsconfig.json`]: host },
+      id: host,
+      modules: { [entry]: source },
+      resolutions: {},
+    })
+    expect(result.exports).toEqual([
+      '/workspace',
+      '/workspace/tsconfig.json',
+      true,
+      host,
+      ['tsconfig.json', 'eslint.config.js'],
+      true,
+    ])
+  }
+})
