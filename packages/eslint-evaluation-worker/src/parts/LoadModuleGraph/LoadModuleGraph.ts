@@ -151,6 +151,7 @@ const appendPathPart = (
 }
 
 const normalizePathModulePath = (path: string): string => {
+  if (Path.isUri(path)) return Path.normalize(path)
   const absolute = path.startsWith('/')
   const parts: string[] = []
   for (const part of path.split('/')) {
@@ -169,6 +170,7 @@ const normalizePathModulePath = (path: string): string => {
 }
 
 const dirnamePathModulePath = (path: string): string => {
+  if (Path.isUri(path)) return Path.dirname(path)
   const normalized = normalizePathModulePath(path)
   if (normalized === '/') {
     return normalized
@@ -197,7 +199,8 @@ const createPathModule = (cwd: string) => ({
   delimiter: ':',
   dirname: dirnamePathModulePath,
   extname: Path.extname,
-  isAbsolute: (path: string): boolean => path.startsWith('/'),
+  isAbsolute: (path: string): boolean =>
+    path.startsWith('/') || Path.isUri(path),
   join: (...paths: readonly string[]): string =>
     normalizePathModulePath(paths.join('/')),
   normalize: normalizePathModulePath,
@@ -217,7 +220,7 @@ const createPathModule = (cwd: string) => ({
   resolve: (...paths: readonly string[]): string => {
     let resolved = ''
     for (const path of paths) {
-      if (path.startsWith('/')) {
+      if (path.startsWith('/') || Path.isUri(path)) {
         resolved = path
       } else {
         resolved = Path.join(resolved || cwd, path)
@@ -727,9 +730,20 @@ const createBuiltins = (
       isatty: (): boolean => false,
     },
     'node:url': {
-      fileURLToPath: (url: string | URL): string => new URL(url).pathname,
-      pathToFileURL: (filePath: string): URL =>
-        new URL(`file://${Path.normalize(filePath)}`),
+      fileURLToPath: (url: string | URL): string => {
+        const parsed = new URL(url)
+        return parsed.protocol === 'file:'
+          ? decodeURIComponent(parsed.pathname)
+          : parsed.href
+      },
+      pathToFileURL: (filePath: string): URL => {
+        if (/^[a-z][a-z\d+.-]*:\/\//i.test(filePath)) {
+          return new URL(filePath)
+        }
+        const url = new URL('file:///')
+        url.pathname = Path.normalize(filePath)
+        return url
+      },
     },
     'node:util': {
       inspect: (value: unknown): string => JSON.stringify(value),
@@ -905,7 +919,7 @@ const evaluateGraph = (
     const path = specifier.startsWith('file:')
       ? decodeURIComponent(new URL(specifier).pathname)
       : specifier.split(/[?#]/, 1)[0]
-    if (!path.startsWith('/')) {
+    if (!path.startsWith('/') && !Path.isUri(path)) {
       return undefined
     }
     const normalized = Path.normalize(path)
