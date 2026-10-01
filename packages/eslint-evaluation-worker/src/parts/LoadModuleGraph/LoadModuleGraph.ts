@@ -411,7 +411,7 @@ const createVirtualProcess = (entry: string) => {
   )
   return {
     argv: [] as readonly string[],
-    cwd: (): string => Path.dirname(entry),
+    cwd: (): string => Path.dirname(Path.toFileSystemPath(entry)),
     env: Object.freeze({}),
     execPath: '/usr/bin/node',
     features: Object.freeze({ typescript: false }),
@@ -451,11 +451,21 @@ const createBuiltins = (
   state: RuntimeState,
   entry: string,
 ): Readonly<Record<string, any>> => {
-  const path = createPathModule(Path.dirname(entry))
+  const path = createPathModule(Path.dirname(Path.toFileSystemPath(entry)))
+  const toVirtualPath = (filePath: string): string => {
+    if (Path.isUri(entry) && filePath.startsWith('/')) {
+      const url = new URL(entry)
+      url.pathname = filePath
+      url.search = ''
+      url.hash = ''
+      return Path.normalize(url.href)
+    }
+    return Path.normalize(filePath)
+  }
   path.posix = path
   path.win32 = path
   const existsSync = (filePath: string): boolean => {
-    const normalized = Path.normalize(filePath).replace(/\/$/, '')
+    const normalized = toVirtualPath(filePath).replace(/\/$/, '')
     return (
       state.executableFingerprints.has(normalized) ||
       Object.hasOwn(state.files, normalized) ||
@@ -466,7 +476,7 @@ const createBuiltins = (
     filePath: string,
     encoding?: string,
   ): string | Buffer => {
-    const normalized = Path.normalize(filePath)
+    const normalized = toVirtualPath(filePath)
     if (!Object.hasOwn(state.files, normalized)) {
       throw new Error(`Virtual file is not available: ${normalized}`)
     }
@@ -478,7 +488,7 @@ const createBuiltins = (
     directory: string,
     options?: string | { readonly withFileTypes?: boolean },
   ): readonly unknown[] => {
-    const normalized = Path.normalize(directory).replace(/\/$/, '')
+    const normalized = toVirtualPath(directory).replace(/\/$/, '')
     const entries = [...(state.virtualDirectoryEntries.get(normalized) ?? [])]
     if (typeof options === 'object' && options.withFileTypes) {
       return entries.map((name) => {
@@ -502,7 +512,7 @@ const createBuiltins = (
     },
   )
   const statSync = (path: string) => {
-    const normalized = Path.normalize(path).replace(/\/$/, '')
+    const normalized = toVirtualPath(path).replace(/\/$/, '')
     const isFile =
       state.executableFingerprints.has(normalized) ||
       Object.hasOwn(state.files, normalized)
