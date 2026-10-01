@@ -1167,7 +1167,7 @@ const substituteImportMeta = (path: string, source: string): string => {
     .split('import.meta.filename')
     .join(JSON.stringify(path))
     .split('import.meta.url')
-    .join(JSON.stringify(`file://${path}`))
+    .join(JSON.stringify(FileSystem.toUri(path)))
 }
 
 const transpileUncached = (

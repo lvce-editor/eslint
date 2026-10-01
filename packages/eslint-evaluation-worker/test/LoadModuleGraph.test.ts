@@ -659,3 +659,18 @@ test.each([
     ).toThrow('patterns changed')
   },
 )
+
+test('preserves remote module URLs through node url and path shims', () => {
+  const entry = 'remote-ssh://user@host:2222/work%20space/eslint.config.js'
+  const sibling = 'remote-ssh://user@host:2222/work%20space/value.json'
+  const value = LoadModuleGraph.loadModuleGraph({
+    entry,
+    id: 'remote-url-graph',
+    modules: {
+      [entry]: `const { fileURLToPath, pathToFileURL } = require('node:url'); const path = require('node:path'); const file = fileURLToPath(${JSON.stringify(entry)}); module.exports = [file, pathToFileURL(file).href, require(path.join(path.dirname(file), 'value.json'))]`,
+      [sibling]: '{"remote":true}',
+    },
+    resolutions: {},
+  })
+  expect(value).toEqual([entry, entry, { remote: true }])
+})
