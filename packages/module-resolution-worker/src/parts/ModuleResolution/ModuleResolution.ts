@@ -267,6 +267,13 @@ const splitAuthority = (
 }
 
 const normalize = (path: string): string => {
+  if (
+    path.startsWith('/') &&
+    !path.endsWith('/') &&
+    !/\\|\/(?:\/|\.{1,2}(?:\/|$))/.test(path)
+  ) {
+    return path
+  }
   const normalizedSlashes = toPath(path).replaceAll('\\', '/')
   const match = /^([a-z][a-z\d+.-]*:\/\/)(.*)$/i.exec(normalizedSlashes)
   const prefix = match?.[1] ?? ''
