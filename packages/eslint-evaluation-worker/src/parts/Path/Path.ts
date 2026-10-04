@@ -16,6 +16,13 @@ const splitAuthority = (
 }
 
 export const normalize = (path: string): string => {
+  if (
+    path.startsWith('/') &&
+    !path.endsWith('/') &&
+    !/\\|\/(?:\/|\.{1,2}(?:\/|$))/.test(path)
+  ) {
+    return path
+  }
   const normalizedSlashes = path.replaceAll('\\', '/')
   const match = /^([a-z][a-z\d+.-]*:\/\/)(.*)$/i.exec(normalizedSlashes)
   const prefix = match?.[1] ?? ''
@@ -47,7 +54,8 @@ export const dirname = (path: string): string => {
 }
 
 export const basename = (path: string, suffix = ''): string => {
-  const value = normalize(path).split('/').at(-1) || ''
+  const normalized = normalize(path)
+  const value = normalized.slice(normalized.lastIndexOf('/') + 1)
   return suffix && value.endsWith(suffix)
     ? value.slice(0, -suffix.length)
     : value

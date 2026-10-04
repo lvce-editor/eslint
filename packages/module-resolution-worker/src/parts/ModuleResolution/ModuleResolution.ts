@@ -1,4 +1,4 @@
-import { packages, transform } from '@babel/standalone'
+import { packages, type transform, transformFromAst } from '@babel/standalone'
 import * as ComputeTextHash from '../ComputeTextHash/ComputeTextHash.ts'
 import * as FileSystem from '../FileSystem/FileSystem.ts'
 import * as ModuleAnalysisCache from '../ModuleAnalysisCache/ModuleAnalysisCache.ts'
@@ -267,6 +267,13 @@ const splitAuthority = (
 }
 
 const normalize = (path: string): string => {
+  if (
+    path.startsWith('/') &&
+    !path.endsWith('/') &&
+    !/\\|\/(?:\/|\.{1,2}(?:\/|$))/.test(path)
+  ) {
+    return path
+  }
   const normalizedSlashes = toPath(path).replaceAll('\\', '/')
   const match = /^([a-z][a-z\d+.-]*:\/\/)(.*)$/i.exec(normalizedSlashes)
   const prefix = match?.[1] ?? ''
@@ -1060,7 +1067,9 @@ const getDependencies = (
     ) {
       addDependency(value.source.value, optional)
     }
-    for (const child of Object.values(value)) {
+    const visitorKeys = packages.types.VISITOR_KEYS[value.type] ?? []
+    for (const key of visitorKeys) {
+      const child = value[key]
       if (Array.isArray(child)) {
         for (const item of child) {
           visit(item, optional)
@@ -1221,8 +1230,10 @@ const transpileUncached = (
     return { ...analysis, substituteImportMeta: false }
   }
   const extension = getFileExtension(path)
-  const result = transform(source, {
+  // Standalone returns a synchronous result; its current typings declare void.
+  const result = transformFromAst(ast, source, {
     babelrc: false,
+    cloneInputAst: false,
     comments: false,
     configFile: false,
     filename: `module${extension || '.js'}`,
@@ -1239,7 +1250,7 @@ const transpileUncached = (
     ],
     sourceMaps: false,
     sourceType: 'unambiguous',
-  })
+  }) as unknown as ReturnType<typeof transform>
   if (!result.code) {
     throw new Error(`Failed to transform ESLint module: ${path}`)
   }
@@ -1398,6 +1409,7 @@ const loadModule = async (
     ...dependencyGraph?.lazyModules,
   }
   const modules: Record<string, string> = { ...dependencyGraph?.modules }
+  let moduleCount = Object.keys(modules).length
   const moduleSources: Record<string, string> = {}
   const resolutions: Record<string, string> = {
     ...dependencyGraph?.resolutions,
@@ -1429,11 +1441,13 @@ const loadModule = async (
     if (Object.hasOwn(modules, path)) {
       return
     }
-    if (Object.keys(modules).length >= maxModuleCount) {
+    if (moduleCount >= maxModuleCount) {
       throw new Error(
         `ESLint config exceeds the ${maxModuleCount} module limit`,
       )
     }
+    // Reserve before asynchronous reads so concurrent visits share the limit.
+    moduleCount++
     const preloadedSource = files[path]
     if (preloadedSource && typeof preloadedSource !== 'string') {
       throw new Error(`Cannot evaluate binary module: ${path}`)
