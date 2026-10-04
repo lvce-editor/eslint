@@ -1,4 +1,4 @@
-import { packages, transformFromAst } from '@babel/standalone'
+import { packages, type transform, transformFromAst } from '@babel/standalone'
 import * as ComputeTextHash from '../ComputeTextHash/ComputeTextHash.ts'
 import * as FileSystem from '../FileSystem/FileSystem.ts'
 import * as ModuleAnalysisCache from '../ModuleAnalysisCache/ModuleAnalysisCache.ts'
@@ -1222,6 +1222,7 @@ const transpileUncached = (
     return { ...analysis, substituteImportMeta: false }
   }
   const extension = getFileExtension(path)
+  // Standalone returns a synchronous result; its current typings declare void.
   const result = transformFromAst(ast, source, {
     cloneInputAst: false,
     babelrc: false,
@@ -1241,7 +1242,7 @@ const transpileUncached = (
     ],
     sourceMaps: false,
     sourceType: 'unambiguous',
-  })
+  }) as unknown as ReturnType<typeof transform>
   if (!result.code) {
     throw new Error(`Failed to transform ESLint module: ${path}`)
   }
