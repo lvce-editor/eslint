@@ -1060,7 +1060,8 @@ const getDependencies = (
     ) {
       addDependency(value.source.value, optional)
     }
-    for (const key of packages.types.VISITOR_KEYS[value.type] ?? []) {
+    const visitorKeys = packages.types.VISITOR_KEYS[value.type] ?? []
+    for (const key of visitorKeys) {
       const child = value[key]
       if (Array.isArray(child)) {
         for (const item of child) {
@@ -1224,8 +1225,8 @@ const transpileUncached = (
   const extension = getFileExtension(path)
   // Standalone returns a synchronous result; its current typings declare void.
   const result = transformFromAst(ast, source, {
-    cloneInputAst: false,
     babelrc: false,
+    cloneInputAst: false,
     comments: false,
     configFile: false,
     filename: `module${extension || '.js'}`,
