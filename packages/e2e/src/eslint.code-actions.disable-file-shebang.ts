@@ -11,15 +11,13 @@ export const test: Test = async ({
   Main,
 }) => {
   const content = "#!/usr/bin/env node\nconsole.log('test')"
-  const workspacePath = decodeURIComponent(
-    new URL(
-      '../fixtures/eslint-code-actions',
-      import.meta.url,
-    ).pathname.replace(/^\/remote/, ''),
-  )
-  const uri = `${workspacePath}/disable-file-shebang.js`
+  const workspaceUri = `file://${new URL(
+    '../fixtures/eslint-code-actions',
+    import.meta.url,
+  ).pathname.replace(/^\/remote/, '')}`
+  const uri = `${workspaceUri}/disable-file-shebang.js`
   await FileSystem.writeFile(uri, content)
-  await Command.execute('Workspace.setUri', workspacePath)
+  await Command.execute('Workspace.setUri', workspaceUri)
   await Main.openUri(uri)
   await Editor.setCursor(1, 5)
   await Editor.openSourceActions()

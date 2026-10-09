@@ -1,39 +1,43 @@
-// import { readFile, readdir, writeFile } from 'node:fs/promises'
-// import { join } from 'node:path'
-// import { pathToFileURL } from 'node:url'
+import { readFile, readdir, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
 
-// const __dirname = import.meta.dirname
-
-// const root = join(__dirname, '..', '..', '..')
-
-// export const getRemoteUrl = (path) => {
-//   const url = pathToFileURL(path).toString().slice(8)
-//   return `/remote/${url}`
-// }
-
-// const nodeModulesPath = join(root, 'packages', 'server', 'node_modules')
-
-// const workerPath = join(root, '.tmp', 'dist', 'dist', 'explorerViewWorkerMain.js')
-
-// const serverStaticPath = join(nodeModulesPath, '@lvce-editor', 'static-server', 'static')
-
-// const RE_COMMIT_HASH = /^[a-z\d]+$/
-// const isCommitHash = (dirent) => {
-//   return dirent.length === 7 && dirent.match(RE_COMMIT_HASH)
-// }
-
-// const dirents = await readdir(serverStaticPath)
-// const commitHash = dirents.find(isCommitHash) || ''
-// const rendererWorkerMainPath = join(serverStaticPath, commitHash, 'packages', 'renderer-worker', 'dist', 'rendererWorkerMain.js')
-
-// const content = await readFile(rendererWorkerMainPath, 'utf-8')
-
-// const remoteUrl = getRemoteUrl(workerPath)
-// if (!content.includes('// const explorerWorkerUrl = ')) {
-//   const occurrence = `const explorerWorkerUrl = \`\${assetDir}/packages/explorer-worker/dist/explorerViewWorkerMain.js\``
-//   const replacement = `// const explorerWorkerUrl = \`\${assetDir}/packages/explorer-worker/dist/explorerViewWorkerMain.js\`
-// const explorerWorkerUrl = \`${remoteUrl}\``
-
-//   const newContent = content.replace(occurrence, replacement)
-//   await writeFile(rendererWorkerMainPath, newContent)
-// }
+const root = join(import.meta.dirname, '..', '..', '..')
+const staticPath = join(
+  root,
+  'node_modules',
+  '@lvce-editor',
+  'static-server',
+  'static',
+)
+const directories = await readdir(staticPath)
+const commitHash = directories.find((name) => /^[a-f0-9]{7}$/.test(name))
+if (!commitHash) throw new Error('Static server commit directory not found')
+const testWorkerPath = join(
+  staticPath,
+  commitHash,
+  'packages',
+  'test-worker',
+  'dist',
+  'testWorkerMain.js',
+)
+const content = await readFile(testWorkerPath, 'utf8')
+const marker =
+  '// Await streamed diagnostics before checking the cached result.'
+if (!content.includes(marker)) {
+  const pattern =
+    /const shouldHaveDiagnostics = async expectedDiagnostics => \{\n  const key = await getEditorKey\(\);\n  const diagnostics = await (invoke\$\d+)\('Editor.getDiagnostics', key\);/
+  if (!pattern.test(content))
+    throw new Error('Expected diagnostic assertion helper not found')
+  const replacement = content.replace(
+    pattern,
+    (
+      _match,
+      invoke,
+    ) => `const shouldHaveDiagnostics = async expectedDiagnostics => {
+  const key = await getEditorKey();
+  ${marker}
+  await ${invoke}('Editor.waitForDiagnostics', key);
+  const diagnostics = await ${invoke}('Editor.getDiagnostics', key);`,
+  )
+  await writeFile(testWorkerPath, replacement)
+}

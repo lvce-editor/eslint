@@ -1,5 +1,6 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 export const createBenchmarkTest = async (
   directory: string,
@@ -11,8 +12,8 @@ export const createBenchmarkTest = async (
   const source = `export const name = 'eslint.benchmark'
 
 export const test = async ({ Command, FileSystem, Main }) => {
-  const workspace = ${JSON.stringify(workspace)}
-  const uri = ${JSON.stringify(uri)}
+  const workspace = ${JSON.stringify(pathToFileURL(workspace).href)}
+  const uri = ${JSON.stringify(pathToFileURL(uri).href)}
   await Command.execute('Workspace.setUri', workspace)
   await Main.openUri(uri)
   const text = await FileSystem.readFile(uri)

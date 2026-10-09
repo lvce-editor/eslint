@@ -11,15 +11,13 @@ export const test: Test = async ({
   Main,
 }) => {
   const content = 'missing()'
-  const workspacePath = decodeURIComponent(
-    new URL(
-      '../fixtures/eslint-code-actions',
-      import.meta.url,
-    ).pathname.replace(/^\/remote/, ''),
-  )
-  const uri = `${workspacePath}/no-undef.js`
+  const workspaceUri = `file://${new URL(
+    '../fixtures/eslint-code-actions',
+    import.meta.url,
+  ).pathname.replace(/^\/remote/, '')}`
+  const uri = `${workspaceUri}/no-undef.js`
   await FileSystem.writeFile(uri, content)
-  await Command.execute('Workspace.setUri', workspacePath)
+  await Command.execute('Workspace.setUri', workspaceUri)
   await Main.openUri(uri)
   await Editor.setCursor(0, 3)
   await Editor.openSourceActions()

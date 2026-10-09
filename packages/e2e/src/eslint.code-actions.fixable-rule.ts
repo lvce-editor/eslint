@@ -11,15 +11,13 @@ export const test: Test = async ({
   Main,
 }) => {
   const content = 'const value = "test"\nconsole.log(value)'
-  const workspacePath = decodeURIComponent(
-    new URL(
-      '../fixtures/eslint-code-actions',
-      import.meta.url,
-    ).pathname.replace(/^\/remote/, ''),
-  )
-  const uri = `${workspacePath}/fixable-rule.js`
+  const workspaceUri = `file://${new URL(
+    '../fixtures/eslint-code-actions',
+    import.meta.url,
+  ).pathname.replace(/^\/remote/, '')}`
+  const uri = `${workspaceUri}/fixable-rule.js`
   await FileSystem.writeFile(uri, content)
-  await Command.execute('Workspace.setUri', workspacePath)
+  await Command.execute('Workspace.setUri', workspaceUri)
   await Main.openUri(uri)
   await Editor.setCursor(0, 15)
   await Editor.openSourceActions()

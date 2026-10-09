@@ -11,15 +11,13 @@ export const test: Test = async ({
   Main,
 }) => {
   const content = '---'
-  const workspacePath = decodeURIComponent(
-    new URL('../fixtures/eslint-plugin-yml', import.meta.url).pathname.replace(
-      /^\/remote/,
-      '',
-    ),
-  )
-  const uri = `${workspacePath}/code-action.yml`
+  const workspaceUri = `file://${new URL(
+    '../fixtures/eslint-plugin-yml',
+    import.meta.url,
+  ).pathname.replace(/^\/remote/, '')}`
+  const uri = `${workspaceUri}/code-action.yml`
   await FileSystem.writeFile(uri, content)
-  await Command.execute('Workspace.setUri', workspacePath)
+  await Command.execute('Workspace.setUri', workspaceUri)
   await Main.openUri(uri)
   await Editor.setCursor(0, 1)
   await Editor.openSourceActions()
