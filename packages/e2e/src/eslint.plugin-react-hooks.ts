@@ -11,18 +11,14 @@ export const test: Test = async ({
   Panel,
   Settings,
 }) => {
-  const workspacePath = decodeURIComponent(
-    new URL(
-      '../fixtures/eslint-plugin-react-hooks',
-      import.meta.url,
-    ).pathname.replace(/^\/remote/, ''),
-  )
-  await Command.execute('Workspace.setUri', workspacePath)
+  const workspaceUri = `file://${new URL(
+    '../fixtures/eslint-plugin-react-hooks',
+    import.meta.url,
+  ).pathname.replace(/^\/remote/, '')}`
+  await Command.execute('Workspace.setUri', workspaceUri)
   await Settings.update({ 'editor.diagnostics': true })
-  await Main.openUri(`${workspacePath}/App.tsx`)
+  await Main.openUri(`${workspaceUri}/App.tsx`)
 
-  const diagnostic = Locator('.Diagnostic.DiagnosticError')
-  await expect(diagnostic).toBeVisible()
   await Editor.shouldHaveDiagnostics([
     {
       columnIndex: 4,
@@ -45,6 +41,8 @@ export const test: Test = async ({
       type: 'warning',
     },
   ])
+  const diagnostic = Locator('.Diagnostic.DiagnosticError')
+  await expect(diagnostic).toBeVisible()
   await Panel.open('Problems')
   const problems = Locator('.Problem')
   await expect(problems).toHaveCount(3)

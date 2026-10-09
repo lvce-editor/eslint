@@ -11,14 +11,12 @@ export const test: Test = async ({
   Panel,
   Settings,
 }) => {
-  const workspacePath = decodeURIComponent(
-    new URL('../fixtures/typescript-eslint', import.meta.url).pathname.replace(
-      /^\/remote/,
-      '',
-    ),
-  )
-  const uri = `${workspacePath}/test.ts`
-  await Command.execute('Workspace.setUri', workspacePath)
+  const workspaceUri = `file://${new URL(
+    '../fixtures/typescript-eslint',
+    import.meta.url,
+  ).pathname.replace(/^\/remote/, '')}`
+  const uri = `${workspaceUri}/test.ts`
+  await Command.execute('Workspace.setUri', workspaceUri)
   await Settings.update({ 'editor.diagnostics': true })
   await Main.openUri(uri)
 

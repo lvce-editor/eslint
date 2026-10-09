@@ -12,15 +12,13 @@ export const test: Test = async ({
 }) => {
   const content =
     "/* eslint-disable-next-line no-debugger */\ndebugger; console.log('test')"
-  const workspacePath = decodeURIComponent(
-    new URL(
-      '../fixtures/eslint-code-actions',
-      import.meta.url,
-    ).pathname.replace(/^\/remote/, ''),
-  )
-  const uri = `${workspacePath}/merge-block-directive.js`
+  const workspaceUri = `file://${new URL(
+    '../fixtures/eslint-code-actions',
+    import.meta.url,
+  ).pathname.replace(/^\/remote/, '')}`
+  const uri = `${workspaceUri}/merge-block-directive.js`
   await FileSystem.writeFile(uri, content)
-  await Command.execute('Workspace.setUri', workspacePath)
+  await Command.execute('Workspace.setUri', workspaceUri)
   await Main.openUri(uri)
   await Editor.setCursor(1, 15)
   await Editor.openSourceActions()

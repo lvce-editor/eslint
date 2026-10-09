@@ -3,14 +3,13 @@ import type { Test } from '@lvce-editor/test-with-playwright'
 export const name = 'eslint.plugin-cspell'
 
 export const test: Test = async ({ Command, FileSystem, Main }) => {
-  const workspacePath = decodeURIComponent(
-    new URL(
-      '../fixtures/eslint-plugin-cspell-disabled',
-      import.meta.url,
-    ).pathname.replace(/^\/remote/, ''),
-  )
-  const uri = `${workspacePath}/test.js`
-  await Command.execute('Workspace.setUri', workspacePath)
+  const workspaceUri = `file://${new URL(
+    '../fixtures/eslint-plugin-cspell-disabled',
+    import.meta.url,
+  ).pathname.replace(/^\/remote/, '')}`
+  // Preserve the filesystem-path input used by this Cspell fixture.
+  const uri = `${decodeURIComponent(new URL(workspaceUri).pathname)}/test.js`
+  await Command.execute('Workspace.setUri', workspaceUri)
   await Main.openUri(uri)
 
   const text = await FileSystem.readFile(uri)
