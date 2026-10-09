@@ -7,7 +7,8 @@ export const test: Test = async ({ Command, FileSystem, Main }) => {
     '../fixtures/eslint-plugin-cspell-disabled',
     import.meta.url,
   ).pathname.replace(/^\/remote/, '')}`
-  const uri = `${workspaceUri}/test.js`
+  // Preserve the filesystem-path input used by this Cspell fixture.
+  const uri = `${decodeURIComponent(new URL(workspaceUri).pathname)}/test.js`
   await Command.execute('Workspace.setUri', workspaceUri)
   await Main.openUri(uri)
 

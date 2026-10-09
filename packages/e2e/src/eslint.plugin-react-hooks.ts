@@ -19,8 +19,6 @@ export const test: Test = async ({
   await Settings.update({ 'editor.diagnostics': true })
   await Main.openUri(`${workspaceUri}/App.tsx`)
 
-  const diagnostic = Locator('.Diagnostic.DiagnosticError')
-  await expect(diagnostic).toBeVisible()
   await Editor.shouldHaveDiagnostics([
     {
       columnIndex: 4,
@@ -43,6 +41,8 @@ export const test: Test = async ({
       type: 'warning',
     },
   ])
+  const diagnostic = Locator('.Diagnostic.DiagnosticError')
+  await expect(diagnostic).toBeVisible()
   await Panel.open('Problems')
   const problems = Locator('.Problem')
   await expect(problems).toHaveCount(3)
