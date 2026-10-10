@@ -757,18 +757,23 @@ const createBuiltins = (
     default: EventEmitter,
     EventEmitter,
   })
-  const assertModule = Object.assign(assert, {
-    deepStrictEqual: (
-      actual: unknown,
-      expected: unknown,
-      message?: string,
-    ): void => assert(isDeepStrictEqual(actual, expected), message),
-    equal: (actual: unknown, expected: unknown): void =>
-      assert(actual == expected),
-    ok: assert,
-    strictEqual: (actual: unknown, expected: unknown): void =>
-      assert(actual === expected),
-  })
+  // The shared assert function must not own callbacks capturing this runtime.
+  // Export getters can otherwise keep an older runtime alive through it too.
+  const assertModule = Object.assign(
+    (value: unknown, message?: string): void => assert(value, message),
+    {
+      deepStrictEqual: (
+        actual: unknown,
+        expected: unknown,
+        message?: string,
+      ): void => assert(isDeepStrictEqual(actual, expected), message),
+      equal: (actual: unknown, expected: unknown): void =>
+        assert(actual == expected),
+      ok: assert,
+      strictEqual: (actual: unknown, expected: unknown): void =>
+        assert(actual === expected),
+    },
+  )
   const utilTypes = {
     isRegExp: (value: unknown): value is RegExp => value instanceof RegExp,
   }

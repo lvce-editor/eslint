@@ -842,3 +842,23 @@ test('exposes remote files to native-path consumers without sharing hosts', () =
     ])
   }
 })
+
+const createAssert = () =>
+  LoadModuleGraph.createModuleRuntime().evaluate(
+    graph({
+      '/workspace/eslint.config.js': `module.exports = require('node:assert')`,
+    }),
+  ).exports
+
+test('keeps callable assert shims isolated between runtimes', () => {
+  const first = createAssert()
+  const firstDeepStrictEqual = first.deepStrictEqual
+  const second = createAssert()
+
+  expect(first).not.toBe(second)
+  expect(first.deepStrictEqual).toBe(firstDeepStrictEqual)
+  expect(() => first(true)).not.toThrow()
+  expect(() => second(false)).toThrow('Assertion failed')
+  expect(() => first.deepStrictEqual({ value: 1 }, { value: 1 })).not.toThrow()
+  expect(() => second.deepStrictEqual({ value: 1 }, { value: 2 })).toThrow()
+})

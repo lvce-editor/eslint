@@ -365,3 +365,130 @@ test('captures config evaluation errors', async () => {
   expect(trace.configEvaluation?.durationMs).toBeGreaterThanOrEqual(0)
   expect(trace.lint).toBeUndefined()
 })
+
+test('preserves pending evaluation across invalidation without caching stale graphs', async () => {
+  const configPath = '/workspace/eslint.config.js'
+  const { promise: pendingConfig, resolve: resolveConfig } =
+    Promise.withResolvers<ModuleGraph>()
+  const createConfig = (severity: number) =>
+    createGraph(
+      configPath,
+      `module.exports = [{ severity: ${severity} }]`,
+      `config-${severity}`,
+    )
+  const eslintGraph = createGraph(
+    '/workspace/node_modules/eslint/index.js',
+    `module.exports = { Linter: class {
+      verify(text, config) {
+        return text.endsWith(';') ? [] : [{ line: 1, column: 1, message: 'semicolon', ruleId: 'semi', severity: config[0].severity, fix: { range: [text.length, text.length], text: ';' } }]
+      }
+    } }`,
+    'eslint-pending',
+  )
+  const loadEslintConfig = jest.fn(async () => createConfig(2))
+  loadEslintConfig.mockImplementationOnce(() => pendingConfig)
+  const dependencies = {
+    loadEslintConfig,
+    loadEslintModule: async () => eslintGraph,
+  }
+  const lint = (text: string) =>
+    EslintEvaluation.lintWithDependencies(
+      text,
+      '/workspace/file.js',
+      configPath,
+      undefined,
+      dependencies,
+    )
+  const pending = lint('value')
+  EslintEvaluation.clearCache()
+  const fresh = await lint('value')
+  resolveConfig(createConfig(1))
+  const stale = await pending
+
+  expect(stale[0].severity).toBe('warning')
+  expect(fresh[0].severity).toBe('error')
+  expect(fresh[0].fix).toEqual({ range: [5, 5], text: ';' })
+  await expect(lint('edited')).resolves.toEqual([
+    { ...fresh[0], fix: { range: [6, 6], text: ';' } },
+  ])
+  await expect(lint('value;')).resolves.toEqual([])
+  expect(loadEslintConfig).toHaveBeenCalledTimes(2)
+  EslintEvaluation.clearCache()
+  await expect(lint('value')).resolves.toEqual(fresh)
+  expect(loadEslintConfig).toHaveBeenCalledTimes(3)
+})
+
+test('tracing and cache invalidation preserve an active lint with lazy module access', async () => {
+  const { promise: gate, resolve: resume } = Promise.withResolvers<void>()
+  const { promise: started, resolve: notifyStarted } =
+    Promise.withResolvers<void>()
+  const globals = globalThis as typeof globalThis & {
+    __eslintPendingLint?: () => Promise<void>
+  }
+  globals.__eslintPendingLint = () => {
+    notifyStarted()
+    return gate
+  }
+  const configGraph = createGraph(
+    '/workspace/eslint.config.js',
+    'module.exports = [{ rules: {} }]',
+    'config-active',
+  )
+  const eslintEntry = '/workspace/node_modules/eslint/index.js'
+  const eslintGraph: ModuleGraph = {
+    entry: eslintEntry,
+    id: 'eslint-active',
+    lazyModules: {
+      '/workspace/node_modules/eslint/lazy.js': 'module.exports = []',
+    },
+    modules: {
+      [eslintEntry]: `module.exports = { ESLint: class {
+        static version = '10.0.0';
+        async lintText(text) { if (text === 'pending') await global.__eslintPendingLint(); return [{ messages: require('./lazy.js') }] }
+      }, Linter: class {} }`,
+    },
+    resolutions: {
+      [`${eslintEntry}\0./lazy.js`]: '/workspace/node_modules/eslint/lazy.js',
+    },
+  }
+  const dependencies = {
+    loadEslintConfig: async () => configGraph,
+    loadEslintModule: async () => eslintGraph,
+  }
+  const lint = (text: string) =>
+    EslintEvaluation.lintWithDependencies(
+      text,
+      '/workspace/file.js',
+      configGraph.entry,
+      undefined,
+      dependencies,
+    )
+  try {
+    const pending = lint('pending')
+    await started
+    const trace = await EslintEvaluation.traceWithDependencies(
+      'trace',
+      '/workspace/file.js',
+      configGraph.entry,
+      undefined,
+      {
+        loadEslintConfig: async () => ({
+          graph: configGraph,
+          stats: resolutionStats,
+        }),
+        loadEslintModule: async () => ({
+          graph: eslintGraph,
+          stats: resolutionStats,
+        }),
+      },
+    )
+    expect(trace.error).toBeUndefined()
+    expect(trace.lint?.diagnostics).toEqual([])
+    await expect(lint('fresh')).resolves.toEqual([])
+    resume()
+    await expect(pending).resolves.toEqual([])
+  } finally {
+    resume()
+    delete globals.__eslintPendingLint
+  }
+})
