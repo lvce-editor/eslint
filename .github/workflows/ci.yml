@@ -64,7 +64,7 @@ jobs:
           PLAYWRIGHT_BROWSERS_PATH: 0
       - name: Run headless test on Windows ARM
         if: matrix.os == 'windows-11-arm'
-        run: npm run e2e:headless -- --timeout=60000
+        run: npm run e2e:headless --workspace=packages/e2e -- --timeout=60000
         env:
           PLAYWRIGHT_BROWSERS_PATH: 0
       - name: Build static site
