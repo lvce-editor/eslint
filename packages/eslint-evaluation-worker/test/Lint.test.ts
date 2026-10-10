@@ -1,5 +1,6 @@
 import { expect, test } from '@jest/globals'
 import { ESLint, Linter } from 'eslint'
+import { resolve } from 'node:path'
 import type { EvaluatedModuleGraph } from '../src/parts/LoadModuleGraph/LoadModuleGraph.ts'
 import type { ModuleGraph } from '../src/parts/ModuleGraph/ModuleGraph.ts'
 import * as Lint from '../src/parts/Lint/Lint.ts'
@@ -283,4 +284,33 @@ test('applies loaded bulk suppressions', async () => {
   )
 
   expect(results.map((result) => result.ruleId)).toEqual(['no-undef'])
+})
+
+test('prepares libraries from the effective per-file parser options before modern linting', async () => {
+  const received: any[] = []
+  const graph: EvaluatedModuleGraph = {
+    ...createGraph(`module.exports = [
+      { files: ['**/*.js'], languageOptions: { parserOptions: { project: './unused.json' } } },
+      { files: ['**/*.js'], languageOptions: { parserOptions: { project: false } }, rules: { 'no-debugger': 'error' } },
+      { files: ['**/*.ts'], languageOptions: { parserOptions: { project: './typed.json' } } }
+    ]`),
+    prepareTypeScriptLibraries: async (...args) => {
+      received.push(args)
+    },
+  }
+  const result = await Lint.lint(
+    'debugger',
+    '/workspace/src/file.js',
+    graph,
+    eslint,
+  )
+  expect(result[0].ruleId).toBe('no-debugger')
+  expect(received).toEqual([
+    [
+      'debugger',
+      resolve('/workspace/src/file.js'),
+      resolve('/workspace'),
+      expect.objectContaining({ project: false }),
+    ],
+  ])
 })

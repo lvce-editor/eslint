@@ -234,3 +234,12 @@ export async function loadEslintModule(
   ModuleGraphDependencies.recordEslintGraph(path, projectPath, graph)
   return graph
 }
+
+export const readTypeScriptFiles = async (
+  requests: readonly { readonly kind: string; readonly path: string }[],
+): Promise<readonly any[]> => {
+  ModuleGraphDependencies.recordTypeScriptPaths(
+    requests.map(({ path }) => path),
+  )
+  return invoke('ModuleResolution.readTypeScriptFiles', requests)
+}

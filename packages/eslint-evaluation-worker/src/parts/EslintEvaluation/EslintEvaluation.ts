@@ -134,7 +134,7 @@ const getOrEvaluate = async (
   if (pending) {
     return pending
   }
-  pending = (async () => runtime.evaluate(await load()))()
+  pending = (async () => runtime.evaluateWithFiles(await load()))()
   cache.pending.set(key, pending)
   try {
     const evaluated = await pending
@@ -255,7 +255,7 @@ export const traceWithDependencies = async (
     }
     const configEvaluationStart = now()
     try {
-      configGraph = runtime.evaluate(resolution.graph)
+      configGraph = await runtime.evaluateWithFiles(resolution.graph)
       configModuleEvaluationDuration = now() - configEvaluationStart
     } catch (error) {
       return {
@@ -291,7 +291,9 @@ export const traceWithDependencies = async (
   const eslintEvaluationStart = now()
   let eslint
   try {
-    const evaluatedEslint = runtime.evaluate(eslintResolutionResult.graph)
+    const evaluatedEslint = await runtime.evaluateWithFiles(
+      eslintResolutionResult.graph,
+    )
     eslint = LoadEslint.loadEslint(evaluatedEslint)
   } catch (error) {
     return {

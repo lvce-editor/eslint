@@ -2082,17 +2082,7 @@ const loadModule = async (
       .map(dirname),
   )
   for (const directory of typeScriptLibDirectories) {
-    const entries = await FileSystem.readDirWithFileTypes(directory)
-    await Promise.all(
-      entries.map(async (entry) => {
-        if (
-          entry.isFile &&
-          (entry.name === 'typesMap.json' || /^lib.*\.d\.ts$/.test(entry.name))
-        ) {
-          await preloadFile(join(directory, entry.name))
-        }
-      }),
-    )
+    await preloadFile(join(directory, 'typesMap.json'))
   }
   const packageDirectories = new Set<string>()
   for (const path of [...Object.keys(modules), ...Object.keys(lazyModules)]) {

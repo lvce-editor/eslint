@@ -49,14 +49,18 @@ type LinterConstructor = typeof Linter
 type LintMessage = Linter.LintMessage
 
 type ModernLintContext = {
+  readonly prepareTypeScriptLibraries: EvaluatedModuleGraph['prepareTypeScriptLibraries']
   readonly compatibilityRuntime?: ModuleCompatibilityRuntime
+  readonly baseDirectory: string
   readonly config: any[]
   readonly engine: InstanceType<EslintConstructor>
   readonly type: 'modern'
 }
 
 type LegacyLintContext = {
+  readonly prepareTypeScriptLibraries: EvaluatedModuleGraph['prepareTypeScriptLibraries']
   readonly compatibilityRuntime?: ModuleCompatibilityRuntime
+  readonly baseDirectory: string
   readonly config: any[]
   readonly engine: InstanceType<LinterConstructor>
   readonly type: 'legacy'
@@ -170,6 +174,7 @@ const createContextFromLoadedConfig = (
   baseDirectory: string,
   eslint: EslintModule,
   compatibilityRuntime?: ModuleCompatibilityRuntime,
+  prepareTypeScriptLibraries?: EvaluatedModuleGraph['prepareTypeScriptLibraries'],
 ): LintContext => {
   const config = Array.isArray(loadedConfig) ? loadedConfig : [loadedConfig]
   if (
@@ -177,9 +182,11 @@ const createContextFromLoadedConfig = (
     getMajorVersion(eslint.ESLint) >= 9
   ) {
     return {
+      baseDirectory,
       compatibilityRuntime,
       config,
       engine: createModernEngine(eslint.ESLint, baseDirectory, config),
+      prepareTypeScriptLibraries,
       type: 'modern',
     }
   }
@@ -187,12 +194,14 @@ const createContextFromLoadedConfig = (
     throw new TypeError('Project ESLint module does not export Linter')
   }
   return {
+    baseDirectory,
     compatibilityRuntime,
     config,
     engine: new eslint.Linter({
       configType: 'flat',
       cwd: baseDirectory,
     }),
+    prepareTypeScriptLibraries,
     type: 'legacy',
   }
 }
@@ -208,6 +217,7 @@ const createContext = (
     baseDirectory,
     eslint,
     graph?.compatibilityRuntime,
+    graph?.prepareTypeScriptLibraries,
   )
 }
 
@@ -246,11 +256,30 @@ const lintWithContext = async (
   filePath: string,
 ): Promise<readonly LintMessage[]> => {
   if (context.type === 'modern') {
+    if (context.prepareTypeScriptLibraries) {
+      const config = await context.engine.calculateConfigForFile(filePath)
+      await context.prepareTypeScriptLibraries(
+        text,
+        filePath,
+        context.baseDirectory,
+        config?.languageOptions?.parserOptions,
+      )
+    }
     const results = await context.engine.lintText(text, {
       filePath,
       warnIgnored: false,
     })
     return results[0]?.messages ?? []
+  }
+  if (context.prepareTypeScriptLibraries) {
+    for (const config of context.config) {
+      await context.prepareTypeScriptLibraries(
+        text,
+        filePath,
+        context.baseDirectory,
+        config?.languageOptions?.parserOptions,
+      )
+    }
   }
   return context.engine.verify(text, context.config, { filename: filePath })
 }

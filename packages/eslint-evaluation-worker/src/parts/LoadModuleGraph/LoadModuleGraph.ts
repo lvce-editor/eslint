@@ -3,7 +3,9 @@ import { Buffer } from 'buffer/index.js'
 import { gzip, ungzip } from 'pako'
 import type { ModuleGraph } from '../ModuleGraph/ModuleGraph.ts'
 import * as Path from '../Path/Path.ts'
+import * as PrepareTypeScriptLibraries from '../PrepareTypeScriptLibraries/PrepareTypeScriptLibraries.ts'
 import * as Rpc from '../Rpc/Rpc.ts'
+import * as TypeScriptProgramFiles from '../TypeScriptProgramFiles/TypeScriptProgramFiles.ts'
 
 type CommonJsModule = {
   exports: any
@@ -18,8 +20,11 @@ interface RuntimeState {
   readonly executableFingerprints: Map<string, string>
   readonly files: Record<string, VirtualFile>
   readonly importStarWrapperCache: ImportStarWrapperCache
+  readonly knownFiles: Set<string>
   readonly lazyModules: Record<string, string>
   readonly modules: Record<string, string>
+  readonly preparedLibraries: Map<string, Promise<void>>
+  readonly programFiles: ReturnType<typeof TypeScriptProgramFiles.create>
   readonly resolutions: Record<string, string>
   readonly virtualDirectories: Set<string>
   readonly virtualDirectoryEntries: Map<string, Set<string>>
@@ -121,10 +126,17 @@ export interface EvaluatedModuleGraph {
   readonly entry: string
   readonly exports: any
   readonly id: string
+  readonly prepareTypeScriptLibraries?: (
+    text: string,
+    filePath: string,
+    baseDirectory: string,
+    parserOptions: any,
+  ) => Promise<void>
 }
 
 export interface ModuleRuntime {
   evaluate(graph: ModuleGraph): EvaluatedModuleGraph
+  evaluateWithFiles(graph: ModuleGraph): Promise<EvaluatedModuleGraph>
 }
 
 export class ModuleRuntimeConflictError extends Error {
@@ -560,22 +572,28 @@ const createBuiltins = (
   path.win32 = path
   const existsSync = (filePath: string): boolean => {
     const normalized = toVirtualPath(filePath).replace(/\/$/, '')
-    return (
+    const exists =
+      state.programFiles.hasFile(normalized) ||
       state.executableFingerprints.has(normalized) ||
+      state.knownFiles.has(normalized) ||
       Object.hasOwn(state.files, normalized) ||
       Object.hasOwn(state.deferredFiles, normalized) ||
       state.virtualDirectories.has(normalized)
-    )
+    if (!exists) state.programFiles.request('stat', normalized)
+    return exists
   }
   const readFileSync = (
     filePath: string,
     encoding?: string,
   ): string | Buffer => {
     const normalized = toVirtualPath(filePath)
-    if (!Object.hasOwn(state.files, normalized)) {
+    state.programFiles.read(normalized)
+    const staged = state.programFiles.getFile(normalized)
+    if (staged === undefined && !Object.hasOwn(state.files, normalized)) {
+      state.programFiles.request('read', normalized)
       throw new Error(`Virtual file is not available: ${normalized}`)
     }
-    const content = state.files[normalized]
+    const content = staged ?? state.files[normalized]
     const buffer = encodeVirtualFile(content)
     return encoding ? buffer.toString(encoding) : buffer
   }
@@ -584,6 +602,7 @@ const createBuiltins = (
     options?: string | { readonly withFileTypes?: boolean },
   ): readonly unknown[] => {
     const normalized = toVirtualPath(directory).replace(/\/$/, '')
+    state.programFiles.request('directory', normalized)
     const entries = [...(state.virtualDirectoryEntries.get(normalized) ?? [])]
     if (typeof options === 'object' && options.withFileTypes) {
       return entries.map((name) => {
@@ -591,6 +610,7 @@ const createBuiltins = (
         return {
           isDirectory: (): boolean => state.virtualDirectories.has(path),
           isFile: (): boolean =>
+            state.knownFiles.has(path) ||
             state.executableFingerprints.has(path) ||
             Object.hasOwn(state.files, path) ||
             Object.hasOwn(state.deferredFiles, path),
@@ -610,10 +630,13 @@ const createBuiltins = (
   const statSync = (path: string) => {
     const normalized = toVirtualPath(path).replace(/\/$/, '')
     const isFile =
+      state.programFiles.hasFile(normalized) ||
+      state.knownFiles.has(normalized) ||
       state.executableFingerprints.has(normalized) ||
       Object.hasOwn(state.files, normalized) ||
       Object.hasOwn(state.deferredFiles, normalized)
     const isDirectory = state.virtualDirectories.has(normalized)
+    if (!isFile && !isDirectory) state.programFiles.request('stat', normalized)
     const size = Object.hasOwn(state.files, normalized)
       ? encodeVirtualFile(state.files[normalized]).length
       : 0
@@ -925,6 +948,32 @@ const fingerprint = (source: string): string => {
   return `${source.length}:${first >>> 0}:${second >>> 0}`
 }
 
+const getTypeScriptDependencyFingerprint = (
+  state: RuntimeState,
+  text: string,
+): string => {
+  const dependencies: any[] = []
+  for (const [path, module] of state.evaluatedModules) {
+    if (!path.endsWith('/typescript/lib/typescript.js')) continue
+    const info = module.exports.preProcessFile(text, true, true)
+    const directives = [
+      info.importedFiles,
+      info.libReferenceDirectives,
+      info.referencedFiles,
+      info.typeReferenceDirectives,
+    ]
+    dependencies.push([
+      path,
+      info.isLibFile,
+      ...directives.map(
+        (references: readonly { readonly fileName: string }[]) =>
+          references.map(({ fileName }) => fileName),
+      ),
+    ])
+  }
+  return fingerprint(JSON.stringify(dependencies))
+}
+
 const addVirtualPath = (state: RuntimeState, filePath: string): void => {
   let child = filePath
   let parent = Path.dirname(child)
@@ -1029,8 +1078,27 @@ const mergeGraph = (state: RuntimeState, graph: ModuleGraph): string => {
   return Path.normalize(graph.entry)
 }
 
+const readVirtualTypeScriptFiles = async (
+  entry: string,
+  requests: Parameters<PrepareTypeScriptLibraries.ReadFiles>[0],
+): ReturnType<PrepareTypeScriptLibraries.ReadFiles> => {
+  if (!Path.isUri(entry)) return PrepareTypeScriptLibraries.readFiles(requests)
+  const translated = requests.map((request) => {
+    const url = new URL(entry)
+    url.pathname = request.path
+    url.search = ''
+    url.hash = ''
+    return { ...request, path: url.href }
+  })
+  const results = await PrepareTypeScriptLibraries.readFiles(translated)
+  return results.map((result) => ({
+    ...result,
+    path: Path.toFileSystemPath(result.path),
+  }))
+}
+
 const createState = (): RuntimeState => {
-  return {
+  const state: RuntimeState = {
     deferredFiles: {},
     evaluatedGraphIds: new Map(),
     evaluatedModules: new Map(),
@@ -1039,12 +1107,33 @@ const createState = (): RuntimeState => {
     importStarWrapperCache: createImportStarWrapperCache(
       new WeakMap<object, Map<string, ImportStarWrapper>>(),
     ),
+    knownFiles: new Set(),
     lazyModules: {},
     modules: {},
+    preparedLibraries: new Map(),
+    programFiles: undefined as any,
+
     resolutions: {},
     virtualDirectories: new Set(),
     virtualDirectoryEntries: new Map(),
   }
+  Object.defineProperty(state, 'programFiles', {
+    value: TypeScriptProgramFiles.create(
+      (path, source) => mergeFiles(state, { [path]: source }),
+      (result) => {
+        if (result.isFile) state.knownFiles.add(result.path)
+        if (result.isDirectory) state.virtualDirectories.add(result.path)
+        const entries = result.entries ?? []
+        for (const entry of entries) {
+          const child = Path.join(result.path, entry.name)
+          addVirtualPath(state, child)
+          if (entry.isFile) state.knownFiles.add(child)
+          if (entry.isDirectory) state.virtualDirectories.add(child)
+        }
+      },
+    ),
+  })
+  return state
 }
 
 const evaluateGraph = (
@@ -1211,6 +1300,8 @@ const evaluateGraph = (
         state.importStarWrapperCache,
       )
       evaluate(module, module.exports, require, id, Path.dirname(id))
+      if (id.endsWith('/typescript/lib/typescript.js'))
+        module.exports = state.programFiles.wrap(module.exports)
       delete sourceContainer[id]
       return module.exports
     } catch (error) {
@@ -1238,18 +1329,137 @@ const evaluateGraph = (
     id = graphId
     state.evaluatedGraphIds.set(entry, id)
   }
+  const prepareTypeScriptLibraries = async (
+    text: string,
+    filePath: string,
+    baseDirectory: string,
+    parserOptions: any,
+  ): Promise<void> => {
+    if (!parserOptions?.project && !parserOptions?.projectService) return
+    for (const path of state.executableFingerprints.keys()) {
+      if (path.endsWith('/typescript/lib/typescript.js')) load(path)
+    }
+    const key = JSON.stringify([
+      filePath,
+      baseDirectory,
+      getTypeScriptDependencyFingerprint(state, text),
+      parserOptions.project,
+      parserOptions.projectService,
+      parserOptions.tsconfigRootDir,
+      Boolean(parserOptions.programs?.length),
+    ])
+    const cached = state.preparedLibraries.get(key)
+    if (cached) return cached
+    const prepare = async (): Promise<void> => {
+      for (const [compilerPath, module] of state.evaluatedModules) {
+        if (!compilerPath.endsWith('/typescript/lib/typescript.js')) continue
+        const fs = builtins['node:fs'] ?? builtins.fs
+        const toVirtual = (path: string): string => {
+          if (Path.isUri(entry) && path.startsWith('/')) {
+            const url = new URL(entry)
+            url.pathname = path
+            url.search = ''
+            url.hash = ''
+            return Path.normalize(url.href)
+          }
+          return Path.normalize(path)
+        }
+        await PrepareTypeScriptLibraries.prepareTypeScriptLibraries(
+          module.exports,
+          {
+            addDirectory: (path, entries) => {
+              const directory = toVirtual(path)
+              state.virtualDirectories.add(directory)
+              for (const entry of entries) {
+                const child = Path.join(directory, entry.name)
+                addVirtualPath(state, child)
+                if (entry.isDirectory) state.virtualDirectories.add(child)
+                if (entry.isFile) state.knownFiles.add(child)
+              }
+            },
+            addFile: (path, source) =>
+              mergeFiles(state, { [toVirtual(path)]: source }),
+            directoryExists: (path) =>
+              fs.existsSync(path) && fs.statSync(path).isDirectory(),
+            entries: (path) => {
+              const entries = fs.readdirSync(path, { withFileTypes: true })
+              const result = {
+                directories: [] as string[],
+                files: [] as string[],
+              }
+              for (const entry of entries) {
+                if (entry.isDirectory()) result.directories.push(entry.name)
+                if (entry.isFile()) result.files.push(entry.name)
+              }
+              return result
+            },
+            fileExists: (path) =>
+              fs.existsSync(path) && fs.statSync(path).isFile(),
+            readFile: (path) => {
+              const source = state.files[toVirtual(path)]
+              return typeof source === 'string' ? source : undefined
+            },
+          },
+          Path.toFileSystemPath(compilerPath),
+          text,
+          filePath,
+          baseDirectory,
+          parserOptions,
+          (requests) => readVirtualTypeScriptFiles(entry, requests),
+        )
+      }
+    }
+    const pending = prepare()
+    state.preparedLibraries.set(key, pending)
+    while (state.preparedLibraries.size > 32) {
+      state.preparedLibraries.delete(
+        state.preparedLibraries.keys().next().value!,
+      )
+    }
+    try {
+      await pending
+    } catch (error) {
+      state.preparedLibraries.delete(key)
+      throw error
+    }
+  }
   return {
     compatibilityRuntime,
     entry,
     exports,
     id,
+    prepareTypeScriptLibraries,
   }
 }
 
 export const createModuleRuntime = (): ModuleRuntime => {
   const state = createState()
+  let evaluations: Promise<void> = Promise.resolve()
   return {
     evaluate: (graph) => evaluateGraph(state, graph),
+    evaluateWithFiles: async (graph) => {
+      const previousEvaluation = evaluations
+      const { promise, resolve: release } = Promise.withResolvers<void>()
+      evaluations = promise
+      await previousEvaluation
+      try {
+        const previous = new Set(state.evaluatedModules.keys())
+        return await state.programFiles.evaluate(
+          () => evaluateGraph(state, graph),
+          () => {
+            for (const path of state.evaluatedModules.keys()) {
+              if (
+                !previous.has(path) &&
+                !path.endsWith('/typescript/lib/typescript.js')
+              )
+                state.evaluatedModules.delete(path)
+            }
+          },
+        )
+      } finally {
+        release()
+      }
+    },
   }
 }
 

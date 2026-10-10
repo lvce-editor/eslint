@@ -55,6 +55,8 @@ const commandMap = {
   'FileSystem.readFileAsBase64': FileSystem.readFileAsBase64,
   'ModuleResolution.loadEslintConfig': ModuleResolutionWorker.loadEslintConfig,
   'ModuleResolution.loadEslintModule': ModuleResolutionWorker.loadEslintModule,
+  'ModuleResolution.readTypeScriptFiles':
+    ModuleResolutionWorker.readTypeScriptFiles,
 }
 
 type CreateRpc = (options: CreateRpcOptions) => Promise<Rpc>

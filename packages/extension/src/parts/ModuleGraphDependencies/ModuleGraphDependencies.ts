@@ -24,6 +24,7 @@ const virtualFileExtensions = [
   '.ts',
   '.tsx',
 ]
+const typeScriptPaths = new Set<string>()
 const graphDependencies = new Map<string, GraphDependencies>()
 
 const toPath = (uri: string): string => {
@@ -71,6 +72,7 @@ const record = (cacheKey: string, graph: ModuleGraph): void => {
 
 export const clear = (): void => {
   graphDependencies.clear()
+  typeScriptPaths.clear()
 }
 
 export const getAffectedCacheKeys = (
@@ -78,8 +80,17 @@ export const getAffectedCacheKeys = (
 ): readonly string[] => {
   const changedPaths = getChangedPaths(changes)
   const affected: string[] = []
+  const typeScriptChanged = changedPaths.some((path) =>
+    typeScriptPaths
+      .values()
+      .some(
+        (dependency) =>
+          path === dependency || path.startsWith(`${dependency}/`),
+      ),
+  )
   for (const [cacheKey, dependencies] of graphDependencies) {
     if (
+      typeScriptChanged ||
       changedPaths.some(
         (path) =>
           dependencies.paths.has(path) ||
@@ -112,4 +123,8 @@ export const recordEslintGraph = (
 ): void => {
   const entryUri = FileSystem.toUri(normalize(projectPath ?? path))
   record(`commonjs-project:${entryUri}`, graph)
+}
+
+export const recordTypeScriptPaths = (paths: readonly string[]): void => {
+  for (const path of paths) typeScriptPaths.add(normalize(path))
 }

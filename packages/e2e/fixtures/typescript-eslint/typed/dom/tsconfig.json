@@ -1,0 +1,7 @@
+{
+  "compilerOptions": {
+    "lib": ["es2020", "dom"],
+    "types": []
+  },
+  "files": ["test.ts"]
+}

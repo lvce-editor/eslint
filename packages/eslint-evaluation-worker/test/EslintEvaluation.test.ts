@@ -443,6 +443,7 @@ test('tracing and cache invalidation preserve an active lint with lazy module ac
     },
     modules: {
       [eslintEntry]: `module.exports = { ESLint: class {
+        async calculateConfigForFile() { return {} }
         static version = '10.0.0';
         async lintText(text) { if (text === 'pending') await global.__eslintPendingLint(); return [{ messages: require('./lazy.js') }] }
       }, Linter: class {} }`,
