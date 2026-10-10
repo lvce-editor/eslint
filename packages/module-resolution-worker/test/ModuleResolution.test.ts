@@ -76,6 +76,11 @@ const setFiles = (value: Record<string, string>): void => {
   state.files = value
 }
 
+const typeScriptImportStarHelper = `var __createBinding = (this && this.__createBinding) || (Object.create ? function(o, m, k, k2) { if (k2 === undefined) k2 = k; var desc = Object.getOwnPropertyDescriptor(m, k); if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) desc = { enumerable: true, get: function() { return m[k]; } }; Object.defineProperty(o, k2, desc); } : function(o, m, k, k2) { if (k2 === undefined) k2 = k; o[k2] = m[k]; });
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? function(o, v) { Object.defineProperty(o, "default", { enumerable: true, value: v }); } : function(o, v) { o["default"] = v; });
+var __importStar = (this && this.__importStar) || (function() { var ownKeys = function(o) { ownKeys = Object.getOwnPropertyNames || function(o) { var ar = []; for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k; return ar; }; return ownKeys(o); }; return function(mod) { if (mod && mod.__esModule) return mod; var result = {}; if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]); __setModuleDefault(result, mod); return result; }; })();
+var __importDefault = function(mod) { return mod; };`
+
 beforeEach(() => {
   state.files = {}
   cacheEntries.clear()
@@ -147,6 +152,60 @@ test('transforms an esm default export to commonjs', async () => {
   )
   expect(graph.entry).toBe('/workspace/eslint.config.js')
   expect(graph.modules[graph.entry]).toContain('exports.default')
+})
+
+test('rewrites the recognized TypeScript import-star helper', async () => {
+  const entry =
+    '/workspace/node_modules/@typescript-eslint/typescript-estree/dist/shared.js'
+  setFiles({
+    '/workspace/node_modules/@typescript-eslint/typescript-estree/dist/lazy.js': `${typeScriptImportStarHelper}\nmodule.exports = __importStar(require("typescript"))`,
+    '/workspace/node_modules/@typescript-eslint/typescript-estree/dist/node_modules/typescript/index.js':
+      'exports.version = "test"',
+    '/workspace/node_modules/@typescript-eslint/typescript-estree/dist/node_modules/typescript/package.json':
+      '{"name":"typescript","main":"index.js"}',
+    '/workspace/node_modules/eslint/package.json':
+      '{"name":"eslint","main":"../@typescript-eslint/typescript-estree/dist/shared.js"}',
+    [entry]: `${typeScriptImportStarHelper}\nconst ts = __importStar(require("typescript")); module.exports = ts`,
+  })
+
+  const graph = await LoadEslintConfig.loadEslintModule(
+    '/workspace/src/index.js',
+  )
+  const configGraph = await LoadEslintConfig.loadEslintConfig(entry)
+
+  expect(graph.modules[entry]).toContain('__importStarWrapperCache')
+  expect(graph.modules[entry]).toContain('typescript-import-star-')
+  expect(configGraph.modules[entry]).toContain('__importStarWrapperCache')
+  expect(
+    graph.lazyModules[
+      '/workspace/node_modules/@typescript-eslint/typescript-estree/dist/lazy.js'
+    ],
+  ).toContain('__importStarWrapperCache')
+})
+
+test('leaves an unrecognized import-star helper unchanged', async () => {
+  const helper = typeScriptImportStarHelper.replace(
+    'Object.getOwnPropertyNames',
+    'Object.keys',
+  )
+  const entry =
+    '/workspace/node_modules/@typescript-eslint/typescript-estree/dist/shared.js'
+  setFiles({
+    '/workspace/node_modules/@typescript-eslint/typescript-estree/dist/node_modules/typescript/index.js':
+      'exports.version = "test"',
+    '/workspace/node_modules/@typescript-eslint/typescript-estree/dist/node_modules/typescript/package.json':
+      '{"name":"typescript","main":"index.js"}',
+    '/workspace/node_modules/eslint/package.json':
+      '{"name":"eslint","main":"../@typescript-eslint/typescript-estree/dist/shared.js"}',
+    [entry]: `${helper}\nconst ts = __importStar(require("typescript")); module.exports = ts`,
+  })
+
+  const graph = await LoadEslintConfig.loadEslintModule(
+    '/workspace/src/index.js',
+  )
+
+  expect(graph.modules[entry]).not.toContain('__importStarWrapperCache')
+  expect(graph.modules[entry]).toContain('__importStar(require("typescript"))')
 })
 
 test('loads ESLint config from a remote ssh URI with its host preserved', async () => {

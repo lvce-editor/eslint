@@ -133,7 +133,7 @@ test('saves a compiled graph with portable uris', async () => {
     resolutions: {
       'file:///workspace/eslint.config.js\0🦄': 'file:///workspace/data.json',
     },
-    version: 2,
+    version: 3,
   })
 })
 
