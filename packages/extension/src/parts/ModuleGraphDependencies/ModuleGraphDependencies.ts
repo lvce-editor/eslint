@@ -59,6 +59,7 @@ const record = (cacheKey: string, graph: ModuleGraph): void => {
   const paths = new Set([
     normalize(graph.entry),
     ...Object.keys(graph.files ?? {}).map(normalize),
+    ...Object.keys(graph.deferredFiles ?? {}).map(normalize),
     ...Object.keys(graph.lazyModules ?? {}).map(normalize),
     ...Object.keys(graph.modules).map(normalize),
   ])

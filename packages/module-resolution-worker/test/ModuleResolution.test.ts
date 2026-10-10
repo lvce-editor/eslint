@@ -95,7 +95,7 @@ beforeEach(() => {
   })
 })
 
-test('applies the cspell compatibility manifest and preloads dictionaries', async () => {
+test('preloads cspell metadata and workspace dictionaries, deferring bundled contents', async () => {
   setFiles({
     '/workspace/cspell.yaml': 'words:\n  - lvce',
     '/workspace/eslint.config.js': `module.exports = require('@cspell/eslint-plugin')`,
@@ -103,7 +103,11 @@ test('applies the cspell compatibility manifest and preloads dictionaries', asyn
     '/workspace/node_modules/@cspell/cspell-bundled-dicts/cspell-default.json': `{"import":["./cspell-default.config.js"]}`,
     '/workspace/node_modules/@cspell/cspell-bundled-dicts/package.json': `{"name":"@cspell/cspell-bundled-dicts","exports":{"./cspell-default.config.js":"./cspell-default.config.js","./cspell-default.json":"./cspell-default.json"},"dependencies":{"@cspell/dict-test":"1.0.0"}}`,
     '/workspace/node_modules/@cspell/dict-test/cspell-ext.json': `{"dictionaryDefinitions":[{"name":"test","path":"./words.trie.gz"}]}`,
+    '/workspace/node_modules/@cspell/dict-test/dict/inline.json':
+      '{"dictionaryDefinitions":[]}',
+    '/workspace/node_modules/@cspell/dict-test/LICENSE': 'license',
     '/workspace/node_modules/@cspell/dict-test/package.json': `{"name":"@cspell/dict-test","exports":{".":"./cspell-ext.json","./cspell-ext.json":"./cspell-ext.json"}}`,
+    '/workspace/node_modules/@cspell/dict-test/README.md': 'documentation',
     '/workspace/node_modules/@cspell/dict-test/words.trie.gz': 'binary',
     '/workspace/node_modules/@cspell/eslint-plugin/dist/spellCheckAST/spellCheck.mjs': `export const spellCheck = async () => ({ issues: [], errors: [] })`,
     '/workspace/node_modules/@cspell/eslint-plugin/dist/spellCheckAST/worker.mjs': `import { runAsWorker } from 'synckit'; runAsWorker(async () => (await import('./spellCheck.mjs')).spellCheck())`,
@@ -128,7 +132,20 @@ test('applies the cspell compatibility manifest and preloads dictionaries', asyn
   ).toBe(true)
   expect(
     graph.files['/workspace/node_modules/@cspell/dict-test/words.trie.gz'],
-  ).toEqual({ content: 'YmluYXJ5', encoding: 'base64' })
+  ).toBeUndefined()
+  expect(graph.deferredFiles).toMatchObject({
+    '/workspace/node_modules/@cspell/dict-test/dict/inline.json': 'utf8',
+    '/workspace/node_modules/@cspell/dict-test/LICENSE': 'utf8',
+    '/workspace/node_modules/@cspell/dict-test/README.md': 'utf8',
+    '/workspace/node_modules/@cspell/dict-test/words.trie.gz': 'base64',
+  })
+  expect(
+    LoadEslintConfig.invalidateForFileChanges({
+      changed: [
+        'file:///workspace/node_modules/@cspell/dict-test/words.trie.gz',
+      ],
+    }),
+  ).toBe(true)
   expect(
     graph.files[
       '/workspace/node_modules/@cspell/cspell-bundled-dicts/cspell-default.json'

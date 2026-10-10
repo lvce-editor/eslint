@@ -697,3 +697,68 @@ test('exposes remote files to native-path consumers without sharing hosts', () =
     ])
   }
 })
+
+test('discovers deferred dictionaries synchronously and reads fresh contents asynchronously', async () => {
+  const calls: unknown[] = []
+  let content = 'first'
+  const previousRpc = Object.getOwnPropertyDescriptor(globalThis, 'rpc')
+  Object.defineProperty(globalThis, 'rpc', {
+    configurable: true,
+    value: {
+      invoke: async (method: string, path: string) => {
+        calls.push([method, path])
+        return method === 'FileSystem.readFileAsBase64'
+          ? btoa(content)
+          : content
+      },
+    },
+  })
+  try {
+    const runtime = LoadModuleGraph.createModuleRuntime()
+    const loaded = runtime.evaluate({
+      ...graph({
+        '/workspace/eslint.config.js': `module.exports = require('fs')`,
+      }),
+      deferredFiles: {
+        '/workspace/dicts/words.txt': 'utf8',
+        '/workspace/dicts/words.txt.gz': 'base64',
+      },
+      files: { '/workspace/cspell.json': '{}' },
+    })
+    const fs = loaded.exports
+    expect(fs.existsSync('/workspace/dicts/words.txt')).toBe(true)
+    expect(fs.statSync('/workspace/dicts/words.txt.gz').isFile()).toBe(true)
+    expect(
+      fs
+        .readdirSync('/workspace/dicts', { withFileTypes: true })
+        .map((entry: any) => [entry.name, entry.isFile()]),
+    ).toEqual([
+      ['words.txt', true],
+      ['words.txt.gz', true],
+    ])
+    expect(fs.readFileSync('/workspace/cspell.json', 'utf8')).toBe('{}')
+    expect(calls).toEqual([])
+    await expect(
+      fs.promises.readFile('/workspace/dicts/words.txt', 'utf8'),
+    ).resolves.toBe('first')
+    content = 'second'
+    // No cached raw copy: subsequent readers see the current file, including
+    // reads from another evaluated graph in the same project runtime.
+    runtime.evaluate({
+      ...graph({ '/workspace/other.js': 'module.exports = true' }),
+      entry: '/workspace/other.js',
+    })
+    await expect(
+      fs.promises.readFile('/workspace/dicts/words.txt', 'utf8'),
+    ).resolves.toBe('second')
+    const binary = await fs.promises.readFile('/workspace/dicts/words.txt.gz')
+    expect(binary.toString()).toBe('second')
+    await expect(
+      fs.promises.readFile('/workspace/missing.txt'),
+    ).rejects.toThrow('Virtual file is not available')
+    expect(calls).toHaveLength(3)
+  } finally {
+    if (previousRpc) Object.defineProperty(globalThis, 'rpc', previousRpc)
+    else delete (globalThis as typeof globalThis & { rpc?: unknown }).rpc
+  }
+})

@@ -226,3 +226,23 @@ test('invalidates when a workspace module is created', async () => {
     }),
   ).toBe(true)
 })
+
+test('invalidates configurations when a deferred dictionary changes', async () => {
+  const dictionary = '/workspace/node_modules/@cspell/dict-test/words.txt.gz'
+  ModuleGraphDependencies.recordConfigGraph(
+    '/workspace/eslint.config.js',
+    '/workspace/file.js',
+    {
+      ...configGraph,
+      deferredFiles: { [dictionary]: 'base64' },
+    },
+  )
+  expect(
+    ModuleResolutionWorker.invalidateForFileChanges({
+      changed: [`file://${dictionary}`],
+    }),
+  ).toBe(true)
+  expect([...ModuleResolutionWorker.state.invalidatedCacheKeys]).toContain(
+    'config-dependencies:file:///workspace/eslint.config.js',
+  )
+})

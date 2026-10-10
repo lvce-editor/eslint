@@ -27,8 +27,10 @@ const setGraph = async (
   cachePath: string,
   entry: string,
   uri: string,
+  deferredFiles: Readonly<Record<string, 'base64' | 'utf8'>> = {},
 ): Promise<void> => {
   const revisionInput = {
+    deferredFiles,
     entry,
     files: [],
     lazyModules: [],
@@ -39,7 +41,7 @@ const setGraph = async (
         uri,
       },
     ],
-    version: 5,
+    version: 6,
   }
   const revision = await ComputeTextHash.computeTextHash(
     JSON.stringify(revisionInput),
@@ -245,4 +247,41 @@ test('does not reuse diagnostics when a shared config dependency changes', async
       '/workspace/eslint.config.js',
     ),
   ).resolves.toBeUndefined()
+})
+
+test('invalidates persisted diagnostics when deferred dictionary contents change', async () => {
+  const dictionary =
+    'file:///workspace/node_modules/@cspell/dict-test/words.txt'
+  hashes.set(dictionary, 'old-dictionary-hash')
+  await setProjectGraphs()
+  await setGraph(
+    'config-dependencies/file/workspace/eslint.config.js',
+    'file:///workspace/eslint.config.js',
+    'file:///workspace/eslint.config.js',
+    { [dictionary]: 'utf8' },
+  )
+  await LintResultCache.save(
+    'const value = 1',
+    '/workspace/src/file.ts',
+    '/workspace/eslint.config.js',
+    undefined,
+    [],
+  )
+  await expect(
+    LintResultCache.restore(
+      'const value = 1',
+      '/workspace/src/file.ts',
+      '/workspace/eslint.config.js',
+    ),
+  ).resolves.toEqual([])
+  hashes.set(dictionary, 'new-dictionary-hash')
+  LintResultCache.clearRevisionCache()
+  await expect(
+    LintResultCache.restore(
+      'const value = 1',
+      '/workspace/src/file.ts',
+      '/workspace/eslint.config.js',
+    ),
+  ).resolves.toBeUndefined()
+  hashes.delete(dictionary)
 })

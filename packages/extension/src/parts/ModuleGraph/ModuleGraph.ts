@@ -6,6 +6,7 @@ interface EncodedVirtualFile {
 type VirtualFile = EncodedVirtualFile | string
 
 export interface ModuleGraph {
+  readonly deferredFiles?: Readonly<Record<string, 'base64' | 'utf8'>>
   readonly entry: string
   readonly files?: Readonly<Record<string, VirtualFile>>
   readonly id: string
