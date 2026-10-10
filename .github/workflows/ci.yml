@@ -19,7 +19,12 @@ jobs:
   ci:
     strategy:
       matrix:
-        os: [ubuntu-24.04, macos-14, windows-2022]
+        os:
+          - ubuntu-24.04
+          - macos-14
+          - windows-2022
+          - ubuntu-24.04-arm
+          - windows-11-arm
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     steps:
@@ -35,7 +40,7 @@ jobs:
         id: npm-cache
         with:
           path: '**/node_modules'
-          key: ${{ runner.os }}-cacheNodeModules-${{ steps.nodeModulesCacheKey.outputs.value }}
+          key: ${{ runner.os }}-${{ runner.arch }}-cacheNodeModules-${{ steps.nodeModulesCacheKey.outputs.value }}
       - name: npm ci
         run: npm ci
         if: steps.npm-cache.outputs.cache-hit != 'true'
@@ -46,6 +51,10 @@ jobs:
         working-directory: ./packages/e2e
         run: npx playwright install chromium
         if: steps.npm-cache.outputs.cache-hit != 'true'
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: 0
+      - name: Verify runner and Chromium architecture
+        run: node packages/e2e/scripts/verifyBrowserArchitecture.js
         env:
           PLAYWRIGHT_BROWSERS_PATH: 0
       - name: Run headless test
