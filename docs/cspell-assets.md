@@ -76,6 +76,15 @@ persisted diagnostic fingerprints; a regression test covers dictionary edits.
 
 ## Reproduction and limits
 
+After integrating the runtime-retention and TypeScript import-wrapper fixes from
+main revision `e36f8ad7cc89`, three fresh source-mode runs per revision using the
+same selective fixture still showed the raw preload reduction above. Median heap
+used was 157,065,744 -> 150,452,408 bytes (6.31 MiB saved), with external memory
+26,115,114 bytes and ArrayBuffers 6,308,035 bytes unchanged. Cold latency was
+6243.91 -> 5252.88 ms and warm latency 1.32 -> 1.11 ms. Cold/warm diagnostics
+matched across revisions. This integration comparison uses the selective fixture;
+the earlier browser measurements retain their explicitly stated original baseline.
+
 After installing dependencies and preparing fixture node_modules links with the
 normal build/prepare-e2e scripts, run in a fresh Node process for each revision:
 
