@@ -6,6 +6,7 @@ export const test: Test = async ({
   Command,
   Editor,
   expect,
+  FileSystem,
   Locator,
   Main,
 }) => {
@@ -14,7 +15,24 @@ export const test: Test = async ({
     import.meta.url,
   ).pathname.replace(/^\/remote/, '')}`
   await Command.execute('Workspace.setUri', workspaceUri)
-  await Main.openUri(`${workspaceUri}/fix.js`)
+  const uri = `${workspaceUri}/fix.js`
+  const text = await FileSystem.readFile(uri)
+  // Await CSpell's cold initialization before opening the source-action menu.
+  const diagnostics = (await Command.executeExtensionCommand('eslint.lint', {
+    text,
+    uri,
+  })) as readonly { readonly message: string; readonly source: string }[]
+  if (
+    diagnostics.length !== 1 ||
+    diagnostics[0].source !== '@cspell/spellchecker' ||
+    diagnostics[0].message !==
+      `Forbidden word: "${text.trim().slice(3)}" (church)`
+  ) {
+    throw new Error(
+      `Unexpected spelling diagnostics: ${JSON.stringify(diagnostics)}`,
+    )
+  }
+  await Main.openUri(uri)
   await Editor.setCursor(0, 5)
   await Editor.openSourceActions()
   const name = "Fix '@cspell/spellchecker' problem"
