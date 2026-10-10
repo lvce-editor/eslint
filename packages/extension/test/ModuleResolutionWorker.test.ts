@@ -226,3 +226,46 @@ test('invalidates when a workspace module is created', async () => {
     }),
   ).toBe(true)
 })
+
+test('tracks hydrated TypeScript config and custom library paths after worker disposal', async () => {
+  ModuleResolutionWorker.state.createRpc = async () => ({
+    dispose: () => {},
+    invoke: async () => [],
+  })
+  ModuleGraphDependencies.recordConfigGraph(
+    '/workspace/eslint.config.js',
+    '/workspace/src/file.ts',
+    configGraph,
+  )
+  const requests = [
+    { kind: 'read', path: '/shared/config/base.json' },
+    {
+      kind: 'stat',
+      path: '/workspace/node_modules/@typescript/lib-dom',
+    },
+  ]
+  await ModuleResolutionWorker.runInSession(() =>
+    ModuleResolutionWorker.readTypeScriptFiles(requests),
+  )
+  expect(ModuleResolutionWorker.state.rpcPromise).toBeUndefined()
+  expect(
+    ModuleResolutionWorker.invalidateForFileChanges({
+      changed: ['file:///shared/config/base.json'],
+    }),
+  ).toBe(true)
+  ModuleGraphDependencies.recordConfigGraph(
+    '/workspace/eslint.config.js',
+    '/workspace/src/file.ts',
+    configGraph,
+  )
+  await ModuleResolutionWorker.runInSession(() =>
+    ModuleResolutionWorker.readTypeScriptFiles(requests),
+  )
+  expect(
+    ModuleResolutionWorker.invalidateForFileChanges({
+      changed: [
+        'file:///workspace/node_modules/@typescript/lib-dom/index.d.ts',
+      ],
+    }),
+  ).toBe(true)
+})

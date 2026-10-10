@@ -1188,7 +1188,7 @@ test('loads the closest project ESLint package as a graph', async () => {
   expect(graph.modules[graph.entry]).toContain('ProjectLinter')
 })
 
-test('preloads only TypeScript runtime library files needed by parsers', async () => {
+test('keeps typesMap without preloading declaration libraries', async () => {
   setFiles({
     '/workspace/node_modules/eslint/index.js': `require('typescript'); class ProjectLinter {}; module.exports = { Linter: ProjectLinter }`,
     '/workspace/node_modules/eslint/package.json': `{"main":"index.js"}`,
@@ -1216,12 +1216,12 @@ test('preloads only TypeScript runtime library files needed by parsers', async (
     ),
   ).toBe(true)
   expect(graph.files).toMatchObject({
-    '/workspace/node_modules/typescript/lib/lib.d.ts': `/// <reference no-default-lib="true"/>`,
-    '/workspace/node_modules/typescript/lib/lib.dom.d.ts': `interface Document {}`,
-    '/workspace/node_modules/typescript/lib/lib.esnext.custom.d.ts': `interface Custom {}`,
     '/workspace/node_modules/typescript/lib/typesMap.json': `{"jquery":"jquery"}`,
   })
   for (const path of [
+    '/workspace/node_modules/typescript/lib/lib.d.ts',
+    '/workspace/node_modules/typescript/lib/lib.dom.d.ts',
+    '/workspace/node_modules/typescript/lib/lib.esnext.custom.d.ts',
     '/workspace/node_modules/typescript/lib/_tsc.js',
     '/workspace/node_modules/typescript/lib/_tsserver.js',
     '/workspace/node_modules/typescript/lib/_typingsInstaller.js',

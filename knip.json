@@ -32,7 +32,7 @@
       "ignoreDependencies": ["eslint"]
     },
     "packages/e2e/fixtures/typescript-eslint": {
-      "entry": ["eslint.config.js", "test.ts", "second.ts"],
+      "entry": ["eslint.config.js", "test.ts", "second.ts", "typed/*/test.ts"],
       "project": ["**/*.{js,json,ts}"],
       "ignoreDependencies": ["eslint"]
     },

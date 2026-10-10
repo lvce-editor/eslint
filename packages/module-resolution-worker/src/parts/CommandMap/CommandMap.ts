@@ -1,4 +1,5 @@
 import * as ModuleResolution from '../ModuleResolution/ModuleResolution.ts'
+import * as ReadTypeScriptFiles from '../ReadTypeScriptFiles/ReadTypeScriptFiles.ts'
 import * as Worker from '../Worker/Worker.ts'
 
 export const commandMap: Readonly<Record<string, unknown>> = {
@@ -7,5 +8,7 @@ export const commandMap: Readonly<Record<string, unknown>> = {
     ModuleResolution.invalidateForFileChanges,
   'ModuleResolution.loadEslintConfig': ModuleResolution.loadEslintConfig,
   'ModuleResolution.loadEslintModule': ModuleResolution.loadEslintModule,
+  'ModuleResolution.readTypeScriptFiles':
+    ReadTypeScriptFiles.readTypeScriptFiles,
   'Worker.dispose': Worker.dispose,
 }

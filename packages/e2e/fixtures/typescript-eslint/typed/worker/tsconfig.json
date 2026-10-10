@@ -1,0 +1,7 @@
+{
+  "compilerOptions": {
+    "lib": ["es2020", "webworker"],
+    "types": []
+  },
+  "files": ["test.ts"]
+}

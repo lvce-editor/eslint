@@ -1,0 +1,1 @@
+const libraryValue = document.title

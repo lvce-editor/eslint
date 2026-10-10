@@ -52,6 +52,8 @@ export interface Rpc {
 const commandMap = {
   'ModuleResolution.loadEslintConfig': ModuleResolutionWorker.loadEslintConfig,
   'ModuleResolution.loadEslintModule': ModuleResolutionWorker.loadEslintModule,
+  'ModuleResolution.readTypeScriptFiles':
+    ModuleResolutionWorker.readTypeScriptFiles,
 }
 
 type CreateRpc = (options: CreateRpcOptions) => Promise<Rpc>
