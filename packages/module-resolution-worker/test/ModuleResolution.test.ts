@@ -158,14 +158,14 @@ test('rewrites the recognized TypeScript import-star helper', async () => {
   const entry =
     '/workspace/node_modules/@typescript-eslint/typescript-estree/dist/shared.js'
   setFiles({
+    '/workspace/node_modules/@typescript-eslint/typescript-estree/dist/lazy.js': `${typeScriptImportStarHelper}\nmodule.exports = __importStar(require("typescript"))`,
+    '/workspace/node_modules/@typescript-eslint/typescript-estree/dist/node_modules/typescript/index.js':
+      'exports.version = "test"',
+    '/workspace/node_modules/@typescript-eslint/typescript-estree/dist/node_modules/typescript/package.json':
+      '{"name":"typescript","main":"index.js"}',
     '/workspace/node_modules/eslint/package.json':
       '{"name":"eslint","main":"../@typescript-eslint/typescript-estree/dist/shared.js"}',
     [entry]: `${typeScriptImportStarHelper}\nconst ts = __importStar(require("typescript")); module.exports = ts`,
-    '/workspace/node_modules/@typescript-eslint/typescript-estree/dist/lazy.js': `${typeScriptImportStarHelper}\nmodule.exports = __importStar(require("typescript"))`,
-    '/workspace/node_modules/@typescript-eslint/typescript-estree/dist/node_modules/typescript/package.json':
-      '{"name":"typescript","main":"index.js"}',
-    '/workspace/node_modules/@typescript-eslint/typescript-estree/dist/node_modules/typescript/index.js':
-      'exports.version = "test"',
   })
 
   const graph = await LoadEslintConfig.loadEslintModule(
@@ -191,13 +191,13 @@ test('leaves an unrecognized import-star helper unchanged', async () => {
   const entry =
     '/workspace/node_modules/@typescript-eslint/typescript-estree/dist/shared.js'
   setFiles({
+    '/workspace/node_modules/@typescript-eslint/typescript-estree/dist/node_modules/typescript/index.js':
+      'exports.version = "test"',
+    '/workspace/node_modules/@typescript-eslint/typescript-estree/dist/node_modules/typescript/package.json':
+      '{"name":"typescript","main":"index.js"}',
     '/workspace/node_modules/eslint/package.json':
       '{"name":"eslint","main":"../@typescript-eslint/typescript-estree/dist/shared.js"}',
     [entry]: `${helper}\nconst ts = __importStar(require("typescript")); module.exports = ts`,
-    '/workspace/node_modules/@typescript-eslint/typescript-estree/dist/node_modules/typescript/package.json':
-      '{"name":"typescript","main":"index.js"}',
-    '/workspace/node_modules/@typescript-eslint/typescript-estree/dist/node_modules/typescript/index.js':
-      'exports.version = "test"',
   })
 
   const graph = await LoadEslintConfig.loadEslintModule(
