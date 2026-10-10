@@ -197,6 +197,27 @@ test('stat converts an absolute path to a file uri', async () => {
   expect(stat).toHaveBeenCalledWith('file:///workspace/a.js')
 })
 
+test.each([
+  [7, { isDirectory: false, isFile: true }],
+  [3, { isDirectory: true, isFile: false }],
+  [undefined, { isDirectory: false, isFile: false }],
+])(
+  'stat accepts a memory filesystem object with type %s',
+  async (type, expected) => {
+    FileSystem.state.api = {
+      ...FileSystem.state.api,
+      stat: jest.fn(async () => ({
+        exists: type !== undefined,
+        size: 0,
+        type,
+      })),
+    }
+    await expect(
+      FileSystem.stat('memfs:///workspace/node_modules'),
+    ).resolves.toEqual(expected)
+  },
+)
+
 test('preserves an existing file uri', async () => {
   await FileSystem.readFile('file:///workspace/a.js')
   expect(readFile).toHaveBeenCalledWith('file:///workspace/a.js')
