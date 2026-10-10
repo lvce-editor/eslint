@@ -80,7 +80,7 @@ After installing dependencies and preparing fixture node_modules links with the
 normal build/prepare-e2e scripts, run in a fresh Node process for each revision:
 
 ```sh
-node --expose-gc scripts/measure-cspell-assets.js /path/to/source-revision /path/to/shared/fixture > measurement.json
+npm run --silent benchmark:cspell-assets -- /path/to/source-revision /path/to/shared/fixture > measurement.json
 ```
 
 Use the selective fixture with `--scenarios` for the compatibility results and
