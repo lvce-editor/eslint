@@ -4,6 +4,7 @@ import { gzip, ungzip } from 'pako'
 import type { ModuleGraph } from '../ModuleGraph/ModuleGraph.ts'
 import * as Path from '../Path/Path.ts'
 import * as PrepareTypeScriptLibraries from '../PrepareTypeScriptLibraries/PrepareTypeScriptLibraries.ts'
+import * as Rpc from '../Rpc/Rpc.ts'
 import * as TypeScriptProgramFiles from '../TypeScriptProgramFiles/TypeScriptProgramFiles.ts'
 
 type CommonJsModule = {
@@ -13,6 +14,7 @@ type CommonJsModule = {
 type VirtualFile = NonNullable<ModuleGraph['files']>[string]
 
 interface RuntimeState {
+  readonly deferredFiles: Record<string, 'base64' | 'utf8'>
   readonly evaluatedGraphIds: Map<string, string>
   readonly evaluatedModules: Map<string, CommonJsModule>
   readonly executableFingerprints: Map<string, string>
@@ -575,6 +577,7 @@ const createBuiltins = (
       state.executableFingerprints.has(normalized) ||
       state.knownFiles.has(normalized) ||
       Object.hasOwn(state.files, normalized) ||
+      Object.hasOwn(state.deferredFiles, normalized) ||
       state.virtualDirectories.has(normalized)
     if (!exists) state.programFiles.request('stat', normalized)
     return exists
@@ -609,7 +612,8 @@ const createBuiltins = (
           isFile: (): boolean =>
             state.knownFiles.has(path) ||
             state.executableFingerprints.has(path) ||
-            Object.hasOwn(state.files, path),
+            Object.hasOwn(state.files, path) ||
+            Object.hasOwn(state.deferredFiles, path),
           isSymbolicLink: (): boolean => false,
           name,
         }
@@ -629,7 +633,8 @@ const createBuiltins = (
       state.programFiles.hasFile(normalized) ||
       state.knownFiles.has(normalized) ||
       state.executableFingerprints.has(normalized) ||
-      Object.hasOwn(state.files, normalized)
+      Object.hasOwn(state.files, normalized) ||
+      Object.hasOwn(state.deferredFiles, normalized)
     const isDirectory = state.virtualDirectories.has(normalized)
     if (!isFile && !isDirectory) state.programFiles.request('stat', normalized)
     const size = Object.hasOwn(state.files, normalized)
@@ -657,8 +662,28 @@ const createBuiltins = (
       directory: string,
       options?: string | { readonly withFileTypes?: boolean },
     ) => readdirSync(directory, options),
-    readFile: async (filePath: string, encoding?: string) =>
-      readFileSync(filePath, encoding),
+    readFile: async (
+      filePath: string,
+      encoding?: string,
+    ): Promise<string | Buffer> => {
+      const normalized = toVirtualPath(filePath)
+      const deferredEncoding = state.deferredFiles[normalized]
+      if (!deferredEncoding || Object.hasOwn(state.files, normalized)) {
+        return readFileSync(filePath, encoding)
+      }
+      // The content belongs to the requesting CSpell reader, not the graph or
+      // runtime. Keep only discovery metadata after parsing the dictionary.
+      const method =
+        deferredEncoding === 'base64'
+          ? 'FileSystem.readFileAsBase64'
+          : 'FileSystem.readFile'
+      const content = await Rpc.invoke<string>(method, normalized)
+      const buffer =
+        deferredEncoding === 'base64'
+          ? Buffer.from(decodeBase64(content))
+          : Buffer.from(content, 'utf8')
+      return encoding ? buffer.toString(encoding) : buffer
+    },
     stat: async (filePath: string) => statSync(filePath),
     writeFile: async (): Promise<never> => writeUnavailable(),
   }
@@ -1074,6 +1099,7 @@ const readVirtualTypeScriptFiles = async (
 
 const createState = (): RuntimeState => {
   const state: RuntimeState = {
+    deferredFiles: {},
     evaluatedGraphIds: new Map(),
     evaluatedModules: new Map(),
     executableFingerprints: new Map(),
@@ -1115,6 +1141,12 @@ const evaluateGraph = (
   graph: ModuleGraph,
 ): EvaluatedModuleGraph => {
   const entry = mergeGraph(state, graph)
+  const deferredEntries = Object.entries(graph.deferredFiles ?? {})
+  for (const [path, encoding] of deferredEntries) {
+    const normalized = Path.normalize(path)
+    state.deferredFiles[normalized] = encoding
+    addVirtualPath(state, normalized)
+  }
   const builtins = createBuiltins(state, entry)
   const resolvePreloadedPath = (specifier: string): string | undefined => {
     const path = specifier.startsWith('file:')

@@ -1,5 +1,6 @@
 import { createRpc, type CreateRpcOptions } from '@lvce-editor/api'
 import type { LoadedSuppressions } from '../LoadSuppressions/LoadSuppressions.ts'
+import * as FileSystem from '../FileSystem/FileSystem.ts'
 import * as ModuleResolutionWorker from '../ModuleResolutionWorker/ModuleResolutionWorker.ts'
 
 export type LintResult = {
@@ -50,6 +51,8 @@ export interface Rpc {
 }
 
 const commandMap = {
+  'FileSystem.readFile': FileSystem.readFile,
+  'FileSystem.readFileAsBase64': FileSystem.readFileAsBase64,
   'ModuleResolution.loadEslintConfig': ModuleResolutionWorker.loadEslintConfig,
   'ModuleResolution.loadEslintModule': ModuleResolutionWorker.loadEslintModule,
   'ModuleResolution.readTypeScriptFiles':
