@@ -1256,7 +1256,8 @@ const rewriteTypeScriptImportStar = (
         })
       }
     }
-    for (const key of packages.types.VISITOR_KEYS[node.type] ?? []) {
+    const visitorKeys = packages.types.VISITOR_KEYS[node.type] ?? []
+    for (const key of visitorKeys) {
       const value = node[key]
       if (Array.isArray(value)) {
         for (const child of value) {
@@ -1269,7 +1270,8 @@ const rewriteTypeScriptImportStar = (
   }
   visit(ast.program)
   let transformed = source
-  for (const replacement of replacements.reverse()) {
+  for (let index = replacements.length - 1; index >= 0; index--) {
+    const replacement = replacements[index]
     transformed = `${transformed.slice(0, replacement.start)}${replacement.value}${transformed.slice(replacement.end)}`
   }
   return transformed === source ? undefined : transformed
