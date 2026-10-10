@@ -4,10 +4,10 @@ import * as FileSystem from '../FileSystem/FileSystem.ts'
 
 const CacheName = 'eslint-config-files-cache-v2'
 const CacheKeyPrefix = 'https://eslint-config-files-cache.invalid/'
-const CompiledCacheName = 'eslint-compiled-module-graph-v3'
+const CompiledCacheName = 'eslint-compiled-module-graph-v4'
 const CompiledCacheKeyPrefix = 'https://eslint-compiled-module-graph.invalid/'
 const CacheVersion = 5
-const CompiledCacheVersion = 2
+const CompiledCacheVersion = 3
 const maxConcurrentCacheReads = 64
 
 const toReadableCachePath = (cacheKey: string): string => {

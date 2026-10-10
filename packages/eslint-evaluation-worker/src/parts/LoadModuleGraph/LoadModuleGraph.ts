@@ -15,12 +15,104 @@ interface RuntimeState {
   readonly evaluatedModules: Map<string, CommonJsModule>
   readonly executableFingerprints: Map<string, string>
   readonly files: Record<string, VirtualFile>
+  readonly importStarWrapperCache: ImportStarWrapperCache
   readonly lazyModules: Record<string, string>
   readonly modules: Record<string, string>
   readonly resolutions: Record<string, string>
   readonly virtualDirectories: Set<string>
   readonly virtualDirectoryEntries: Map<string, Set<string>>
 }
+
+interface ImportStarWrapper {
+  readonly descriptors: readonly (PropertyDescriptor | undefined)[]
+  readonly keys: readonly string[]
+  readonly namespace: object
+}
+
+type ImportStarWrapperCache = (
+  importStar: (module: any) => any,
+  helperKey: string,
+  module: any,
+) => any
+
+const haveSameImportStarShape = (
+  previous: ImportStarWrapper,
+  module: object,
+): boolean => {
+  const keys = Object.getOwnPropertyNames(module)
+  let propertyIndex = 0
+  for (const key of keys) {
+    if (key === 'default') {
+      continue
+    }
+    if (previous.keys[propertyIndex] !== key) {
+      return false
+    }
+    const left = previous.descriptors[propertyIndex]
+    const right = Object.getOwnPropertyDescriptor(module, key)
+    if (!left || !right) {
+      if (left !== right) {
+        return false
+      }
+      propertyIndex++
+      continue
+    }
+    if (
+      left.configurable !== right.configurable ||
+      left.enumerable !== right.enumerable ||
+      'get' in left !== 'get' in right ||
+      'set' in left !== 'set' in right ||
+      left.get !== right.get ||
+      left.set !== right.set ||
+      left.writable !== right.writable ||
+      (!(left.writable || left.configurable) && left.value !== right.value)
+    ) {
+      return false
+    }
+    propertyIndex++
+  }
+  return propertyIndex === previous.keys.length
+}
+
+const createImportStarWrapperCache =
+  (cache: WeakMap<object, Map<string, ImportStarWrapper>>) =>
+  (importStar: (module: any) => any, helperKey: string, module: any): any => {
+    if (
+      (typeof module !== 'object' && typeof module !== 'function') ||
+      module === null
+    ) {
+      return importStar(module)
+    }
+    const esModuleDescriptor = Object.getOwnPropertyDescriptor(
+      module,
+      '__esModule',
+    )
+    if (
+      (esModuleDescriptor && 'get' in esModuleDescriptor) ||
+      (!esModuleDescriptor && '__esModule' in module) ||
+      esModuleDescriptor?.value
+    ) {
+      return importStar(module)
+    }
+    let wrappers = cache.get(module)
+    const existing = wrappers?.get(helperKey)
+    if (existing && haveSameImportStarShape(existing, module)) {
+      return existing.namespace
+    }
+    const keys = Object.getOwnPropertyNames(module).filter(
+      (key) => key !== 'default',
+    )
+    const descriptors = keys.map((key) =>
+      Object.getOwnPropertyDescriptor(module, key),
+    )
+    const namespace = importStar(module)
+    if (!wrappers) {
+      wrappers = new Map()
+      cache.set(module, wrappers)
+    }
+    wrappers.set(helperKey, { descriptors, keys, namespace })
+    return namespace
+  }
 
 export interface EvaluatedModuleGraph {
   readonly compatibilityRuntime: ModuleCompatibilityRuntime
@@ -907,17 +999,22 @@ const mergeGraph = (state: RuntimeState, graph: ModuleGraph): string => {
   return Path.normalize(graph.entry)
 }
 
-const createState = (): RuntimeState => ({
-  evaluatedGraphIds: new Map(),
-  evaluatedModules: new Map(),
-  executableFingerprints: new Map(),
-  files: {},
-  lazyModules: {},
-  modules: {},
-  resolutions: {},
-  virtualDirectories: new Set(),
-  virtualDirectoryEntries: new Map(),
-})
+const createState = (): RuntimeState => {
+  return {
+    evaluatedGraphIds: new Map(),
+    evaluatedModules: new Map(),
+    executableFingerprints: new Map(),
+    files: {},
+    importStarWrapperCache: createImportStarWrapperCache(
+      new WeakMap<object, Map<string, ImportStarWrapper>>(),
+    ),
+    lazyModules: {},
+    modules: {},
+    resolutions: {},
+    virtualDirectories: new Set(),
+    virtualDirectoryEntries: new Map(),
+  }
+}
 
 const evaluateGraph = (
   state: RuntimeState,
@@ -1060,6 +1157,7 @@ const evaluateGraph = (
         'clearImmediate',
         'setImmediate',
         'SharedArrayBuffer',
+        '__importStarWrapperCache',
         `'use strict';
       return function (module, exports, require, __filename, __dirname) {
         'use strict';
@@ -1073,6 +1171,7 @@ const evaluateGraph = (
         clearImmediate,
         setImmediate,
         globalThis.SharedArrayBuffer ?? globalThis.ArrayBuffer,
+        state.importStarWrapperCache,
       )
       evaluate(module, module.exports, require, id, Path.dirname(id))
       delete sourceContainer[id]

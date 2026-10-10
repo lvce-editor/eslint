@@ -14,6 +14,21 @@ const graph = (
   resolutions,
 })
 
+const importStarHelper = `const importStar = mod => {
+  if (mod && mod.__esModule) return mod
+  const result = {}
+  if (mod != null) {
+    for (const key of Object.getOwnPropertyNames(mod)) {
+      if (key !== 'default') Object.defineProperty(result, key, { enumerable: true, get: () => mod[key] })
+    }
+  }
+  Object.defineProperty(result, 'default', { enumerable: true, value: mod })
+  return result
+}`
+
+const cachedImportStar = (specifier: string): string =>
+  `__importStarWrapperCache(importStar, 'typescript-import-star-test', require(${JSON.stringify(specifier)}))`
+
 test('loads a commonjs config', () => {
   const value = LoadModuleGraph.loadModuleGraph(
     graph({
@@ -21,6 +36,136 @@ test('loads a commonjs config', () => {
     }),
   )
   expect(value).toEqual([{ rules: {} }])
+})
+
+test('reuses namespace wrappers with live exports and default imports', () => {
+  const value = LoadModuleGraph.loadModuleGraph(
+    graph(
+      {
+        '/workspace/source.js': `let value = 1; Object.defineProperty(exports, 'value', { configurable: true, enumerable: true, get: () => value }); exports.setValue = next => value = next`,
+        '/workspace/first.js': `${importStarHelper}; module.exports = ${cachedImportStar('./source.js')}`,
+        '/workspace/second.js': `${importStarHelper}; module.exports = ${cachedImportStar('./source.js')}`,
+        '/workspace/eslint.config.js': `const source = require('./source.js'); const first = require('./first.js'); const second = require('./second.js'); source.setValue(2); module.exports = { same: first === second, live: first.value, defaultIsSource: first.default === source, descriptor: Object.getOwnPropertyDescriptor(first, 'value') }`,
+      },
+      {
+        '/workspace/eslint.config.js\0./first.js': '/workspace/first.js',
+        '/workspace/eslint.config.js\0./second.js': '/workspace/second.js',
+        '/workspace/eslint.config.js\0./source.js': '/workspace/source.js',
+        '/workspace/first.js\0./source.js': '/workspace/source.js',
+        '/workspace/second.js\0./source.js': '/workspace/source.js',
+      },
+    ),
+  )
+
+  expect(value).toEqual({
+    same: true,
+    live: 2,
+    defaultIsSource: true,
+    descriptor: expect.objectContaining({
+      configurable: false,
+      enumerable: true,
+      get: expect.any(Function),
+      set: undefined,
+    }),
+  })
+})
+
+test('rechecks wrapper shape after circular export initialization', () => {
+  const value = LoadModuleGraph.loadModuleGraph(
+    graph(
+      {
+        '/workspace/a.js': `${importStarHelper}; exports.ready = true; exports.fromCycle = require('./b.js'); exports.later = true`,
+        '/workspace/b.js': `${importStarHelper}; module.exports = ${cachedImportStar('./a.js')}`,
+        '/workspace/eslint.config.js': `${importStarHelper}; const a = require('./a.js'); const afterInitialization = ${cachedImportStar('./a.js')}; module.exports = { before: a.fromCycle.later, after: afterInitialization.later, reusedAfterInitialization: afterInitialization === a.fromCycle }`,
+      },
+      {
+        '/workspace/a.js\0./b.js': '/workspace/b.js',
+        '/workspace/b.js\0./a.js': '/workspace/a.js',
+        '/workspace/eslint.config.js\0./a.js': '/workspace/a.js',
+      },
+    ),
+  )
+
+  expect(value).toEqual({
+    before: undefined,
+    after: true,
+    reusedAfterInitialization: false,
+  })
+})
+
+test('does not reuse a wrapper after module.exports replacement', () => {
+  const value = LoadModuleGraph.loadModuleGraph(
+    graph(
+      {
+        '/workspace/source.js': `${importStarHelper}; exports.before = true; const previous = ${cachedImportStar('./source.js')}; module.exports = { after: true, previous }; module.exports.current = ${cachedImportStar('./source.js')}`,
+        '/workspace/eslint.config.js': `const source = require('./source.js'); module.exports = { previousDefault: source.previous.default.before, currentDefault: source.current.default.after, different: source.previous !== source.current }`,
+      },
+      {
+        '/workspace/eslint.config.js\0./source.js': '/workspace/source.js',
+        '/workspace/source.js\0./source.js': '/workspace/source.js',
+      },
+    ),
+  )
+
+  expect(value).toEqual({
+    previousDefault: true,
+    currentDefault: true,
+    different: true,
+  })
+})
+
+test('keeps namespace wrapper caches isolated between module runtimes', () => {
+  const source = `${importStarHelper}; module.exports = ${cachedImportStar('./source.js')}`
+  const sourceModule = `exports.value = 1`
+  const runtime = LoadModuleGraph.createModuleRuntime()
+  const first = runtime.evaluate(
+    graph(
+      {
+        '/workspace/source.js': sourceModule,
+        '/workspace/eslint.config.js': source,
+      },
+      { '/workspace/eslint.config.js\0./source.js': '/workspace/source.js' },
+    ),
+  ).exports
+  const second = LoadModuleGraph.createModuleRuntime().evaluate(
+    graph(
+      {
+        '/workspace/source.js': sourceModule,
+        '/workspace/eslint.config.js': source,
+      },
+      { '/workspace/eslint.config.js\0./source.js': '/workspace/source.js' },
+    ),
+  ).exports
+
+  expect(first).not.toBe(second)
+  expect(first.value).toBe(1)
+  expect(second.value).toBe(1)
+})
+
+test('reuses TypeScript exports across recognized helpers', () => {
+  const value = LoadModuleGraph.loadModuleGraph(
+    graph(
+      {
+        '/workspace/node_modules/typescript/lib/typescript.js':
+          'exports.version = "test"',
+        '/workspace/node_modules/@typescript-eslint/first.js': `${importStarHelper}; module.exports = ${cachedImportStar('typescript')}`,
+        '/workspace/node_modules/@typescript-eslint/second.js': `${importStarHelper}; module.exports = ${cachedImportStar('typescript')}`,
+        '/workspace/eslint.config.js': `const first = require('./node_modules/@typescript-eslint/first.js'); const second = require('./node_modules/@typescript-eslint/second.js'); module.exports = { same: first === second, version: first.version, default: first.default.version }`,
+      },
+      {
+        '/workspace/eslint.config.js\0./node_modules/@typescript-eslint/first.js':
+          '/workspace/node_modules/@typescript-eslint/first.js',
+        '/workspace/eslint.config.js\0./node_modules/@typescript-eslint/second.js':
+          '/workspace/node_modules/@typescript-eslint/second.js',
+        '/workspace/node_modules/@typescript-eslint/first.js\0typescript':
+          '/workspace/node_modules/typescript/lib/typescript.js',
+        '/workspace/node_modules/@typescript-eslint/second.js\0typescript':
+          '/workspace/node_modules/typescript/lib/typescript.js',
+      },
+    ),
+  )
+
+  expect(value).toEqual({ same: true, version: 'test', default: 'test' })
 })
 
 test('runs deferred cspell-compatible work without worker threads', async () => {

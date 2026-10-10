@@ -1169,6 +1169,112 @@ const getAnalysisCacheKey = async (
   }
 }
 
+const normalizeTypeScriptImportStarHelper = (
+  source: string,
+): string | undefined => {
+  const bindingIndex = source.indexOf('var __createBinding =')
+  const importStarIndex = source.indexOf('var __importStar =', bindingIndex)
+  const helperEnd = source.indexOf('})();', importStarIndex)
+  if (bindingIndex === -1 || importStarIndex === -1 || helperEnd === -1) {
+    return undefined
+  }
+  const helper = source.slice(bindingIndex, helperEnd + 4)
+  const normalized = helper
+    .replaceAll(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '')
+    .replaceAll(/\s+/g, '')
+  // This deliberately recognizes the emitted TypeScript helper, including its
+  // own-key fallback and descriptor logic. Other __importStar implementations
+  // keep their original behavior.
+  if (
+    !normalized.startsWith(
+      'var__createBinding=(this&&this.__createBinding)||',
+    ) ||
+    !normalized.includes(
+      'var__setModuleDefault=(this&&this.__setModuleDefault)||',
+    ) ||
+    !normalized.includes('var__importStar=(this&&this.__importStar)||') ||
+    !normalized.includes('Object.getOwnPropertyNames||function(o)') ||
+    !normalized.includes('Object.getOwnPropertyDescriptor(m,k)') ||
+    !normalized.includes(
+      'if(k[i]!=="default")__createBinding(result,mod,k[i])',
+    ) ||
+    !normalized.includes('__setModuleDefault(result,mod)')
+  ) {
+    return undefined
+  }
+  return normalized
+}
+
+const getTypeScriptImportStarCacheKey = (helper: string): string => {
+  return `typescript-import-star-${helper}`
+}
+
+const rewriteTypeScriptImportStar = (
+  path: string,
+  source: string,
+): string | undefined => {
+  if (!path.includes('/node_modules/@typescript-eslint/')) {
+    return undefined
+  }
+  const helper = normalizeTypeScriptImportStarHelper(source)
+  if (!helper) {
+    return undefined
+  }
+  const cacheKey = getTypeScriptImportStarCacheKey(helper)
+  const ast = packages.parser.parse(source, {
+    sourceType: 'unambiguous',
+  })
+  const replacements: Array<{ end: number; start: number; value: string }> = []
+  const visit = (node: any): void => {
+    if (!node || typeof node !== 'object') {
+      return
+    }
+    if (
+      node.type === 'CallExpression' &&
+      node.callee?.type === 'Identifier' &&
+      node.callee.name === '__importStar' &&
+      node.arguments?.length === 1
+    ) {
+      const requireCall = node.arguments[0]
+      const specifier = requireCall?.arguments?.[0]
+      if (
+        requireCall?.type === 'CallExpression' &&
+        requireCall.callee?.type === 'Identifier' &&
+        requireCall.callee.name === 'require' &&
+        requireCall.arguments?.length === 1 &&
+        specifier?.type === 'StringLiteral' &&
+        specifier.value === 'typescript' &&
+        typeof node.start === 'number' &&
+        typeof node.end === 'number' &&
+        typeof requireCall.start === 'number' &&
+        typeof requireCall.end === 'number'
+      ) {
+        replacements.push({
+          end: node.end,
+          start: node.start,
+          value: `__importStarWrapperCache(__importStar, ${JSON.stringify(cacheKey)}, ${source.slice(requireCall.start, requireCall.end)})`,
+        })
+      }
+    }
+    for (const key of packages.types.VISITOR_KEYS[node.type] ?? []) {
+      const value = node[key]
+      if (Array.isArray(value)) {
+        for (const child of value) {
+          visit(child)
+        }
+      } else {
+        visit(value)
+      }
+    }
+  }
+  visit(ast.program)
+  let transformed = source
+  for (const replacement of replacements.reverse()) {
+    transformed = `${transformed.slice(0, replacement.start)}${replacement.value}${transformed.slice(replacement.end)}`
+  }
+  return transformed === source ? undefined : transformed
+}
+
 const substituteImportMeta = (path: string, source: string): string => {
   return source
     .split('import.meta.dirname')
@@ -1199,10 +1305,11 @@ const transpileUncached = (
     return trimmed.startsWith('export ') || trimmed.startsWith('import ')
   })
   if (scanCommonJs && !path.endsWith('.mjs') && !hasModuleSyntax) {
+    const transformedSource = rewriteTypeScriptImportStar(path, source)
     const lazyRuleMapIndex = source.indexOf('new LazyLoadingRuleMap')
     const dependencySource =
       lazyRuleMapIndex === -1 ? source : source.slice(0, lazyRuleMapIndex)
-    return {
+    const analysis = {
       dependencies: getCommonJsSpecifiers(dependencySource).map(
         (specifier) => ({
           optional: true,
@@ -1215,6 +1322,9 @@ const transpileUncached = (
       usesLazyLoadingRuleMap: lazyRuleMapIndex !== -1,
       usesReaddirSync: /\breaddirSync\s*\(/.test(source),
     }
+    return transformedSource
+      ? { ...analysis, source: transformedSource, substituteImportMeta: true }
+      : { ...analysis, substituteImportMeta: false }
   }
   const isTypeScript = path.endsWith('.ts') || path.endsWith('.tsx')
   const isTsx = path.endsWith('.tsx')
@@ -1227,7 +1337,14 @@ const transpileUncached = (
   })
   const analysis = getDependencies(ast)
   if (ast.program.sourceType !== 'module') {
-    return { ...analysis, substituteImportMeta: false }
+    const transformedSource = rewriteTypeScriptImportStar(path, source)
+    return transformedSource
+      ? {
+          ...analysis,
+          source: transformedSource,
+          substituteImportMeta: true,
+        }
+      : { ...analysis, substituteImportMeta: false }
   }
   const extension = getFileExtension(path)
   // Standalone returns a synchronous result; its current typings declare void.
@@ -1624,7 +1741,10 @@ const loadModule = async (
         if (totalBytes > maxTotalBytes) {
           throw new Error('ESLint config exceeds the 64 MB file limit')
         }
-        target[path] = source
+        target[path] =
+          target === lazyModules
+            ? (rewriteTypeScriptImportStar(path, source) ?? source)
+            : source
         if (target === lazyModules && scanCommonJs && !path.endsWith('.json')) {
           for (const specifier of getCommonJsSpecifiers(source)) {
             if (!specifier.startsWith('.') && !specifier.startsWith('/')) {
