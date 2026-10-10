@@ -29,7 +29,7 @@ Syntax-only retained no declaration libraries and used about 6.60 MiB less evalu
 
 Other-worker heap totals were 15.826/15.846/15.843 MB for baseline syntax/ES/DOM and 15.776/15.795/15.774 MB for the candidate, with no resolution worker remaining. There is no corresponding multi-megabyte shift into another live worker. Evaluator backing storage grew by about 16.7 KiB. The DOM cold sample took longer with the candidate; the disposable probe adds initial work. The syntax and ES samples were faster, but a single sample cannot establish a performance improvement. No rules were disabled and no memory-budget threshold was raised.
 
-The table captures the final source, including the preparation cache, Windows path normalization and early Program hydration. Full PR CI, including the existing memory gate, remains required.
+The table isolates this feature at commit `769b00eeb3cfc09fb69292193fc8045aeb204364`, including the preparation cache, Windows path normalization and early Program hydration. The integration branch also includes newer main changes for assert runtime retention (#154) and TypeScript import wrappers (#156); their savings are not attributed to this table. Full PR CI, including the existing memory gate, validates the combined source.
 
 ## Functional coverage
 
