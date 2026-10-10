@@ -7,7 +7,7 @@ import * as FileSystem from '../FileSystem/FileSystem.ts'
 
 const GraphCacheName = 'eslint-config-files-cache-v2'
 const GraphCacheKeyPrefix = 'https://eslint-config-files-cache.invalid/'
-const GraphCacheVersion = 5
+const GraphCacheVersion = 6
 const ResultCacheName = 'eslint-lint-result-v1'
 const ResultCacheKeyPrefix = 'https://eslint-lint-result.invalid/'
 const ResultCacheVersion = 1
@@ -22,6 +22,7 @@ interface CachedModule extends CachedFile {
 }
 
 interface CachedModuleGraph {
+  readonly deferredFiles: Readonly<Record<string, 'base64' | 'utf8'>>
   readonly entry: string
   readonly files: readonly CachedFile[]
   readonly lazyModules: readonly CachedFile[]
@@ -108,6 +109,12 @@ const isCachedModuleGraph = (value: unknown): value is CachedModuleGraph => {
   return (
     candidate.version === GraphCacheVersion &&
     typeof candidate.entry === 'string' &&
+    Boolean(candidate.deferredFiles) &&
+    typeof candidate.deferredFiles === 'object' &&
+    !Array.isArray(candidate.deferredFiles) &&
+    Object.values(candidate.deferredFiles).every(
+      (encoding) => encoding === 'utf8' || encoding === 'base64',
+    ) &&
     Array.isArray(candidate.files) &&
     candidate.files.every(isCachedFile) &&
     Array.isArray(candidate.lazyModules) &&
@@ -169,16 +176,27 @@ const loadGraphRevision = async (
       return undefined
     }
     const entries = [...value.modules, ...value.lazyModules, ...value.files]
-    const hashes = await FileSystem.getFileHashes(
-      entries.map((entry) => entry.uri),
-    )
+    const deferredPaths = Object.keys(value.deferredFiles)
+    const hashes = await FileSystem.getFileHashes([
+      ...entries.map((entry) => entry.uri),
+      ...deferredPaths,
+    ])
     if (
-      hashes.length !== entries.length ||
-      hashes.some((hash, index) => hash !== entries[index].hash)
+      hashes.length !== entries.length + deferredPaths.length ||
+      hashes.includes(null) ||
+      hashes
+        .slice(0, entries.length)
+        .some((hash, index) => hash !== entries[index].hash)
     ) {
       return undefined
     }
-    return revision
+    // Raw dictionary content is absent from the compiled graph. Its current
+    // hashes must still participate in persisted diagnostic invalidation.
+    return deferredPaths.length === 0
+      ? revision
+      : ComputeTextHash.computeTextHash(
+          JSON.stringify([revision, hashes.slice(entries.length)]),
+        )
   } catch {
     return undefined
   }

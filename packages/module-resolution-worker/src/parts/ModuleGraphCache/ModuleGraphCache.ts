@@ -6,7 +6,7 @@ const CacheName = 'eslint-config-files-cache-v2'
 const CacheKeyPrefix = 'https://eslint-config-files-cache.invalid/'
 const CompiledCacheName = 'eslint-compiled-module-graph-v4'
 const CompiledCacheKeyPrefix = 'https://eslint-compiled-module-graph.invalid/'
-const CacheVersion = 5
+const CacheVersion = 6
 const CompiledCacheVersion = 3
 const maxConcurrentCacheReads = 64
 
@@ -25,6 +25,7 @@ const toReadableCachePath = (cacheKey: string): string => {
 }
 
 export interface ModuleGraphToCache {
+  readonly deferredFiles?: Readonly<Record<string, 'base64' | 'utf8'>>
   readonly entry: string
   readonly files: Readonly<Record<string, VirtualFile>>
   readonly lazyModules: Readonly<Record<string, string>>
@@ -34,6 +35,7 @@ export interface ModuleGraphToCache {
 }
 
 export interface RestoredModuleGraph {
+  readonly deferredFiles?: Readonly<Record<string, 'base64' | 'utf8'>>
   readonly entry: string
   readonly entrySource: string
   readonly files: Readonly<Record<string, VirtualFile>>
@@ -52,6 +54,7 @@ interface CachedModule extends CachedFile {
 }
 
 interface CachedModuleGraph {
+  readonly deferredFiles?: Readonly<Record<string, 'base64' | 'utf8'>>
   readonly entry: string
   readonly files: readonly CachedFile[]
   readonly lazyModules: readonly CachedFile[]
@@ -110,6 +113,12 @@ const isCachedModuleGraph = (value: unknown): value is CachedModuleGraph => {
   return (
     candidate.version === CacheVersion &&
     typeof candidate.entry === 'string' &&
+    Boolean(candidate.deferredFiles) &&
+    typeof candidate.deferredFiles === 'object' &&
+    !Array.isArray(candidate.deferredFiles) &&
+    Object.values(candidate.deferredFiles).every(
+      (encoding) => encoding === 'utf8' || encoding === 'base64',
+    ) &&
     Array.isArray(candidate.files) &&
     candidate.files.every(isCachedFile) &&
     Array.isArray(candidate.lazyModules) &&
@@ -338,6 +347,12 @@ export const restore = async (
       return undefined
     }
     return {
+      deferredFiles: Object.fromEntries(
+        Object.entries(cached.deferredFiles ?? {}).map(([uri, encoding]) => [
+          FileSystem.toPath(uri),
+          encoding,
+        ]),
+      ),
       entry: FileSystem.toPath(cached.entry),
       entrySource: compiled.entrySource,
       files: mapSources(compiled.files),
@@ -411,6 +426,12 @@ export const save = async (
       uri: FileSystem.toUri(path),
     }))
     const revisionInput = {
+      deferredFiles: Object.fromEntries(
+        Object.entries(graph.deferredFiles ?? {}).map(([path, encoding]) => [
+          FileSystem.toUri(path),
+          encoding,
+        ]),
+      ),
       entry: FileSystem.toUri(graph.entry),
       files,
       lazyModules,

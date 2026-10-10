@@ -1,0 +1,6 @@
+{
+  "version": "0.2",
+  "words": ["lvceaccepted"],
+  "dictionaryDefinitions": [{ "name": "custom", "path": "./custom-words.txt" }],
+  "dictionaries": ["custom"]
+}

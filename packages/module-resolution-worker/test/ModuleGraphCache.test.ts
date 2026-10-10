@@ -80,6 +80,7 @@ test('saves a compiled graph with portable uris', async () => {
     Date.now(),
   )
   await expect(response?.json()).resolves.toEqual({
+    deferredFiles: {},
     entry: 'file:///workspace/eslint.config.js',
     files: [
       {
@@ -102,7 +103,7 @@ test('saves a compiled graph with portable uris', async () => {
       },
     ],
     revision: expect.any(String),
-    version: 5,
+    version: 6,
   })
   const compiledResponse = cacheEntries.get(
     'https://eslint-compiled-module-graph.invalid/module/file/workspace/eslint.config.js/file/workspace/src/file.ts',
@@ -156,6 +157,7 @@ test('restores a compiled graph after validating every hash in one request', asy
   await expect(
     ModuleGraphCache.restore('module:file:///workspace/eslint.config.js'),
   ).resolves.toEqual({
+    deferredFiles: {},
     entry: '/workspace/eslint.config.js',
     entrySource: 'module.exports = []',
     files: { '/workspace/data.json': '{"value":1}' },
@@ -192,6 +194,7 @@ test('round-trips binary virtual files', async () => {
   await expect(
     ModuleGraphCache.restore('module:file:///workspace/eslint.config.js'),
   ).resolves.toEqual({
+    deferredFiles: {},
     entry: '/workspace/eslint.config.js',
     entrySource: 'module.exports = []',
     files: { '/workspace/words.txt.gz': binaryFile },
@@ -219,6 +222,7 @@ test('restores compiled modules and files from batched cache records', async () 
   await expect(
     ModuleGraphCache.restore('module:file:///workspace/eslint.config.js'),
   ).resolves.toEqual({
+    deferredFiles: {},
     entry: '/workspace/eslint.config.js',
     entrySource: 'module.exports = []',
     files: { '/workspace/data.json': '{"value":1}' },
@@ -339,4 +343,25 @@ test('stores large compiled graphs compactly and restores their content', async 
   )
   const restored = await ModuleGraphCache.restore(key)
   expect(restored?.modules['/workspace/eslint.config.js']).toBe(compiled)
+})
+
+test('restores dictionary discovery metadata without hashing or retaining its content', async () => {
+  const deferredFiles = { '/workspace/dictionary.txt.gz': 'base64' as const }
+  await ModuleGraphCache.save('module:file:///workspace/eslint.config.js:', {
+    deferredFiles,
+    entry: '/workspace/eslint.config.js',
+    files: {},
+    lazyModules: {},
+    modules: { '/workspace/eslint.config.js': 'module.exports = []' },
+    moduleSources: { '/workspace/eslint.config.js': 'module.exports = []' },
+    resolutions: {},
+  })
+  const restored = await ModuleGraphCache.restore(
+    'module:file:///workspace/eslint.config.js:',
+  )
+  expect(restored?.deferredFiles).toEqual(deferredFiles)
+  expect(restored?.files).toEqual({})
+  expect(getFileHashes).toHaveBeenCalledWith([
+    'file:///workspace/eslint.config.js',
+  ])
 })

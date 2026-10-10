@@ -15,6 +15,7 @@ const configFileName = 'eslint.config.js'
 const suppressionsFileName = 'eslint-suppressions.json'
 
 export interface ModuleGraph {
+  readonly deferredFiles?: Readonly<Record<string, 'base64' | 'utf8'>>
   readonly entry: string
   readonly files: Readonly<Record<string, VirtualFile>>
   readonly id: string
@@ -227,6 +228,7 @@ export const invalidateForFileChanges = (
         path === cached.graph.entry ||
         Object.hasOwn(cached.graph.modules, path) ||
         Object.hasOwn(cached.graph.files, path) ||
+        Object.hasOwn(cached.graph.deferredFiles ?? {}, path) ||
         isVirtualWorkspaceFile(path, cached.graph.entry),
     )
     if (!hasChangedModule) {
@@ -1446,6 +1448,7 @@ const restoreModuleGraph = async (
   }
   try {
     const graph = {
+      deferredFiles: restored.deferredFiles,
       entry: restored.entry,
       files: restored.files,
       id: `${cacheKey}:${graphIdState.next++}`,
@@ -1504,6 +1507,10 @@ const loadModule = async (
       const graph = dependencyGraph
         ? {
             ...restored,
+            deferredFiles: {
+              ...dependencyGraph.deferredFiles,
+              ...restored.deferredFiles,
+            },
             files: { ...dependencyGraph.files, ...restored.files },
             lazyModules: {
               ...dependencyGraph.lazyModules,
@@ -1523,6 +1530,9 @@ const loadModule = async (
   }
   const entrySource = await FileSystem.readFile(entry)
   clearResolutionCaches()
+  const deferredFiles: Record<string, 'base64' | 'utf8'> = {
+    ...dependencyGraph?.deferredFiles,
+  }
   const files: Record<string, VirtualFile> = { ...dependencyGraph?.files }
   const lazyModules: Record<string, string> = {
     ...dependencyGraph?.lazyModules,
@@ -1800,28 +1810,48 @@ const loadModule = async (
   const preloadCspellDirectory = async (
     directory: string,
     ignoredDirectories: ReadonlySet<string>,
-    includeAllFiles: boolean,
+    deferContents: boolean,
   ): Promise<void> => {
     const entries = await FileSystem.readDirWithFileTypes(directory)
     for (const entry of entries) {
       const path = join(directory, entry.name)
       if (entry.isDirectory) {
         if (!ignoredDirectories.has(entry.name)) {
-          await preloadCspellDirectory(
-            path,
-            ignoredDirectories,
-            includeAllFiles,
-          )
+          await preloadCspellDirectory(path, ignoredDirectories, deferContents)
         }
       } else if (
         entry.isFile &&
-        (includeAllFiles ||
+        (deferContents ||
           entry.name === 'package.json' ||
           [...cspellVirtualFileExtensions, '.gz'].some((extension) =>
             entry.name.endsWith(extension),
           ))
       ) {
-        await preloadCspellFile(path)
+        // Keep package/config entry points synchronously readable. CSpell reads
+        // imported data and selected dictionaries through fs.promises.
+        const isMetadata =
+          entry.name === 'package.json' ||
+          entry.name.startsWith('cspell') ||
+          ['.js', '.cjs', '.mjs'].some((extension) => path.endsWith(extension))
+        if (
+          deferContents &&
+          !isMetadata &&
+          !Object.hasOwn(files, path) &&
+          !Object.hasOwn(modules, path)
+        ) {
+          if (Object.keys(deferredFiles).length >= maxModuleCount) {
+            throw new Error(
+              `CSpell assets exceed the ${maxModuleCount} file limit`,
+            )
+          }
+          deferredFiles[path] = cspellBinaryFileExtensions.some((extension) =>
+            path.endsWith(extension),
+          )
+            ? 'base64'
+            : 'utf8'
+        } else {
+          await preloadCspellFile(path)
+        }
       }
     }
   }
@@ -2097,6 +2127,7 @@ const loadModule = async (
     files[manifestPath] = source
   }
   const graph = {
+    deferredFiles,
     entry,
     files,
     id: `${cacheKey}:${graphIdState.next++}`,
@@ -2116,6 +2147,7 @@ const loadModule = async (
         ),
       )
     await ModuleGraphCache.save(cacheKey, {
+      deferredFiles,
       entry,
       files: withoutSharedEntries(files, dependencyGraph?.files),
       lazyModules: withoutSharedEntries(
