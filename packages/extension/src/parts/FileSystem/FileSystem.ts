@@ -203,7 +203,11 @@ export const stat = async (
   isFile: boolean
   isDirectory: boolean
 }> => {
-  const type = await state.api.stat(toUri(path))
+  const result = await state.api.stat(toUri(path))
+  const type =
+    result && typeof result === 'object' && 'type' in result
+      ? result.type
+      : result
   return {
     isDirectory: type === 3 || type === 11,
     isFile: type === 7 || type === 10,
