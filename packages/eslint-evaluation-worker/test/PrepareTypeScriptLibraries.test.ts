@@ -160,6 +160,32 @@ test('noLib omits libraries', async () => {
   expect(result.libraries).toEqual([])
 })
 
+test('library discovery releases ambient type inputs and preserves project library references', async () => {
+  const result = await prepare(
+    { project: './tsconfig.json' },
+    {
+      '/workspace/node_modules/@types/extra/index.d.ts':
+        'declare const unrelatedAmbient: string',
+      '/workspace/other.ts':
+        '/// <reference lib="dom" />\nexport const unrelated = 1',
+      '/workspace/tsconfig.json': JSON.stringify({
+        compilerOptions: { lib: ['es5'], types: ['extra'] },
+        files: ['file.ts', 'other.ts'],
+      }),
+    },
+  )
+  expect(result.libraries).toContain('lib.es5.d.ts')
+  expect(result.libraries).toContain('lib.dom.d.ts')
+  expect(result.files['/workspace/other.ts']).toContain('reference lib="dom"')
+  expect(
+    result.files['/workspace/node_modules/@types/extra/index.d.ts'],
+  ).toBeUndefined()
+  expect(result.requests).toContainEqual({
+    kind: 'read',
+    path: '/workspace/other.ts',
+  })
+})
+
 test('target and inherited package configs use TypeScript semantics', async () => {
   const result = await prepare(
     { project: './tsconfig.json' },

@@ -203,6 +203,16 @@ const createHydration = (ts: any, fs: FileSystem, root: string) => {
     },
     commit: () => {
       for (const path of used) {
+        // Ambient/package declarations read by the probe are temporary. Loading
+        // every dependency changes the parser's existing graph and retains its
+        // ASTs. Project documents must survive for their reference-lib directives.
+        if (
+          path.includes('/node_modules/') &&
+          !path.endsWith('.json') &&
+          !/\/typescript\/lib\/lib[^/]*\.d\.ts$/.test(path) &&
+          !path.includes('/node_modules/@typescript/lib-')
+        )
+          continue
         const source = staged.get(path)
         if (source !== undefined) fs.addFile(path, source)
       }
@@ -230,7 +240,7 @@ const createHydration = (ts: any, fs: FileSystem, root: string) => {
 }
 
 // Discover files using the project's own compiler without touching the parser's
-// caches. Each pass has a fresh Program. Only inputs of the final Program survive.
+// caches. Each pass has a fresh Program. Probe-only package inputs are released.
 export const prepareTypeScriptLibraries = async (
   ts: any,
   fs: FileSystem,
