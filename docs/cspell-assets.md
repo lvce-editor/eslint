@@ -66,7 +66,7 @@ worker transport or browser bundles; the browser comparison above covers those.
 All cold/warm diagnostic results matched. Imported custom words, C++
 languageSettings (`constexpr`), explicit Python (`isinstance`), JavaScript
 identifiers, disabled/active/disabled transitions and preferred
-`curch -> church` suggestion/fix (range [3, 8]) also matched baseline. A fresh
+`curch -> church` suggestion/fix (range `[3, 8]`) also matched baseline. A fresh
 disabled-rule run performed zero deferred reads and still reported no-debugger.
 
 An initial candidate disabled persisted diagnostics accidentally through a graph
