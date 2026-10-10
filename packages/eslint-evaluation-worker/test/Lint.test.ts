@@ -1,5 +1,6 @@
 import { expect, test } from '@jest/globals'
 import { ESLint, Linter } from 'eslint'
+import { resolve } from 'node:path'
 import type { EvaluatedModuleGraph } from '../src/parts/LoadModuleGraph/LoadModuleGraph.ts'
 import type { ModuleGraph } from '../src/parts/ModuleGraph/ModuleGraph.ts'
 import * as Lint from '../src/parts/Lint/Lint.ts'
@@ -307,8 +308,8 @@ test('prepares libraries from the effective per-file parser options before moder
   expect(received).toEqual([
     [
       'debugger',
-      '/workspace/src/file.js',
-      '/workspace',
+      resolve('/workspace/src/file.js'),
+      resolve('/workspace'),
       expect.objectContaining({ project: false }),
     ],
   ])
