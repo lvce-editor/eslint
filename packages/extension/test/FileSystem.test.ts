@@ -114,6 +114,38 @@ test('getFileHashes batches uri hashing and primes subsequent content reads', as
   expect(readFile).not.toHaveBeenCalled()
 })
 
+test('getFileHashes skips disk hashing when there are no paths', async () => {
+  await expect(FileSystem.getFileHashes([])).resolves.toEqual([])
+
+  expect(getFileHashes).not.toHaveBeenCalled()
+})
+
+test('getFileHashes skips disk hashing for virtual files', async () => {
+  await expect(
+    FileSystem.getFileHashes(['memfs:///workspace/file.js']),
+  ).resolves.toEqual([null])
+
+  expect(getFileHashes).not.toHaveBeenCalled()
+})
+
+test('getFileHashes keeps virtual and disk hash results in input order', async () => {
+  getFileHashes.mockResolvedValueOnce(['content-hash', null])
+
+  await expect(
+    FileSystem.getFileHashes([
+      'memfs:///workspace/virtual.js',
+      '/workspace/file.js',
+      'https://example.com/remote.js',
+      '/workspace/missing.js',
+    ]),
+  ).resolves.toEqual([null, 'content-hash', null, null])
+
+  expect(getFileHashes).toHaveBeenCalledWith([
+    'file:///workspace/file.js',
+    'file:///workspace/missing.js',
+  ])
+})
+
 test('getFileHashes treats a failed batch as cache misses without individual requests', async () => {
   getFileHashes.mockRejectedValueOnce(new Error('Hashing unavailable'))
 
