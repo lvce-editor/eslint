@@ -79,16 +79,18 @@ export const getFileHashes = async (
   const uris = paths.map(toUri)
   const fileUris = uris.filter((uri) => uri.startsWith('file://'))
   const hashes: Array<string | null> = uris.map(() => null)
-  try {
-    const fileHashes = await state.api.getFileHashes(fileUris)
-    let fileIndex = 0
-    for (let index = 0; index < uris.length; index++) {
-      if (uris[index].startsWith('file://')) {
-        hashes[index] = fileHashes[fileIndex++] ?? null
+  if (fileUris.length > 0) {
+    try {
+      const fileHashes = await state.api.getFileHashes(fileUris)
+      let fileIndex = 0
+      for (let index = 0; index < uris.length; index++) {
+        if (uris[index].startsWith('file://')) {
+          hashes[index] = fileHashes[fileIndex++] ?? null
+        }
       }
+    } catch (error) {
+      Logger.warn('Failed to hash ESLint files in one batch', error)
     }
-  } catch (error) {
-    Logger.warn('Failed to hash ESLint files in one batch', error)
   }
   for (let index = 0; index < uris.length; index++) {
     const hash = hashes[index]
