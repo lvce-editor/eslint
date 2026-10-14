@@ -9,6 +9,7 @@ const root = join(__dirname, '..')
 const cacheFormatVersion = '2'
 
 const locations = [
+  '.nvmrc',
   'package.json',
   'package-lock.json',
   '.github/workflows/pr.yml',
