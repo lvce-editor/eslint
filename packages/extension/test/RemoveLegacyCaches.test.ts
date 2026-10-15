@@ -8,10 +8,12 @@ test('removes obsolete caches without deleting current or unrelated caches', asy
     'eslint-module-analysis-v1',
     'eslint-module-analysis-v2',
     'eslint-module-analysis-v3',
+    'eslint-module-analysis-v5',
     'eslint-file-content-v1',
     'eslint-compiled-module-graph-v3',
     'eslint-file-content-v2',
     'eslint-module-analysis-v4',
+    'eslint-module-analysis-v6',
     'lvce-runtime',
   ])
   Object.defineProperty(globalThis, 'caches', {
@@ -23,6 +25,7 @@ test('removes obsolete caches without deleting current or unrelated caches', asy
     'eslint-compiled-module-graph-v3',
     'eslint-file-content-v2',
     'eslint-module-analysis-v4',
+    'eslint-module-analysis-v6',
     'lvce-runtime',
   ])
 })
@@ -36,5 +39,5 @@ test('unavailable storage does not prevent activation', async () => {
     value: { delete: deleteCache },
   })
   await expect(RemoveLegacyCaches.removeLegacyCaches()).resolves.toBeUndefined()
-  expect(deleteCache).toHaveBeenCalledTimes(6)
+  expect(deleteCache).toHaveBeenCalledTimes(7)
 })

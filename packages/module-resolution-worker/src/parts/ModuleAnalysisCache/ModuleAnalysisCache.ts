@@ -1,12 +1,11 @@
 import * as CacheResponse from '../CacheResponse/CacheResponse.ts'
 
-const CacheName = 'eslint-module-analysis-v5'
+const CacheName = 'eslint-module-analysis-v6'
 const CacheKeyPrefix = 'https://eslint-module-analysis-cache.invalid/'
 
 const pending = new Map<string, Promise<unknown>>()
 
-const getCacheKey = (key: string): string =>
-  `${CacheKeyPrefix}${encodeURIComponent(key)}`
+const getCacheKey = (key: string): string => `${CacheKeyPrefix}${key}`
 
 const getCachedValue = async (key: string): Promise<unknown> => {
   try {
