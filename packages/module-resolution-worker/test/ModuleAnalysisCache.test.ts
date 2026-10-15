@@ -42,17 +42,17 @@ test('stores computed analysis and reuses it from cache storage', async () => {
   const compute = jest.fn(async () => analysis)
 
   await expect(
-    ModuleAnalysisCache.getOrCompute('module:.js:hash', isAnalysis, compute),
+    ModuleAnalysisCache.getOrCompute('commonjs/cjs/hash', isAnalysis, compute),
   ).resolves.toEqual(analysis)
   await expect(
-    ModuleAnalysisCache.getOrCompute('module:.js:hash', isAnalysis, compute),
+    ModuleAnalysisCache.getOrCompute('commonjs/cjs/hash', isAnalysis, compute),
   ).resolves.toEqual(analysis)
 
   expect(compute).toHaveBeenCalledTimes(1)
-  expect(open).toHaveBeenCalledWith('eslint-module-analysis-v5')
+  expect(open).toHaveBeenCalledWith('eslint-module-analysis-v6')
   expect(put).toHaveBeenCalledTimes(1)
   expect(put.mock.calls[0][0]).toBe(
-    'https://eslint-module-analysis-cache.invalid/module%3A.js%3Ahash',
+    'https://eslint-module-analysis-cache.invalid/commonjs/cjs/hash',
   )
   expect(
     Date.parse(put.mock.calls[0][1].headers.get('Expires') || ''),
@@ -73,12 +73,12 @@ test('coalesces concurrent analysis for the same content hash', async () => {
   })
 
   const first = ModuleAnalysisCache.getOrCompute(
-    'module:.ts:hash',
+    'module/ts/hash',
     isAnalysis,
     compute,
   )
   const second = ModuleAnalysisCache.getOrCompute(
-    'module:.ts:hash',
+    'module/ts/hash',
     isAnalysis,
     compute,
   )
@@ -95,13 +95,13 @@ test('coalesces concurrent analysis for the same content hash', async () => {
 
 test('recomputes invalid cached analysis', async () => {
   cacheEntries.set(
-    'https://eslint-module-analysis-cache.invalid/module%3A.js%3Ahash',
+    'https://eslint-module-analysis-cache.invalid/module/js/hash',
     Response.json({ source: 42 }),
   )
   const compute = jest.fn(async () => ({ source: 'transformed' }))
 
   await expect(
-    ModuleAnalysisCache.getOrCompute('module:.js:hash', isAnalysis, compute),
+    ModuleAnalysisCache.getOrCompute('module/js/hash', isAnalysis, compute),
   ).resolves.toEqual({ source: 'transformed' })
 
   expect(compute).toHaveBeenCalledTimes(1)
@@ -113,7 +113,7 @@ test('falls back when cache storage is unavailable', async () => {
   const compute = jest.fn(async () => ({ source: 'transformed' }))
 
   await expect(
-    ModuleAnalysisCache.getOrCompute('module:.js:hash', isAnalysis, compute),
+    ModuleAnalysisCache.getOrCompute('module/js/hash', isAnalysis, compute),
   ).resolves.toEqual({ source: 'transformed' })
 
   expect(compute).toHaveBeenCalledTimes(1)
@@ -132,7 +132,7 @@ test('recomputes analysis when reading the cached response body fails', async ()
   const compute = jest.fn(async () => ({ source: 'transformed' }))
 
   await expect(
-    ModuleAnalysisCache.getOrCompute('module:.js:hash', isAnalysis, compute),
+    ModuleAnalysisCache.getOrCompute('module/js/hash', isAnalysis, compute),
   ).resolves.toEqual({ source: 'transformed' })
   expect(compute).toHaveBeenCalledTimes(1)
 })
