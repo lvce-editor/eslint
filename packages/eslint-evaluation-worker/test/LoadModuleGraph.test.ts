@@ -38,6 +38,14 @@ test('loads a commonjs config', () => {
   expect(value).toEqual([{ rules: {} }])
 })
 
+test('removes dependency source map directives while preserving line numbers', () => {
+  expect(
+    LoadModuleGraph.removeSourceMappingURL(
+      'module.exports = true\n//# sourceMappingURL=html:///workspace/node_modules/eslint/index.js.map\n',
+    ),
+  ).toBe('module.exports = true\n\n')
+})
+
 test('reuses namespace wrappers with live exports and default imports', () => {
   const value = LoadModuleGraph.loadModuleGraph(
     graph(
