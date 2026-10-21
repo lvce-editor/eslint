@@ -14,7 +14,7 @@ type CommonJsModule = {
 type VirtualFile = NonNullable<ModuleGraph['files']>[string]
 
 export const removeSourceMappingURL = (source: string): string =>
-  source.replace(/^[\t ]*\/\/[#@]\s*sourceMappingURL=[^\r\n]*/gm, '')
+  source.replaceAll(/^[\t ]*\/\/[#@]\s*sourceMappingURL=[^\r\n]*/gm, '')
 
 interface RuntimeState {
   readonly deferredFiles: Record<string, 'base64' | 'utf8'>
