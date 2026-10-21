@@ -13,6 +13,9 @@ type CommonJsModule = {
 
 type VirtualFile = NonNullable<ModuleGraph['files']>[string]
 
+export const removeSourceMappingURL = (source: string): string =>
+  source.replace(/^[\t ]*\/\/[#@]\s*sourceMappingURL=[^\r\n]*/gm, '')
+
 interface RuntimeState {
   readonly deferredFiles: Record<string, 'base64' | 'utf8'>
   readonly evaluatedGraphIds: Map<string, string>
@@ -1287,7 +1290,7 @@ const evaluateGraph = (
         `'use strict';
       return function (module, exports, require, __filename, __dirname) {
         'use strict';
-        ${source}
+        ${removeSourceMappingURL(source)}
         //# sourceURL=${id}
       }`,
       )
