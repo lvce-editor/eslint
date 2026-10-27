@@ -132,6 +132,9 @@ jobs:
           ]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
+    env:
+      LVCE_E2E_MESSAGE_CAPTURE: '1'
+      LVCE_E2E_ATTEMPT: ${{ matrix.attempt }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -159,6 +162,8 @@ jobs:
         run: node packages/e2e/scripts/verifyBrowserArchitecture.js
         env:
           PLAYWRIGHT_BROWSERS_PATH: 0
+      - name: Install focused message capture
+        run: node packages/server/src/postinstall.js
       - name: Run headless test
         if: matrix.os != 'windows-11-arm'
         run: npm run e2e:headless

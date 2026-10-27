@@ -41,3 +41,17 @@ if (!content.includes(marker)) {
   )
   await writeFile(testWorkerPath, replacement)
 }
+
+if (process.env.LVCE_E2E_MESSAGE_CAPTURE === '1') {
+  const { patchE2eMessageCapture } = await import('./patchE2eMessageCapture.js')
+  await patchE2eMessageCapture(
+    join(
+      staticPath,
+      commitHash,
+      'packages',
+      'renderer-process',
+      'dist',
+      'rendererProcessMain.js',
+    ),
+  )
+}
