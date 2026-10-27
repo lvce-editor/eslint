@@ -169,7 +169,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          npm run e2e:headless --workspace=packages/e2e -- --timeout=60000 2>&1 | tee packages/e2e/e2e-output.log
+          npm run e2e:headless --workspace=packages/e2e -- --timeout=60000 --trace-renderer-worker 2>&1 | tee packages/e2e/e2e-output.log
         env:
           PLAYWRIGHT_BROWSERS_PATH: 0
       - name: Upload e2e artifacts
