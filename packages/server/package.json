@@ -14,6 +14,7 @@
     "@lvce-editor/server": "0.121.6"
   },
   "devDependencies": {
+    "@lvce-editor/test-with-playwright-worker": "22.36.3",
     "@types/node": "^26.6.2"
   }
 }
