@@ -5,6 +5,10 @@ test('includes the extension icon', () => {
   expect(extension.icon).toBe('./media/icon.png')
 })
 
+test('categorizes ESLint as a linter', () => {
+  expect(extension.categories).toEqual(['Linters'])
+})
+
 test('contributes the ESLint output channel', () => {
   expect(extension.outputChannels).toEqual([
     {
