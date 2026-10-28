@@ -16,6 +16,7 @@ const locations = [
   '.github/workflows/ci.yml',
   '.github/workflows/release.yml',
   'scripts/computeNodeModulesCacheKey.js',
+  'scripts/installPlaywrightBrowsers.js',
   'packages/server/src/postinstall.js',
 ]
 
