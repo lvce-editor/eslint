@@ -41,10 +41,7 @@ jobs:
       - run: npm test
       - run: npm run lint
       - name: install playwright dependencies
-        working-directory: ./packages/e2e
-        run: |
-          npx playwright install chromium
-          npx playwright-core install chromium
+        run: node scripts/installPlaywrightBrowsers.js
         if: steps.npm-cache.outputs.cache-hit != 'true'
       - name: Verify runner and Chromium architecture
         run: node packages/e2e/scripts/verifyBrowserArchitecture.js
