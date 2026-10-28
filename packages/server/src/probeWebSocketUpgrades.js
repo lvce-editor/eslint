@@ -42,7 +42,11 @@ await Promise.all(
 const reservation = createServer()
 reservation.listen(0, 'localhost')
 await once(reservation, 'listening')
-const { port } = reservation.address()
+const address = reservation.address()
+if (!address || typeof address === 'string') {
+  throw new Error('Expected a TCP address for the probe server')
+}
+const { port } = address
 await new Promise((resolveClose) => reservation.close(resolveClose))
 const server = fork(
   fileURLToPath(
@@ -61,8 +65,10 @@ const server = fork(
     stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
   },
 )
-server.stdout.pipe(process.stdout)
-server.stderr.pipe(process.stderr)
+const serverPid = server.pid
+if (serverPid === undefined) throw new Error('Probe server has no process ID')
+server.stdout?.pipe(process.stdout)
+server.stderr?.pipe(process.stderr)
 const results = []
 let failed = 0
 const sockets = new Set()
@@ -117,7 +123,7 @@ const probe = (type, index) =>
       sockets.add(socket)
       socket.once('close', () => sockets.delete(socket))
       socket.on('error', (error) => {
-        if (settled && peer) peer.teardownCode = error.code
+        if (settled && peer && 'code' in error) peer.teardownCode = error.code
       })
       socket.once('connect', () => {
         peer = {
@@ -142,12 +148,14 @@ const probe = (type, index) =>
       finish({
         ok: false,
         error: String(error),
-        code: error.code,
-        causes: error.errors?.map((cause) => ({
-          code: cause.code,
-          address: cause.address,
-          port: cause.port,
-        })),
+        code: 'code' in error ? error.code : undefined,
+        causes: (error instanceof AggregateError ? error.errors : []).map(
+          (cause) => ({
+            code: cause.code,
+            address: cause.address,
+            port: cause.port,
+          }),
+        ),
       }),
     )
     req.end()
@@ -193,16 +201,17 @@ try {
     if (process.platform === 'win32') {
       await promisify(execFile)(
         'taskkill',
-        ['/PID', String(server.pid), '/T', '/F'],
+        ['/PID', String(serverPid), '/T', '/F'],
         { timeout: 10000 },
       )
     } else {
-      process.kill(-server.pid, 'SIGTERM')
+      process.kill(-serverPid, 'SIGTERM')
     }
     if (server.exitCode === null && server.signalCode === null)
       await once(server, 'exit', { signal: AbortSignal.timeout(5000) })
   } catch (error) {
-    if (error.code !== 'ESRCH') cleanupError = String(error)
+    if (!(error instanceof Error && 'code' in error && error.code === 'ESRCH'))
+      cleanupError = String(error)
   }
   if (!cleanupError) await rm(profile, { recursive: true, force: true })
   const summary = {
