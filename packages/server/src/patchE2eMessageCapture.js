@@ -128,6 +128,30 @@ const invokeHelper = async (callbacks, ipc, method, params, useSendAndTransfer) 
   )
   runner = replaceOnce(
     runner,
+    '    page.__lvceStartupErrors = [];',
+    `    // Diagnostic capture: correlate socket errors with navigation generations.
+    page.__lvceStartupGeneration = (page.__lvceStartupGeneration || 0) + 1;
+    page.__lvceStartupErrors = [];`,
+    '// Diagnostic capture: correlate socket errors with navigation generations.',
+  )
+  runner = replaceOnce(
+    runner,
+    `  page.on('requestfailed', request => recordStartupError({ type: 'requestfailed', url: request.url(), failure: request.failure() }));`,
+    `  page.on('requestfailed', request => recordStartupError({ type: 'requestfailed', url: request.url(), failure: request.failure() }));
+  // Diagnostic capture: preserve the actual WebSocket handshake failure.
+  page.on('websocket', socket => {
+    const generation = page.__lvceStartupGeneration;
+    socket.on('socketerror', error => {
+      const address = new URL(socket.url());
+      address.search = '';
+      address.hash = '';
+      recordStartupError({ type: 'websocket-error', url: address.href, message: String(error), generation, currentGeneration: page.__lvceStartupGeneration });
+    });
+  });`,
+    '// Diagnostic capture: preserve the actual WebSocket handshake failure.',
+  )
+  runner = replaceOnce(
+    runner,
     `    if (rendererWorkerTraceDirectory) {
       await exportTrace({`,
     `    if (rendererWorkerTraceDirectory) {
