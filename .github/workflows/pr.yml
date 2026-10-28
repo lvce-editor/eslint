@@ -178,6 +178,10 @@ jobs:
           npm run e2e:headless --workspace=packages/e2e -- --timeout=60000 --trace-renderer-worker 2>&1 | tee packages/e2e/e2e-output.log
         env:
           PLAYWRIGHT_BROWSERS_PATH: 0
+      - name: Compress failed Chromium network log
+        if: failure()
+        shell: bash
+        run: gzip -9 packages/e2e/chromium-netlog.json
       - name: Upload e2e artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -188,4 +192,5 @@ jobs:
             packages/e2e/screenshots/
             packages/e2e/test-results/
             packages/e2e/renderer-worker-traces/
+            packages/e2e/chromium-netlog.json.gz
           if-no-files-found: warn

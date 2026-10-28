@@ -10,6 +10,21 @@ const replaceOnce = (content, before, after, marker) => {
 }
 
 export const patchE2eMessageCapture = async (rendererPath, testWorkerPath) => {
+  const serverPath = fileURLToPath(
+    new URL('./src/server.js', import.meta.resolve('@lvce-editor/server')),
+  )
+  const server = await readFile(serverPath, 'utf8')
+  await writeFile(
+    serverPath,
+    replaceOnce(
+      server,
+      'const handleAppReady = () => {',
+      `const handleAppReady = () => {
+  // Diagnostic capture: record the actual listening address.
+  if (process.env.LVCE_E2E_MESSAGE_CAPTURE === '1') console.log('LVCE_SERVER_ADDRESS', JSON.stringify(server.address()));`,
+      '// Diagnostic capture: record the actual listening address.',
+    ),
+  )
   let testWorker = await readFile(testWorkerPath, 'utf8')
   testWorker = replaceOnce(
     testWorker,
@@ -93,6 +108,20 @@ const invokeHelper = async (callbacks, ipc, method, params, useSendAndTransfer) 
     import.meta.resolve('@lvce-editor/test-with-playwright-worker'),
   )
   let runner = await readFile(runnerPath, 'utf8')
+  runner = replaceOnce(
+    runner,
+    `  const browserInstance = await launcher.launch({
+    headless
+  });`,
+    `  const browserInstance = await launcher.launch({
+    headless,
+    // Diagnostic capture: preserve Chromium's attempted socket addresses.
+    args: process.env.LVCE_E2E_MESSAGE_CAPTURE === '1'
+      ? ['--log-net-log=' + join(process.cwd(), 'chromium-netlog.json')]
+      : []
+  });`,
+    "// Diagnostic capture: preserve Chromium's attempted socket addresses.",
+  )
   runner = replaceOnce(
     runner,
     '    await navigateToTest(page, url);',
