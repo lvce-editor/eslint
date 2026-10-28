@@ -5,6 +5,9 @@ on:
     branches:
       - main
 
+env:
+  PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/node_modules/.cache/ms-playwright
+
 # Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
   contents: read
@@ -48,25 +51,16 @@ jobs:
       - run: npm test
       - run: npm run lint
       - name: install playwright dependencies
-        working-directory: ./packages/e2e
-        run: npx playwright install chromium
+        run: node scripts/installPlaywrightBrowsers.js
         if: steps.npm-cache.outputs.cache-hit != 'true'
-        env:
-          PLAYWRIGHT_BROWSERS_PATH: 0
       - name: Verify runner and Chromium architecture
         run: node packages/e2e/scripts/verifyBrowserArchitecture.js
-        env:
-          PLAYWRIGHT_BROWSERS_PATH: 0
       - name: Run headless test
         if: matrix.os != 'windows-11-arm'
         run: npm run e2e:headless
-        env:
-          PLAYWRIGHT_BROWSERS_PATH: 0
       - name: Run headless test on Windows ARM
         if: matrix.os == 'windows-11-arm'
         run: npm run e2e:headless --workspace=packages/e2e -- --timeout=60000
-        env:
-          PLAYWRIGHT_BROWSERS_PATH: 0
       - name: Build static site
         run: node scripts/build-static.js
         env:
@@ -91,8 +85,6 @@ jobs:
           --heap
           --memory-budget packages/benchmark/memory-budget.json
           --output benchmark-results/memory
-        env:
-          PLAYWRIGHT_BROWSERS_PATH: 0
       - name: Upload memory benchmark summary
         if: always() && matrix.os == 'ubuntu-24.04'
         uses: actions/upload-artifact@v4

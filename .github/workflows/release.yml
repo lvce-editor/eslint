@@ -12,6 +12,9 @@ on:
         required: true
         type: string
 
+env:
+  PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/node_modules/.cache/ms-playwright
+
 concurrency:
   group: release-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: false
@@ -56,15 +59,10 @@ jobs:
       - run: npm test
       - run: npm run lint
       - name: install playwright dependencies
-        working-directory: ./packages/e2e
-        run: npx playwright install chromium
+        run: node scripts/installPlaywrightBrowsers.js
         if: steps.npm-cache.outputs.cache-hit != 'true'
-        env:
-          PLAYWRIGHT_BROWSERS_PATH: 0
       - name: Run headless test
         run: npm run e2e:headless
-        env:
-          PLAYWRIGHT_BROWSERS_PATH: 0
       - run: node scripts/build.js
       - name: Build archive
         shell: bash
