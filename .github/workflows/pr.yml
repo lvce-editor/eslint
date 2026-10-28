@@ -107,11 +107,34 @@ jobs:
       fail-fast: false
       matrix:
         os: [windows-11-arm]
-        attempt: [1]
+        attempt:
+          [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+          ]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     env:
       LVCE_E2E_MESSAGE_CAPTURE: '1'
+      LVCE_E2E_RPC_ONLY: '1'
       LVCE_E2E_ATTEMPT: ${{ matrix.attempt }}
     steps:
       - uses: actions/checkout@v4

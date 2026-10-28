@@ -53,5 +53,6 @@ if (process.env.LVCE_E2E_MESSAGE_CAPTURE === '1') {
       'dist',
       'rendererProcessMain.js',
     ),
+    testWorkerPath,
   )
 }
