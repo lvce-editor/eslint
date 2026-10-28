@@ -95,6 +95,49 @@ const invokeHelper = async (callbacks, ipc, method, params, useSendAndTransfer) 
   let runner = await readFile(runnerPath, 'utf8')
   runner = replaceOnce(
     runner,
+    '    await navigateToTest(page, url);',
+    `    // Diagnostic capture: reset startup errors before each navigation.
+    page.__lvceStartupErrors = [];
+    page.__lvceStartupErrorsDropped = 0;
+    await navigateToTest(page, url);`,
+    '// Diagnostic capture: reset startup errors before each navigation.',
+  )
+  runner = replaceOnce(
+    runner,
+    `  });
+  try {
+    if (traceRendererWorker) {`,
+    `  });
+  // Diagnostic capture: buffer browser-reported startup failures only.
+  const recordStartupError = event => {
+    const events = page.__lvceStartupErrors ||= [];
+    if (events.length >= 100) {
+      page.__lvceStartupErrorsDropped = (page.__lvceStartupErrorsDropped || 0) + 1;
+      return;
+    }
+    events.push({ ...event, timestamp: Date.now() });
+  };
+  page.on('pageerror', error => recordStartupError({ type: 'pageerror', message: String(error), stack: error.stack?.slice(0, 16384) }));
+  page.on('console', message => {
+    if (message.type() === 'error') recordStartupError({ type: 'console-error', message: message.text().slice(0, 16384), location: message.location() });
+  });
+  page.on('requestfailed', request => recordStartupError({ type: 'requestfailed', url: request.url(), failure: request.failure() }));
+  try {
+    if (traceRendererWorker) {`,
+    '// Diagnostic capture: buffer browser-reported startup failures only.',
+  )
+  runner = replaceOnce(
+    runner,
+    `    if (rendererWorkerTraceDirectory) {
+      await exportTrace({`,
+    `    if (rendererWorkerTraceDirectory) {
+      // Diagnostic capture: retain the completed test outcome for the exporter.
+      page.__lvceLastTestResult = result;
+      await exportTrace({`,
+    '// Diagnostic capture: retain the completed test outcome for the exporter.',
+  )
+  runner = replaceOnce(
+    runner,
     'const getUrlFromTestFile = (absolutePath, port, traceFocus, traceRendererWorker) => {',
     `const getUrlFromTestFile = (absolutePath, port, traceFocus, traceRendererWorker) => {
   // Diagnostic capture: RPC-only pass uses the original untraced test URL.
@@ -135,6 +178,33 @@ const invokeHelper = async (callbacks, ipc, method, params, useSendAndTransfer) 
   await writeFile(join(directory, rpcName), JSON.stringify({ workers: rpcCaptures, workerUrls: workers.map(worker => worker.url()) }));
   let capture;`,
     '// Diagnostic capture: inspect test-worker state after the test finishes.',
+  )
+  runner = replaceOnce(
+    runner,
+    `  let capture;
+  try {
+    capture = await page.evaluate(traceSelector => {`,
+    `  // Diagnostic capture: persist the failing page without observing DOM mutations.
+  if (page.__lvceLastTestResult?.status === Fail$1) {
+    let snapshot;
+    let timer;
+    try {
+      snapshot = await Promise.race([
+        page.evaluate(() => ({ url: location.href, bodyText: document.body?.innerText.slice(0, 65536), html: document.documentElement.outerHTML.slice(0, 262144), htmlTruncated: document.documentElement.outerHTML.length > 262144 })),
+        new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Failing-page diagnostic evaluation timed out')), 5000); }),
+      ]);
+    } catch (error) {
+      snapshot = { captureError: String(error) };
+    } finally {
+      clearTimeout(timer);
+    }
+    const failureName = 'page-failure-' + getFileName(test).slice(0, -5) + '-' + (process.env.LVCE_E2E_ATTEMPT || 'local') + '.json';
+    await writeFile(join(directory, failureName), JSON.stringify({ result: page.__lvceLastTestResult, startupErrors: page.__lvceStartupErrors || [], dropped: page.__lvceStartupErrorsDropped || 0, snapshot }));
+  }
+  let capture;
+  try {
+    capture = await page.evaluate(traceSelector => {`,
+    '// Diagnostic capture: persist the failing page without observing DOM mutations.',
   )
   runner = replaceOnce(
     runner,
