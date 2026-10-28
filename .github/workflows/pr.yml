@@ -133,8 +133,6 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     env:
-      LVCE_E2E_MESSAGE_CAPTURE: '1'
-      LVCE_E2E_RPC_ONLY: '1'
       LVCE_E2E_ATTEMPT: ${{ matrix.attempt }}
     steps:
       - uses: actions/checkout@v4
@@ -163,8 +161,6 @@ jobs:
         run: node packages/e2e/scripts/verifyBrowserArchitecture.js
         env:
           PLAYWRIGHT_BROWSERS_PATH: 0
-      - name: Install focused message capture
-        run: node packages/server/src/postinstall.js
       - name: Run headless test
         if: matrix.os != 'windows-11-arm'
         run: npm run e2e:headless
@@ -175,13 +171,9 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          npm run e2e:headless --workspace=packages/e2e -- --timeout=60000 --trace-renderer-worker 2>&1 | tee packages/e2e/e2e-output.log
+          npm run e2e:headless --workspace=packages/e2e -- --timeout=60000 2>&1 | tee packages/e2e/e2e-output.log
         env:
           PLAYWRIGHT_BROWSERS_PATH: 0
-      - name: Compress failed Chromium network log
-        if: failure()
-        shell: bash
-        run: gzip -9 packages/e2e/chromium-netlog.json
       - name: Upload e2e artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -191,6 +183,4 @@ jobs:
             packages/e2e/e2e-output.log
             packages/e2e/screenshots/
             packages/e2e/test-results/
-            packages/e2e/renderer-worker-traces/
-            packages/e2e/chromium-netlog.json.gz
           if-no-files-found: warn
