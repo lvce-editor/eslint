@@ -1165,7 +1165,8 @@ const getAnalysisCacheKey = async (
 ): Promise<string | undefined> => {
   try {
     const hash = await ComputeTextHash.computeTextHash(source)
-    return `${kind}:${getFileExtension(path)}:${hash}`
+    const extension = getFileExtension(path).slice(1) || 'none'
+    return `${kind}/${extension}/${hash}`
   } catch {
     return undefined
   }

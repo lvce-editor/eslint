@@ -4,6 +4,7 @@ const legacyCacheNames = [
   'eslint-module-analysis-v1',
   'eslint-module-analysis-v2',
   'eslint-module-analysis-v3',
+  'eslint-module-analysis-v5',
   'eslint-file-content-v1',
 ]
 

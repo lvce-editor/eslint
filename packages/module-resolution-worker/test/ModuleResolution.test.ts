@@ -330,7 +330,31 @@ test('reuses cached module analysis across projects with path-specific import me
   )
   expect(analysisPuts).toHaveLength(1)
   expect(getRequestKey(analysisPuts[0][0])).toMatch(
-    /\/module%3A\.js%3A[\da-f]{64}$/,
+    /\/module\/js\/[\da-f]{64}$/,
+  )
+})
+
+test('keeps cache entries distinct by file extension', async () => {
+  const source = 'module.exports = []'
+  setFiles({
+    '/workspace/config.cjs': source,
+    '/workspace/config.js': source,
+  })
+
+  await LoadEslintConfig.loadEslintConfig('/workspace/config.cjs')
+  await LoadEslintConfig.loadEslintConfig('/workspace/config.js')
+
+  const analysisUrls = put.mock.calls
+    .map(([key]) => getRequestKey(key))
+    .filter((url) =>
+      url.startsWith('https://eslint-module-analysis-cache.invalid/'),
+    )
+  expect(analysisUrls).toHaveLength(2)
+  expect(analysisUrls).toEqual(
+    expect.arrayContaining([
+      expect.stringMatching(/\/module\/cjs\/[\da-f]{64}$/),
+      expect.stringMatching(/\/module\/js\/[\da-f]{64}$/),
+    ]),
   )
 })
 
